@@ -6,6 +6,11 @@ const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { PROGRAMS } = require('../config/constants');
 const { publicUrl } = require('../middleware/upload');
+const {
+  assertProgramAccess,
+  scopeFilterToProgram,
+  resolveProgramForCreate,
+} = require('../utils/programScope');
 
 function parseList(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -20,7 +25,7 @@ function parseList(value) {
 /** GET /api/activities */
 exports.list = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.program) filter.program = req.query.program;
+  scopeFilterToProgram(filter, req.user, req.query.program);
   if (req.query.status) filter.status = req.query.status;
   if (req.query.upcoming === 'true') filter.date = { $gte: new Date() };
   if (req.query.search) {
@@ -53,6 +58,7 @@ exports.list = asyncHandler(async (req, res) => {
 exports.get = asyncHandler(async (req, res) => {
   const activity = await Activity.findById(req.params.id).populate('createdBy', 'name role');
   if (!activity) throw ApiError.notFound('Activity not found.');
+  assertProgramAccess(req.user, activity.program);
 
   const participants = await Attendance.countDocuments({ activityId: activity._id });
 
@@ -64,7 +70,7 @@ exports.create = asyncHandler(async (req, res) => {
   requireFields(req.body, ['title', 'date']);
   assertEnum(req.body.program, PROGRAMS, 'program');
 
-  const program = req.body.program || req.user.program || 'CWTS';
+  const program = resolveProgramForCreate(req.user, req.body.program);
   const photos = (req.files || []).map((f) => publicUrl('activities', f.filename));
 
   const activity = await Activity.create({
@@ -90,7 +96,12 @@ exports.create = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const activity = await Activity.findById(req.params.id);
   if (!activity) throw ApiError.notFound('Activity not found.');
+  assertProgramAccess(req.user, activity.program);
   assertEnum(req.body.program, PROGRAMS, 'program');
+  // Program-scoped roles cannot move an activity to the other program.
+  if (req.user.role !== 'super_admin' && req.body.program !== undefined) {
+    req.body.program = req.user.program;
+  }
 
   const scalarFields = [
     'title',
@@ -126,6 +137,7 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const activity = await Activity.findById(req.params.id);
   if (!activity) throw ApiError.notFound('Activity not found.');
+  assertProgramAccess(req.user, activity.program);
 
   await Attendance.updateMany({ activityId: activity._id }, { activityId: null });
   await activity.deleteOne();
@@ -137,6 +149,7 @@ exports.remove = asyncHandler(async (req, res) => {
 exports.participants = asyncHandler(async (req, res) => {
   const activity = await Activity.findById(req.params.id);
   if (!activity) throw ApiError.notFound('Activity not found.');
+  assertProgramAccess(req.user, activity.program);
 
   const records = await Attendance.find({ activityId: activity._id }).sort({ time: 1 });
   const users = await User.find({ _id: { $in: records.map((r) => r.studentId) } });

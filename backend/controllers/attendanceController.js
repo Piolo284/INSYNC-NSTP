@@ -22,6 +22,12 @@ const {
 const { sendAttendanceCode } = require('../utils/mailer');
 const { notifyUser } = require('../utils/notify');
 const { recalculateGrade } = require('../utils/gradeCalculator');
+const { TRAINEE_ROLES } = require('../config/constants');
+const {
+  assertProgramAccess,
+  scopeFilterToProgram,
+  resolveProgramForCreate,
+} = require('../utils/programScope');
 
 const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
 
@@ -34,7 +40,7 @@ exports.createSession = asyncHandler(async (req, res) => {
   requireFields(req.body, ['date', 'startTime', 'endTime']);
   assertEnum(req.body.program, PROGRAMS, 'program');
 
-  const program = req.body.program || req.user.program || 'CWTS';
+  const program = resolveProgramForCreate(req.user, req.body.program);
   const date = new Date(req.body.date);
   if (Number.isNaN(date.getTime())) {
     throw ApiError.badRequest('Please provide a valid date.');
@@ -50,6 +56,7 @@ exports.createSession = asyncHandler(async (req, res) => {
   if (activityId) {
     const activity = await Activity.findById(activityId);
     if (!activity) throw ApiError.notFound('Activity not found.');
+    assertProgramAccess(req.user, activity.program);
   }
 
   const session = await AttendanceSession.create({
@@ -75,7 +82,7 @@ exports.createSession = asyncHandler(async (req, res) => {
 /** GET /api/attendance/sessions */
 exports.listSessions = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.program) filter.program = req.query.program;
+  scopeFilterToProgram(filter, req.user, req.query.program);
   if (req.query.status) filter.status = req.query.status;
   if (req.query.date) {
     const d = new Date(req.query.date);
@@ -96,6 +103,7 @@ exports.getSession = asyncHandler(async (req, res) => {
     'title location'
   );
   if (!session) throw ApiError.notFound('Attendance session not found.');
+  assertProgramAccess(req.user, session.program);
 
   const records = await Attendance.countDocuments({ sessionId: session._id });
   res.json({
@@ -108,6 +116,7 @@ exports.getSession = asyncHandler(async (req, res) => {
 exports.closeSession = asyncHandler(async (req, res) => {
   const session = await AttendanceSession.findById(req.params.id);
   if (!session) throw ApiError.notFound('Attendance session not found.');
+  assertProgramAccess(req.user, session.program);
 
   session.status = 'Closed';
   await session.save();
@@ -274,7 +283,7 @@ exports.verify = asyncHandler(async (req, res) => {
 /** GET /api/attendance */
 exports.list = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.program) filter.program = req.query.program;
+  scopeFilterToProgram(filter, req.user, req.query.program);
   if (req.query.status && req.query.status !== 'All') filter.status = req.query.status;
   if (req.query.sessionId) filter.sessionId = req.query.sessionId;
   if (req.query.activityId) filter.activityId = req.query.activityId;
@@ -285,7 +294,7 @@ exports.list = asyncHandler(async (req, res) => {
   }
 
   // Trainees may only ever see their own rows.
-  if (['student', 'cadet'].includes(req.user.role)) {
+  if (TRAINEE_ROLES.includes(req.user.role)) {
     filter.studentId = req.user._id;
   }
 
@@ -334,6 +343,7 @@ exports.create = asyncHandler(async (req, res) => {
   if (req.body.sessionId) {
     session = await AttendanceSession.findById(req.body.sessionId);
     if (!session) throw ApiError.notFound('Attendance session not found.');
+    assertProgramAccess(req.user, session.program);
   }
 
   const users = await User.find({
@@ -343,7 +353,10 @@ exports.create = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('One or more selected students could not be found.');
   }
 
-  const program = req.body.program || session?.program || req.user.program || 'CWTS';
+  const program = session ? session.program : resolveProgramForCreate(req.user, req.body.program);
+  if (users.some((u) => u.program !== program)) {
+    throw ApiError.badRequest('All selected students must belong to the same program.');
+  }
   const status = req.body.status || 'Present';
   const now = new Date();
 
@@ -412,6 +425,7 @@ exports.create = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const record = await Attendance.findById(req.params.id);
   if (!record) throw ApiError.notFound('Attendance record not found.');
+  assertProgramAccess(req.user, record.program);
 
   assertEnum(req.body.status, ATTENDANCE_STATUSES, 'status');
 
@@ -430,6 +444,7 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const record = await Attendance.findById(req.params.id);
   if (!record) throw ApiError.notFound('Attendance record not found.');
+  assertProgramAccess(req.user, record.program);
 
   const { studentId, program } = record;
   await record.deleteOne();
@@ -443,7 +458,10 @@ exports.remove = asyncHandler(async (req, res) => {
  * Feeds the officer attendance screen: per-day totals plus a monthly trend.
  */
 exports.summary = asyncHandler(async (req, res) => {
-  const program = req.query.program || req.user.program || 'CWTS';
+  const program =
+    req.user.role === 'super_admin'
+      ? req.query.program || 'CWTS'
+      : req.user.program;
   const date = req.query.date ? new Date(req.query.date) : new Date();
 
   const dayFilter = {

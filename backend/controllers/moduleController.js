@@ -4,9 +4,14 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
-const { PROGRAMS } = require('../config/constants');
+const { PROGRAMS, TRAINEE_ROLES } = require('../config/constants');
 const { publicUrl } = require('../middleware/upload');
 const { notifyUsers } = require('../utils/notify');
+const {
+  assertProgramAccess,
+  scopeFilterToProgram,
+  resolveProgramForCreate,
+} = require('../utils/programScope');
 
 function parseJsonish(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -35,8 +40,7 @@ function parseList(value) {
  */
 exports.list = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.program) filter.program = req.query.program;
-  else if (['student', 'cadet'].includes(req.user.role)) filter.program = req.user.program;
+  scopeFilterToProgram(filter, req.user, req.query.program);
 
   if (req.query.status) filter.status = req.query.status;
   if (req.query.moduleCode && req.query.moduleCode !== 'All Modules') {
@@ -74,7 +78,7 @@ exports.list = asyncHandler(async (req, res) => {
   const mineMap = new Map(mine.map((s) => [String(s.moduleId), s]));
 
   const totalTrainees = await User.countDocuments({
-    role: { $in: ['student', 'cadet'] },
+    role: { $in: TRAINEE_ROLES },
     ...(filter.program ? { program: filter.program } : {}),
     status: 'Active',
   });
@@ -108,6 +112,7 @@ exports.list = asyncHandler(async (req, res) => {
 exports.get = asyncHandler(async (req, res) => {
   const module = await ModuleModel.findById(req.params.id).populate('createdBy', 'name role');
   if (!module) throw ApiError.notFound('Module not found.');
+  assertProgramAccess(req.user, module.program);
 
   const mine = await Submission.findOne({ moduleId: module._id, studentId: req.user._id });
   const submittedCount = await Submission.countDocuments({ moduleId: module._id });
@@ -123,7 +128,7 @@ exports.create = asyncHandler(async (req, res) => {
   requireFields(req.body, ['title']);
   assertEnum(req.body.program, PROGRAMS, 'program');
 
-  const program = req.body.program || req.user.program || 'CWTS';
+  const program = resolveProgramForCreate(req.user, req.body.program);
   const file = req.file;
 
   const module = await ModuleModel.create({
@@ -167,7 +172,11 @@ exports.create = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const module = await ModuleModel.findById(req.params.id);
   if (!module) throw ApiError.notFound('Module not found.');
+  assertProgramAccess(req.user, module.program);
   assertEnum(req.body.program, PROGRAMS, 'program');
+  if (req.user.role !== 'super_admin' && req.body.program !== undefined) {
+    req.body.program = req.user.program;
+  }
 
   ['title', 'description', 'program', 'moduleCode', 'section', 'status'].forEach((f) => {
     if (req.body[f] !== undefined) module[f] = req.body[f];
@@ -199,6 +208,7 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const module = await ModuleModel.findById(req.params.id);
   if (!module) throw ApiError.notFound('Module not found.');
+  assertProgramAccess(req.user, module.program);
 
   await Submission.deleteMany({ moduleId: module._id });
   await module.deleteOne();
@@ -210,6 +220,7 @@ exports.remove = asyncHandler(async (req, res) => {
 exports.submissions = asyncHandler(async (req, res) => {
   const module = await ModuleModel.findById(req.params.id);
   if (!module) throw ApiError.notFound('Module not found.');
+  assertProgramAccess(req.user, module.program);
 
   const filter = { moduleId: module._id };
   if (req.query.status && req.query.status !== 'All') filter.status = req.query.status;

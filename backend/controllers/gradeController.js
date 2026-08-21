@@ -4,15 +4,16 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
-const { grading } = require('../config/constants');
+const { grading, TRAINEE_ROLES } = require('../config/constants');
+const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 
 /** GET /api/grades */
 exports.list = asyncHandler(async (req, res) => {
   const filter = {};
-  if (req.query.program) filter.program = req.query.program;
+  scopeFilterToProgram(filter, req.user, req.query.program);
   if (req.query.remarks && req.query.remarks !== 'All') filter.remarks = req.query.remarks;
 
-  if (['student', 'cadet'].includes(req.user.role)) {
+  if (TRAINEE_ROLES.includes(req.user.role)) {
     filter.studentId = req.user._id;
   }
 
@@ -62,6 +63,9 @@ exports.getForStudent = asyncHandler(async (req, res) => {
   if (!user) throw ApiError.notFound('Student not found.');
 
   assertSelfOrStaff(req, user._id);
+  if (String(req.user._id) !== String(user._id)) {
+    assertProgramAccess(req.user, user.program);
+  }
 
   const grade = await recalculateGrade(user._id, user.program || 'CWTS');
   await grade.populate('studentId', 'name studentId program section yearLevel profileImage');
@@ -74,6 +78,7 @@ exports.recalculate = asyncHandler(async (req, res) => {
   if (req.body.studentId) {
     const user = await User.findById(req.body.studentId);
     if (!user) throw ApiError.notFound('Student not found.');
+    assertProgramAccess(req.user, user.program);
     const grade = await recalculateGrade(
       user._id,
       user.program || 'CWTS',
@@ -82,7 +87,10 @@ exports.recalculate = asyncHandler(async (req, res) => {
     return res.json({ success: true, count: 1, data: grade });
   }
 
-  const program = req.body.program || req.user.program || 'CWTS';
+  const program =
+    req.user.role === 'super_admin'
+      ? req.body.program || 'CWTS'
+      : req.user.program;
   const trainees = await User.find({
     role: program === 'ROTC' ? 'cadet' : 'student',
     program,
@@ -105,6 +113,7 @@ exports.recalculate = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const grade = await Grade.findById(req.params.id);
   if (!grade) throw ApiError.notFound('Grade record not found.');
+  assertProgramAccess(req.user, grade.program);
 
   if (req.body.finalGrade !== undefined) {
     const value = Number(req.body.finalGrade);
@@ -123,10 +132,13 @@ exports.update = asyncHandler(async (req, res) => {
 
 /**
  * GET /api/grades/report/export
- * Returns CSV for the instructor "Export final grade report" button.
+ * Returns CSV for the admin_cwts/admin_rotc "Export final grade report" button.
  */
 exports.exportReport = asyncHandler(async (req, res) => {
-  const program = req.query.program || req.user.program || 'CWTS';
+  const program =
+    req.user.role === 'super_admin'
+      ? req.query.program || 'CWTS'
+      : req.user.program;
 
   const grades = await Grade.find({ program }).populate(
     'studentId',

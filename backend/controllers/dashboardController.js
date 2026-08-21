@@ -94,85 +94,19 @@ exports.officer = asyncHandler(async (req, res) => {
 });
 
 /**
- * GET /api/dashboard/instructor
- * Fills the instructor home screen: module count, enrolled trainees,
- * attendance rate, announcement count, class breakdown and recent activity.
- */
-exports.instructor = asyncHandler(async (req, res) => {
-  const program = req.query.program || req.user.program || 'CWTS';
-  const traineeRole = program === 'ROTC' ? 'cadet' : 'student';
-
-  const [
-    modules,
-    enrolled,
-    statusRows,
-    announcements,
-    recentSubmissions,
-    trend,
-  ] = await Promise.all([
-    ModuleModel.countDocuments({ program, status: { $ne: 'Archived' } }),
-    User.countDocuments({ role: traineeRole, program, status: 'Active' }),
-    Attendance.aggregate([
-      { $match: { program } },
-      { $group: { _id: '$status', count: { $sum: 1 } } },
-    ]),
-    Announcement.countDocuments({
-      status: 'Published',
-      program: { $in: [program, 'All'] },
-    }),
-    Submission.find()
-      .populate('studentId', 'name studentId program')
-      .populate('moduleId', 'title program')
-      .sort({ submittedAt: -1 })
-      .limit(10),
-    attendanceTrend(program),
-  ]);
-
-  const status = toMap(statusRows);
-  const present = status.Present || 0;
-  const late = status.Late || 0;
-  const excused = status.Excused || 0;
-  const absent = status.Absent || 0;
-  const total = present + late + excused + absent;
-
-  const profile = await profileFor(req.user);
-
-  res.json({
-    success: true,
-    data: {
-      user: req.user.toPublic(),
-      profile,
-      program,
-      overview: {
-        modules,
-        enrolledStudents: enrolled,
-        attendanceRate: total ? Math.round(((present + late + excused) / total) * 100) : 0,
-        announcements,
-      },
-      classOverview: { present, absent, late, excused, total },
-      trend,
-      recentActivities: recentSubmissions
-        .filter((s) => !s.moduleId || s.moduleId.program === program)
-        .slice(0, 5)
-        .map((s) => ({
-          _id: s._id,
-          title: s.moduleId
-            ? `${s.studentId?.name || 'A trainee'} submitted ${s.moduleId.title}`
-            : `${s.studentId?.name || 'A trainee'} submitted an activity`,
-          date: s.submittedAt,
-          status: s.status,
-        })),
-    },
-  });
-});
-
-/**
  * GET /api/dashboard/admin
  * Every admin-managed count in one payload — users by role, per-program
- * trainee counts, and content totals.
+ * trainee counts, and content totals. super_admin gets the full CWTS+ROTC
+ * picture; admin_cwts/admin_rotc get the identical shape scoped to their
+ * own program only.
  */
 exports.admin = asyncHandler(async (req, res) => {
   const today = new Date();
+  const isSuperAdmin = req.user.role === 'super_admin';
+  const programFilter = isSuperAdmin ? {} : { program: req.user.program };
+  const contentFilter = isSuperAdmin ? {} : { program: req.user.program };
+  const attendanceFilter = isSuperAdmin ? {} : { program: req.user.program };
+  const gradeFilter = isSuperAdmin ? {} : { program: req.user.program };
 
   const [
     roleRows,
@@ -184,19 +118,28 @@ exports.admin = asyncHandler(async (req, res) => {
     attendanceToday,
     grades,
   ] = await Promise.all([
-    User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]),
     User.aggregate([
-      { $match: { role: { $in: ['student', 'cadet'] } } },
+      { $match: programFilter },
+      { $group: { _id: '$role', count: { $sum: 1 } } },
+    ]),
+    User.aggregate([
+      { $match: { role: { $in: ['student', 'cadet'] }, ...programFilter } },
       { $group: { _id: '$program', count: { $sum: 1 } } },
     ]),
-    Activity.countDocuments(),
-    Announcement.countDocuments(),
-    ModuleModel.countDocuments(),
-    Submission.countDocuments(),
+    Activity.countDocuments(contentFilter),
+    Announcement.countDocuments(
+      isSuperAdmin ? {} : { program: { $in: [req.user.program, 'All'] } }
+    ),
+    ModuleModel.countDocuments(contentFilter),
+    Submission.countDocuments(), // Submission has no direct program field.
     Attendance.countDocuments({
+      ...attendanceFilter,
       date: { $gte: startOfDay(today), $lte: endOfDay(today) },
     }),
-    Grade.aggregate([{ $group: { _id: '$remarks', count: { $sum: 1 } } }]),
+    Grade.aggregate([
+      { $match: gradeFilter },
+      { $group: { _id: '$remarks', count: { $sum: 1 } } },
+    ]),
   ]);
 
   const byRole = toMap(roleRows);
@@ -204,13 +147,15 @@ exports.admin = asyncHandler(async (req, res) => {
   res.json({
     success: true,
     data: {
+      program: isSuperAdmin ? null : req.user.program,
       users: {
         total: Object.values(byRole).reduce((a, b) => a + b, 0),
         students: byRole.student || 0,
         cadets: byRole.cadet || 0,
         officers: byRole.officer || 0,
-        instructors: byRole.instructor || 0,
-        admins: byRole.admin || 0,
+        adminCwts: byRole.admin_cwts || 0,
+        adminRotc: byRole.admin_rotc || 0,
+        superAdmins: byRole.super_admin || 0,
       },
       programs: toMap(programRows),
       content: { activities, announcements, modules, submissions },

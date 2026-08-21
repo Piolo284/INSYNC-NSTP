@@ -2,9 +2,10 @@ const router = require('express').Router();
 const ctrl = require('../controllers/activityController');
 const { protect, authorize } = require('../middleware/auth');
 const { uploader } = require('../middleware/upload');
+const { STAFF_ROLES } = require('../config/constants');
 
 const photos = uploader('activities').array('photos', 10);
-const staff = authorize('officer', 'instructor', 'admin');
+const staff = authorize(...STAFF_ROLES);
 
 router.use(protect);
 

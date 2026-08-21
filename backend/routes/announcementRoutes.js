@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const ctrl = require('../controllers/announcementController');
 const { protect, authorize } = require('../middleware/auth');
+const { STAFF_ROLES } = require('../config/constants');
 
-const staff = authorize('officer', 'instructor', 'admin');
+const staff = authorize(...STAFF_ROLES);
 
 router.use(protect);
 

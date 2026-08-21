@@ -4,16 +4,25 @@
  * values can be adjusted without touching code.
  */
 
-const ROLES = ['student', 'cadet', 'officer', 'instructor', 'admin'];
+const ROLES = ['student', 'cadet', 'officer', 'admin_cwts', 'admin_rotc', 'super_admin'];
 const PROGRAMS = ['CWTS', 'ROTC'];
 const USER_STATUSES = ['Active', 'Inactive', 'Dropped', 'Pending'];
+
+/** Roles that administer exactly one program (CWTS or ROTC), never both. */
+const PROGRAM_ADMIN_ROLES = ['admin_cwts', 'admin_rotc'];
+/** Every role with admin-level rights, program-scoped or system-wide. */
+const ADMIN_ROLES = ['admin_cwts', 'admin_rotc', 'super_admin'];
+/** Non-trainee roles — replaces the old hand-typed ['officer','instructor','admin']. */
+const STAFF_ROLES = ['officer', 'admin_cwts', 'admin_rotc', 'super_admin'];
+/** Trainee roles — unchanged. */
+const TRAINEE_ROLES = ['student', 'cadet'];
 
 const ATTENDANCE_STATUSES = ['Present', 'Late', 'Absent', 'Excused'];
 const ATTENDANCE_METHODS = ['QR', 'Manual'];
 
 const SUBMISSION_STATUSES = ['To Do', 'Submitted', 'Graded', 'Missing'];
 
-const TARGET_AUDIENCES = ['All', 'Students', 'Cadets', 'Officers', 'Instructors'];
+const TARGET_AUDIENCES = ['All', 'Students', 'Cadets', 'Officers'];
 
 const SESSION_STATUSES = ['Active', 'Closed', 'Cancelled'];
 
@@ -50,6 +59,10 @@ const attendanceRules = () => ({
 
 module.exports = {
   ROLES,
+  PROGRAM_ADMIN_ROLES,
+  ADMIN_ROLES,
+  STAFF_ROLES,
+  TRAINEE_ROLES,
   PROGRAMS,
   USER_STATUSES,
   ATTENDANCE_STATUSES,

@@ -2,7 +2,6 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
 const Officer = require('../models/Officer');
-const Instructor = require('../models/Instructor');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { signToken } = require('../middleware/auth');
@@ -18,8 +17,6 @@ async function profileFor(user) {
       return Cadet.findOne({ userId: user._id });
     case 'officer':
       return Officer.findOne({ userId: user._id });
-    case 'instructor':
-      return Instructor.findOne({ userId: user._id });
     default:
       return null;
   }
@@ -40,7 +37,7 @@ async function authResponse(res, user, status = 200) {
 /**
  * POST /api/auth/login
  * Accepts { email | studentId, password }. The trainee login screen sends a
- * student ID, the officer/instructor screens send an email — both land here.
+ * student ID, the officer/admin screens send an email — both land here.
  */
 exports.login = asyncHandler(async (req, res) => {
   const { email, studentId, identifier, password, role } = req.body;

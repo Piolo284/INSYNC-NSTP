@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { STAFF_ROLES } = require('../config/constants');
 
 function signToken(user) {
   return jwt.sign(
@@ -39,7 +40,7 @@ const protect = asyncHandler(async (req, _res, next) => {
   next();
 });
 
-/** Usage: router.post('/', protect, authorize('officer', 'instructor'), handler) */
+/** Usage: router.post('/', protect, authorize('officer', 'admin_cwts'), handler) */
 function authorize(...roles) {
   return (req, _res, next) => {
     if (!req.user) return next(ApiError.unauthorized());
@@ -55,7 +56,7 @@ function authorize(...roles) {
 /** Trainees may only read their own records; staff may read anyone's. */
 function assertSelfOrStaff(req, targetUserId) {
   const isSelf = String(req.user._id) === String(targetUserId);
-  const isStaff = ['officer', 'instructor', 'admin'].includes(req.user.role);
+  const isStaff = STAFF_ROLES.includes(req.user.role);
   if (!isSelf && !isStaff) {
     throw ApiError.forbidden('You can only view your own records.');
   }

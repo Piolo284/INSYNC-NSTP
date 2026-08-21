@@ -12,7 +12,7 @@ const studentSchema = new mongoose.Schema(
     studentId: { type: String, required: true, unique: true, trim: true },
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    program: { type: String, default: 'CWTS' },
+    program: { type: String, enum: ['CWTS'], default: 'CWTS' },
     course: { type: String, trim: true, default: '' }, // e.g. BSIT
     yearLevel: { type: String, trim: true, default: '' },
     section: { type: String, trim: true, default: '' },

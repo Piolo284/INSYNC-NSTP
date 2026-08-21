@@ -51,7 +51,7 @@ async function login(identifier, password, role) {
 async function main() {
   console.log(`\nSmoke testing ${BASE}\n`);
 
-  let studentToken, cadetToken, officerToken, instructorToken, adminToken;
+  let studentToken, cadetToken, officerToken, adminCwtsToken, adminToken;
   let studentId, moduleId, submissionId, activityId, sessionCode;
 
   await check('health check', async () => {
@@ -60,28 +60,28 @@ async function main() {
   });
 
   await check('login as student', async () => {
-    studentToken = await login('student@nstp.test', 'Student123', 'student');
+    studentToken = await login('student.cwts@nstp.test', 'StudentCWTS123', 'student');
   });
 
   await check('login as cadet', async () => {
-    cadetToken = await login('cadet@nstp.test', 'Cadet123', 'cadet');
+    cadetToken = await login('cadet.rotc@nstp.test', 'CadetROTC123', 'cadet');
   });
 
   await check('login as CWTS officer', async () => {
-    officerToken = await login('officer.cwts@nstp.test', 'Officer123', 'officer');
+    officerToken = await login('officer.cwts@nstp.test', 'OfficerCWTS123', 'officer');
   });
 
-  await check('login as CWTS instructor', async () => {
-    instructorToken = await login('instructor@nstp.test', 'Instructor123', 'instructor');
+  await check('login as CWTS program admin (admin_cwts)', async () => {
+    adminCwtsToken = await login('admin.cwts@nstp.test', 'AdminCWTS123', 'admin_cwts');
   });
 
-  await check('login as admin', async () => {
-    adminToken = await login('admin@nstp.test', 'Admin123', 'admin');
+  await check('login as super_admin', async () => {
+    adminToken = await login('admin@nstp.test', 'Admin123', 'super_admin');
   });
 
   await check('reject wrong password', async () => {
     try {
-      await login('student@nstp.test', 'WrongPass1!', 'student');
+      await login('student.cwts@nstp.test', 'WrongPass1!', 'student');
       throw new Error('should have been rejected');
     } catch (err) {
       assert(err.message.startsWith('401'), `expected 401, got ${err.message}`);
@@ -111,12 +111,13 @@ async function main() {
     assert(typeof res.data.overview.totalStudents === 'number', 'missing totalStudents');
   });
 
-  await check('instructor dashboard has module count', async () => {
-    const res = await api('GET', '/dashboard/instructor', { token: instructorToken });
-    assert(typeof res.data.overview.modules === 'number', 'missing modules count');
+  await check('admin_cwts dashboard has program-scoped module count', async () => {
+    const res = await api('GET', '/dashboard/admin', { token: adminCwtsToken });
+    assert(typeof res.data.content.modules === 'number', 'missing modules count');
+    assert(res.data.program === 'CWTS', 'expected admin_cwts to be scoped to CWTS');
   });
 
-  await check('admin dashboard aggregates users', async () => {
+  await check('super_admin dashboard aggregates users', async () => {
     const res = await api('GET', '/dashboard/admin', { token: adminToken });
     assert(res.data.users.total >= 10, 'expected at least 10 seeded users');
   });
@@ -219,7 +220,7 @@ async function main() {
 
   await check('officer marks manual attendance for a cadet', async () => {
     const meRes = await api('GET', '/auth/me', { token: cadetToken });
-    const rotcOfficerToken = await login('officer.rotc@nstp.test', 'Officer123', 'officer');
+    const rotcOfficerToken = await login('officer.rotc@nstp.test', 'OfficerROTC123', 'officer');
     const res = await api('POST', '/attendance', {
       token: rotcOfficerToken,
       body: {
@@ -242,9 +243,9 @@ async function main() {
     submissionId = res.data._id;
   });
 
-  await check('officer grades the submission', async () => {
+  await check('admin_cwts grades the submission', async () => {
     const res = await api('POST', `/submissions/${submissionId}/grade`, {
-      token: instructorToken,
+      token: adminCwtsToken,
       body: { score: 88, totalPoints: 100, feedback: 'Nice work.' },
     });
     assert(res.data.status === 'Graded', 'submission not marked Graded');
@@ -288,7 +289,7 @@ async function main() {
 
   await check('CSV export endpoint responds', async () => {
     const res = await fetch(`${BASE}/grades/report/export?program=CWTS`, {
-      headers: { Authorization: `Bearer ${instructorToken}` },
+      headers: { Authorization: `Bearer ${adminCwtsToken}` },
     });
     assert(res.ok, 'export endpoint failed');
     const text = await res.text();

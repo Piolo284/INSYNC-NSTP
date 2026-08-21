@@ -12,7 +12,7 @@ const cadetSchema = new mongoose.Schema(
     cadetId: { type: String, required: true, unique: true, trim: true },
     fullName: { type: String, required: true, trim: true },
     email: { type: String, required: true, lowercase: true, trim: true },
-    program: { type: String, default: 'ROTC' },
+    program: { type: String, enum: ['ROTC'], default: 'ROTC' },
     course: { type: String, trim: true, default: '' },
     platoon: { type: String, trim: true, default: '' },
     company: { type: String, trim: true, default: '' },

@@ -51,9 +51,13 @@ router.get('/', (_req, res) => {
       'GET    /api/notifications/:userId',
       'PUT    /api/notifications/:id/read',
       'GET    /api/dashboard/officer',
-      'GET    /api/dashboard/instructor',
       'GET    /api/dashboard/admin',
       'GET    /api/documents',
+      'GET    /api/officers',
+      'GET    /api/officers/:id',
+      'POST   /api/officers',
+      'PUT    /api/officers/:id',
+      'DELETE /api/officers/:id',
     ],
   });
 });
@@ -71,5 +75,6 @@ router.use('/grades', require('./gradeRoutes'));
 router.use('/notifications', require('./notificationRoutes'));
 router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/documents', require('./documentRoutes'));
+router.use('/officers', require('./officerRoutes'));
 
 module.exports = router;

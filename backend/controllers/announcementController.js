@@ -5,12 +5,12 @@ const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { PROGRAMS, TARGET_AUDIENCES } = require('../config/constants');
 const { notifyUsers } = require('../utils/notify');
+const { assertProgramAccess } = require('../utils/programScope');
 
 const AUDIENCE_ROLES = {
   Students: ['student'],
   Cadets: ['cadet'],
   Officers: ['officer'],
-  Instructors: ['instructor'],
 };
 
 /** Resolves who should receive a notification for this announcement. */
@@ -22,7 +22,7 @@ async function recipientsFor(announcement) {
   const filter = {};
   const roles = AUDIENCE_ROLES[announcement.targetAudience];
   if (roles) filter.role = { $in: roles };
-  else filter.role = { $in: ['student', 'cadet', 'officer', 'instructor'] };
+  else filter.role = { $in: ['student', 'cadet', 'officer'] };
 
   if (announcement.program && announcement.program !== 'All') {
     filter.program = announcement.program;
@@ -40,13 +40,16 @@ async function recipientsFor(announcement) {
 exports.list = asyncHandler(async (req, res) => {
   const filter = { status: req.query.status || 'Published' };
 
-  if (req.query.program) {
-    filter.program = { $in: [req.query.program, 'All'] };
+  if (req.user.role === 'super_admin') {
+    if (req.query.program) filter.program = { $in: [req.query.program, 'All'] };
+  } else {
+    // Every other role — trainee, officer, admin_cwts/admin_rotc — is locked
+    // to their own program (plus 'All'-targeted announcements).
+    filter.program = { $in: [req.user.program, 'All'] };
   }
 
   if (['student', 'cadet'].includes(req.user.role)) {
     const audience = req.user.role === 'cadet' ? 'Cadets' : 'Students';
-    filter.program = { $in: [req.user.program, 'All'] };
     filter.targetAudience = { $in: ['All', audience] };
     filter.$or = [
       { recipients: { $size: 0 } },
@@ -64,6 +67,17 @@ exports.list = asyncHandler(async (req, res) => {
   res.json({ success: true, count: announcements.length, data: announcements });
 });
 
+/**
+ * Announcements can target 'All' (both programs), which only super_admin may
+ * use. admin_cwts/admin_rotc/officer are locked to their own program.
+ */
+function assertAnnouncementAccess(user, program) {
+  if (user.role === 'super_admin') return;
+  if (program === 'All' || program !== user.program) {
+    throw ApiError.forbidden('You are not authorized to access this program.');
+  }
+}
+
 /** GET /api/announcements/:id */
 exports.get = asyncHandler(async (req, res) => {
   const announcement = await Announcement.findById(req.params.id).populate(
@@ -71,6 +85,9 @@ exports.get = asyncHandler(async (req, res) => {
     'name role'
   );
   if (!announcement) throw ApiError.notFound('Announcement not found.');
+  if (req.user.role !== 'super_admin' && announcement.program !== 'All') {
+    assertProgramAccess(req.user, announcement.program);
+  }
   res.json({ success: true, data: announcement });
 });
 
@@ -80,10 +97,25 @@ exports.create = asyncHandler(async (req, res) => {
   assertEnum(req.body.program, [...PROGRAMS, 'All'], 'program');
   assertEnum(req.body.targetAudience, TARGET_AUDIENCES, 'targetAudience');
 
+  // Force the program (and, by extension, the audience) to the caller's own
+  // program unless they are super_admin — closes the "target the other
+  // program" hole for admin_cwts/admin_rotc/officer.
+  const program =
+    req.user.role === 'super_admin' ? req.body.program || 'All' : req.user.program;
+
+  if (req.user.role !== 'super_admin' && req.body.targetAudience) {
+    const wrongAudience =
+      (req.user.program === 'CWTS' && req.body.targetAudience === 'Cadets') ||
+      (req.user.program === 'ROTC' && req.body.targetAudience === 'Students');
+    if (wrongAudience) {
+      throw ApiError.forbidden('You are not authorized to target that audience.');
+    }
+  }
+
   const announcement = await Announcement.create({
     title: req.body.title,
     content: req.body.content,
-    program: req.body.program || req.user.program || 'All',
+    program,
     targetAudience: req.body.targetAudience || 'All',
     recipients: Array.isArray(req.body.recipients) ? req.body.recipients : [],
     date: req.body.date ? new Date(req.body.date) : new Date(),
@@ -111,9 +143,18 @@ exports.create = asyncHandler(async (req, res) => {
 exports.update = asyncHandler(async (req, res) => {
   const announcement = await Announcement.findById(req.params.id);
   if (!announcement) throw ApiError.notFound('Announcement not found.');
+  if (req.user.role !== 'super_admin' && announcement.program !== 'All') {
+    assertProgramAccess(req.user, announcement.program);
+  } else if (req.user.role !== 'super_admin') {
+    // An existing 'All' announcement may only be edited by super_admin.
+    throw ApiError.forbidden('You are not authorized to access this program.');
+  }
 
   assertEnum(req.body.program, [...PROGRAMS, 'All'], 'program');
   assertEnum(req.body.targetAudience, TARGET_AUDIENCES, 'targetAudience');
+  if (req.user.role !== 'super_admin' && req.body.program !== undefined) {
+    req.body.program = req.user.program;
+  }
 
   const fields = [
     'title',
@@ -139,6 +180,12 @@ exports.update = asyncHandler(async (req, res) => {
 exports.remove = asyncHandler(async (req, res) => {
   const announcement = await Announcement.findById(req.params.id);
   if (!announcement) throw ApiError.notFound('Announcement not found.');
+  if (req.user.role !== 'super_admin') {
+    if (announcement.program === 'All') {
+      throw ApiError.forbidden('You are not authorized to access this program.');
+    }
+    assertProgramAccess(req.user, announcement.program);
+  }
 
   await announcement.deleteOne();
   res.json({ success: true, message: 'Announcement deleted.' });
@@ -148,6 +195,11 @@ exports.remove = asyncHandler(async (req, res) => {
 exports.send = asyncHandler(async (req, res) => {
   const announcement = await Announcement.findById(req.params.id);
   if (!announcement) throw ApiError.notFound('Announcement not found.');
+  if (req.user.role !== 'super_admin' && announcement.program !== 'All') {
+    assertProgramAccess(req.user, announcement.program);
+  } else if (req.user.role !== 'super_admin') {
+    throw ApiError.forbidden('You are not authorized to access this program.');
+  }
 
   if (Array.isArray(req.body.recipients) && req.body.recipients.length) {
     announcement.recipients = req.body.recipients;

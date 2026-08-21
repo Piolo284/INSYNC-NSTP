@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const Cadet = require('../models/Cadet');
+const User = require('../models/User');
 const Attendance = require('../models/Attendance');
 const Announcement = require('../models/Announcement');
 const ModuleModel = require('../models/Module');
@@ -10,6 +11,9 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
+const { ADMIN_ROLES } = require('../config/constants');
+const { requireFields, isValidEmail } = require('../utils/validate');
+const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 
 async function resolveCadet(idOrNumber) {
   const or = [{ cadetId: idOrNumber }];
@@ -31,11 +35,13 @@ exports.list = asyncHandler(async (req, res) => {
     const rx = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ fullName: rx }, { cadetId: rx }, { email: rx }];
   }
+  scopeFilterToProgram(filter, req.user, req.query.program);
 
   const cadets = await Cadet.find(filter).sort({ fullName: 1 });
+  const countScope = filter.program ? { program: filter.program } : {};
   const [total, active] = await Promise.all([
-    Cadet.countDocuments(),
-    Cadet.countDocuments({ status: 'Active' }),
+    Cadet.countDocuments(countScope),
+    Cadet.countDocuments({ ...countScope, status: 'Active' }),
   ]);
 
   res.json({
@@ -49,14 +55,22 @@ exports.list = asyncHandler(async (req, res) => {
 /** GET /api/cadets/:id */
 exports.get = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
-  assertSelfOrStaff(req, cadet.userId?._id || cadet.userId);
+  const userId = cadet.userId?._id || cadet.userId;
+  assertSelfOrStaff(req, userId);
+  if (String(req.user._id) !== String(userId)) {
+    assertProgramAccess(req.user, cadet.program);
+  }
   res.json({ success: true, data: cadet });
 });
 
 /** PUT /api/cadets/:id */
 exports.update = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
-  assertSelfOrStaff(req, cadet.userId?._id || cadet.userId);
+  const userId = cadet.userId?._id || cadet.userId;
+  assertSelfOrStaff(req, userId);
+  if (String(req.user._id) !== String(userId)) {
+    assertProgramAccess(req.user, cadet.program);
+  }
 
   const fields = [
     'fullName',
@@ -72,7 +86,7 @@ exports.update = asyncHandler(async (req, res) => {
     'emergencyContact',
     'profileImage',
   ];
-  if (['officer', 'instructor', 'admin'].includes(req.user.role)) fields.push('status');
+  if (ADMIN_ROLES.includes(req.user.role) || req.user.role === 'officer') fields.push('status');
 
   fields.forEach((f) => {
     if (req.body[f] !== undefined) cadet[f] = req.body[f];
@@ -87,6 +101,9 @@ exports.dashboard = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
   const userId = cadet.userId?._id || cadet.userId;
   assertSelfOrStaff(req, userId);
+  if (String(req.user._id) !== String(userId)) {
+    assertProgramAccess(req.user, cadet.program);
+  }
 
   const program = 'ROTC';
   const now = new Date();
@@ -155,6 +172,9 @@ exports.attendance = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
   const userId = cadet.userId?._id || cadet.userId;
   assertSelfOrStaff(req, userId);
+  if (String(req.user._id) !== String(userId)) {
+    assertProgramAccess(req.user, cadet.program);
+  }
 
   const filter = { studentId: userId };
   if (req.query.status && req.query.status !== 'All') filter.status = req.query.status;
@@ -172,9 +192,87 @@ exports.grades = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
   const userId = cadet.userId?._id || cadet.userId;
   assertSelfOrStaff(req, userId);
+  if (String(req.user._id) !== String(userId)) {
+    assertProgramAccess(req.user, cadet.program);
+  }
 
   const grade = await recalculateGrade(userId, 'ROTC');
   res.json({ success: true, data: grade });
+});
+
+/**
+ * POST /api/cadets — admin_rotc/super_admin only. Creates the User (role
+ * 'cadet') and its Cadet profile together, mirroring authController.register.
+ */
+exports.create = asyncHandler(async (req, res) => {
+  const {
+    name,
+    email,
+    password,
+    cadetId,
+    course = '',
+    platoon = '',
+    company = '',
+    brigade = '',
+    yearLevel = '',
+    section = '',
+    contactNumber = '',
+    address = '',
+    emergencyContact = '',
+  } = req.body;
+
+  requireFields(req.body, ['name', 'email', 'password', 'cadetId']);
+
+  if (!isValidEmail(email)) {
+    throw ApiError.badRequest('Please enter a valid email address.');
+  }
+  if (String(password).length < 8) {
+    throw ApiError.badRequest('Password must be at least 8 characters long.');
+  }
+
+  const existing = await User.findOne({
+    $or: [{ email: String(email).toLowerCase() }, { studentId: cadetId }],
+  });
+  if (existing) {
+    throw ApiError.conflict(
+      existing.email === String(email).toLowerCase()
+        ? 'That email address is already registered.'
+        : 'That cadet ID is already registered.'
+    );
+  }
+
+  const user = await User.create({
+    name,
+    email,
+    password,
+    role: 'cadet',
+    studentId: cadetId,
+    program: 'ROTC',
+    yearLevel,
+    section,
+    contactNumber,
+    status: 'Active',
+  });
+
+  const cadet = await Cadet.create({
+    userId: user._id,
+    cadetId,
+    fullName: name,
+    email: String(email).toLowerCase(),
+    program: 'ROTC',
+    course,
+    platoon,
+    company,
+    brigade,
+    yearLevel,
+    section,
+    contactNumber,
+    address,
+    emergencyContact,
+    status: 'Active',
+  });
+
+  res.status(201).json({ success: true, data: { user: user.toPublic(), cadet } });
 });
 
 exports.resolveCadet = resolveCadet;

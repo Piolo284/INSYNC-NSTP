@@ -1,12 +1,13 @@
 const Notification = require('../models/Notification');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { STAFF_ROLES } = require('../config/constants');
 
 /** GET /api/notifications/:userId */
 exports.listForUser = asyncHandler(async (req, res) => {
   const { userId } = req.params;
   const isSelf = String(req.user._id) === String(userId);
-  if (!isSelf && !['admin', 'instructor'].includes(req.user.role)) {
+  if (!isSelf && !STAFF_ROLES.includes(req.user.role)) {
     throw ApiError.forbidden('You can only view your own notifications.');
   }
 
@@ -86,7 +87,7 @@ exports.remove = asyncHandler(async (req, res) => {
 
   if (
     String(notification.recipientId) !== String(req.user._id) &&
-    !['admin'].includes(req.user.role)
+    req.user.role !== 'super_admin'
   ) {
     throw ApiError.forbidden('You can only delete your own notifications.');
   }

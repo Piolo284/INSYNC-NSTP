@@ -9,7 +9,6 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
 const Officer = require('../models/Officer');
-const Instructor = require('../models/Instructor');
 const Activity = require('../models/Activity');
 const ModuleModel = require('../models/Module');
 const Announcement = require('../models/Announcement');
@@ -22,6 +21,10 @@ const Grade = require('../models/Grade');
 
 const { recalculateGrade } = require('../utils/gradeCalculator');
 const { startOfDay, combineDateAndTime, formatTime12h } = require('../utils/datetime');
+
+// `npm run seed` and `npm run seed:fresh` both currently run this file the
+// same way (always wipe + recreate) — there is no persistent "add to existing
+// data" mode yet, so the two npm scripts are equivalent for now.
 
 // ---------- deterministic helpers ----------
 const pick = (arr, i) => arr[i % arr.length];
@@ -139,7 +142,6 @@ async function wipe() {
     Student.deleteMany({}),
     Cadet.deleteMany({}),
     Officer.deleteMany({}),
-    Instructor.deleteMany({}),
     Activity.deleteMany({}),
     ModuleModel.deleteMany({}),
     Announcement.deleteMany({}),
@@ -157,73 +159,51 @@ async function seed() {
   await wipe();
 
   // ============================================================
-  // 1. ADMIN
+  // 1. SUPER ADMIN (system-wide, no single program)
   // ============================================================
-  const admin = await User.create({
+  const superAdmin = await User.create({
     name: 'System Administrator',
     email: 'admin@nstp.test',
     password: 'Admin123',
-    role: 'admin',
+    role: 'super_admin',
     studentId: 'ADMIN-001',
     status: 'Active',
   });
-  console.log('[seed] admin created');
+  console.log('[seed] super_admin created');
 
   // ============================================================
-  // 2. INSTRUCTORS (2)
+  // 2. PROGRAM ADMINS (admin_cwts, admin_rotc)
   // ============================================================
-  const instructorSeeds = [
-    {
-      name: 'Lorenz D. Manalo',
-      email: 'instructor@nstp.test',
-      employeeId: 'INS-001',
-      program: 'CWTS',
-      sections: ['CWTS 1 - A', 'CWTS 1 - B'],
-    },
-    {
-      name: 'Ramon C. Villanueva',
-      email: 'instructor.rotc@nstp.test',
-      employeeId: 'INS-002',
-      program: 'ROTC',
-      sections: ['ROTC 1 - A'],
-    },
-  ];
-
-  const instructors = [];
-  for (const s of instructorSeeds) {
-    const user = await User.create({
-      name: s.name,
-      email: s.email,
-      password: 'Instructor123',
-      role: 'instructor',
-      studentId: s.employeeId,
-      program: s.program,
-      status: 'Active',
-    });
-    await Instructor.create({
-      userId: user._id,
-      employeeId: s.employeeId,
-      fullName: s.name,
-      email: s.email,
-      program: s.program,
-      department: 'NSTP Office',
-      sections: s.sections,
-      contactNumber: '09171234567',
-    });
-    instructors.push(user);
-  }
-  console.log(`[seed] ${instructors.length} instructors created`);
+  const adminCwts = await User.create({
+    name: 'Lorenz D. Manalo',
+    email: 'admin.cwts@nstp.test',
+    password: 'AdminCWTS123',
+    role: 'admin_cwts',
+    studentId: 'ADMIN-CWTS-001',
+    program: 'CWTS',
+    status: 'Active',
+  });
+  const adminRotc = await User.create({
+    name: 'Ramon C. Villanueva',
+    email: 'admin.rotc@nstp.test',
+    password: 'AdminROTC123',
+    role: 'admin_rotc',
+    studentId: 'ADMIN-ROTC-001',
+    program: 'ROTC',
+    status: 'Active',
+  });
+  console.log('[seed] admin_cwts and admin_rotc created');
 
   // ============================================================
   // 3. OFFICERS (3 CWTS + 3 ROTC)
   // ============================================================
   const officerSeeds = [
-    { name: 'Piolo M. Privado', email: 'officer.cwts@nstp.test', id: 'OFF-C01', program: 'CWTS' },
-    { name: 'Ana Marie Garcia', email: 'officer.cwts2@nstp.test', id: 'OFF-C02', program: 'CWTS' },
-    { name: 'Mark Anthony Cruz', email: 'officer.cwts3@nstp.test', id: 'OFF-C03', program: 'CWTS' },
-    { name: 'Bernard S. Tolentino', email: 'officer.rotc@nstp.test', id: 'OFF-R01', program: 'ROTC' },
-    { name: 'Katrina L. Bautista', email: 'officer.rotc2@nstp.test', id: 'OFF-R02', program: 'ROTC' },
-    { name: 'Dennis P. Ocampo', email: 'officer.rotc3@nstp.test', id: 'OFF-R03', program: 'ROTC' },
+    { name: 'Piolo M. Privado', email: 'officer.cwts@nstp.test', password: 'OfficerCWTS123', id: 'OFF-C01', program: 'CWTS' },
+    { name: 'Ana Marie Garcia', email: 'officer.cwts2@nstp.test', password: 'OfficerCWTS123', id: 'OFF-C02', program: 'CWTS' },
+    { name: 'Mark Anthony Cruz', email: 'officer.cwts3@nstp.test', password: 'OfficerCWTS123', id: 'OFF-C03', program: 'CWTS' },
+    { name: 'Bernard S. Tolentino', email: 'officer.rotc@nstp.test', password: 'OfficerROTC123', id: 'OFF-R01', program: 'ROTC' },
+    { name: 'Katrina L. Bautista', email: 'officer.rotc2@nstp.test', password: 'OfficerROTC123', id: 'OFF-R02', program: 'ROTC' },
+    { name: 'Dennis P. Ocampo', email: 'officer.rotc3@nstp.test', password: 'OfficerROTC123', id: 'OFF-R03', program: 'ROTC' },
   ];
 
   const officers = [];
@@ -232,7 +212,7 @@ async function seed() {
     const user = await User.create({
       name: s.name,
       email: s.email,
-      password: 'Officer123',
+      password: s.password,
       role: 'officer',
       studentId: s.id,
       program: s.program,
@@ -262,12 +242,12 @@ async function seed() {
   for (let i = 0; i < STUDENT_NAMES.length; i += 1) {
     const name = STUDENT_NAMES[i];
     const studentId = `23BI${471 + i}`;
-    const email = i === 0 ? 'student@nstp.test' : `student${i + 1}@nstp.test`;
+    const email = i === 0 ? 'student.cwts@nstp.test' : `student${i + 1}@nstp.test`;
 
     const user = await User.create({
       name,
       email,
-      password: 'Student123',
+      password: 'StudentCWTS123',
       role: 'student',
       studentId,
       program: 'CWTS',
@@ -304,12 +284,12 @@ async function seed() {
   for (let i = 0; i < CADET_NAMES.length; i += 1) {
     const name = CADET_NAMES[i];
     const cadetId = `23RC${101 + i}`;
-    const email = i === 0 ? 'cadet@nstp.test' : `cadet${i + 1}@nstp.test`;
+    const email = i === 0 ? 'cadet.rotc@nstp.test' : `cadet${i + 1}@nstp.test`;
 
     const user = await User.create({
       name,
       email,
-      password: 'Cadet123',
+      password: 'CadetROTC123',
       role: 'cadet',
       studentId: cadetId,
       program: 'ROTC',
@@ -415,7 +395,7 @@ async function seed() {
         totalPoints: 100,
         rubrics: RUBRIC_TEMPLATE,
         status: i < 3 ? 'Completed' : 'Open',
-        createdBy: instructors[0]._id,
+        createdBy: adminCwts._id,
       })
     );
   }
@@ -433,7 +413,7 @@ async function seed() {
         totalPoints: 100,
         rubrics: RUBRIC_TEMPLATE,
         status: i === 0 ? 'Completed' : 'Open',
-        createdBy: instructors[1]._id,
+        createdBy: adminRotc._id,
       })
     );
   }
@@ -452,7 +432,7 @@ async function seed() {
     ['First Aid Training Seminar', 'Basic first aid and emergency response training for all CWTS officers.', 'CWTS', 'Officers', 'AVR Building', false],
     ['ROTC Orientation', 'All ROTC cadets must attend the orientation. Bring your cadet uniform and ROTC manual.', 'ROTC', 'Cadets', 'MARSU Gymnasium', true],
     ['Field Training Exercise', 'Overnight bivouac training. Bring field equipment, sleeping bag, and personal necessities.', 'ROTC', 'Cadets', 'MARSU Training Ground', false],
-    ['Faculty Meeting', 'All NSTP instructors are requested to attend the monthly coordination meeting.', 'All', 'Instructors', 'NSTP Office', false],
+    ['Program Coordination Meeting', 'All NSTP officers and program admins are requested to attend the monthly coordination meeting.', 'All', 'Officers', 'NSTP Office', false],
   ];
 
   const announcements = [];
@@ -576,7 +556,6 @@ async function seed() {
   // ============================================================
   // 10. SUBMISSIONS (+ grades on the older ones)
   // ============================================================
-  const gradedByInstructor = instructors[0]._id;
   const submissionRows = [];
 
   const cwtsModulesWithDeadline = modules.filter(
@@ -624,8 +603,9 @@ async function seed() {
     });
   }
 
-  buildSubmissions(cwtsModulesWithDeadline, students, gradedByInstructor);
-  buildSubmissions(rotcModulesWithDeadline, cadets, instructors[1]._id);
+  // CWTS-program content is graded by admin_cwts, ROTC-program content by admin_rotc.
+  buildSubmissions(cwtsModulesWithDeadline, students, adminCwts._id);
+  buildSubmissions(rotcModulesWithDeadline, cadets, adminRotc._id);
 
   await Submission.insertMany(submissionRows);
   console.log(`[seed] ${submissionRows.length} submissions created`);
@@ -634,10 +614,10 @@ async function seed() {
   // 11. GRADES (computed from the seeded data, never invented)
   // ============================================================
   for (const s of students) {
-    await recalculateGrade(s._id, 'CWTS', gradedByInstructor);
+    await recalculateGrade(s._id, 'CWTS', adminCwts._id);
   }
   for (const c of cadets) {
-    await recalculateGrade(c._id, 'ROTC', instructors[1]._id);
+    await recalculateGrade(c._id, 'ROTC', adminRotc._id);
   }
   console.log(`[seed] ${students.length + cadets.length} grade records computed`);
 
@@ -704,7 +684,7 @@ async function seed() {
     });
   });
 
-  officers.concat(instructors).forEach((user) => {
+  officers.concat([adminCwts, adminRotc]).forEach((user) => {
     notificationRows.push({
       recipientId: user._id,
       title: 'New submissions to grade',
@@ -724,13 +704,13 @@ async function seed() {
   console.log(' SEED COMPLETE');
   console.log('========================================');
   console.log(' Test accounts (all passwords are case-sensitive):');
-  console.log('   admin@nstp.test           / Admin123       (admin)');
-  console.log('   instructor@nstp.test      / Instructor123  (CWTS instructor)');
-  console.log('   instructor.rotc@nstp.test / Instructor123  (ROTC instructor)');
-  console.log('   officer.cwts@nstp.test    / Officer123     (CWTS officer)');
-  console.log('   officer.rotc@nstp.test    / Officer123     (ROTC officer)');
-  console.log('   student@nstp.test         / Student123     (CWTS trainee, ID 23BI471)');
-  console.log('   cadet@nstp.test           / Cadet123       (ROTC cadet,   ID 23RC101)');
+  console.log('   admin@nstp.test           / Admin123        (super_admin)');
+  console.log('   admin.cwts@nstp.test      / AdminCWTS123    (admin_cwts)');
+  console.log('   admin.rotc@nstp.test      / AdminROTC123    (admin_rotc)');
+  console.log('   officer.cwts@nstp.test    / OfficerCWTS123  (CWTS officer)');
+  console.log('   officer.rotc@nstp.test    / OfficerROTC123  (ROTC officer)');
+  console.log('   student.cwts@nstp.test    / StudentCWTS123  (CWTS trainee, ID 23BI471)');
+  console.log('   cadet.rotc@nstp.test      / CadetROTC123    (ROTC cadet,   ID 23RC101)');
   console.log('');
   console.log(' Trainees can also log in with their student/cadet ID.');
   console.log(` Live QR test code: ${liveSession.sessionCode}`);
