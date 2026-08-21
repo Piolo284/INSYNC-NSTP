@@ -7,7 +7,13 @@ import 'mobile/splash/welcome_screen.dart';
 import 'mobile/cwts/cwts_main_shell.dart';
 import 'mobile/rotc/rotc_main_shell.dart';
 import 'mobile/cwts_officer/cwts_officer_main_shell.dart';
-import 'mobile/cwts_trainer/cwts_trainer_main_shell.dart';
+
+/// Lets the splash router pop a message onto the very first screen the user
+/// sees after an unsupported/legacy session is signed out (there is no
+/// Scaffold above [WelcomeScreen] yet at that point, so a normal
+/// `ScaffoldMessenger.of(context)` call has nothing to attach to).
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -20,6 +26,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       title: 'MARSU-NSTP',
       theme: ThemeData(
@@ -31,6 +38,11 @@ class MyApp extends StatelessWidget {
     );
   }
 }
+
+/// Roles this mobile app knows how to show a shell for. The three
+/// `admin_*`/`super_admin` roles (and any other legacy/retired role) are
+/// managed exclusively through the web admin portal.
+const _supportedMobileRoles = {'student', 'cadet', 'officer'};
 
 class SplashRouter extends StatefulWidget {
   const SplashRouter({super.key});
@@ -58,9 +70,31 @@ class _SplashRouterState extends State<SplashRouter> {
     final prefs = await SharedPreferences.getInstance();
     final hasSeen = prefs.getBool('has_seen_splash') ?? false;
 
+    var restoredRole = role;
+    if (role.isNotEmpty && !_supportedMobileRoles.contains(role)) {
+      // A restored session with a role this mobile app no longer supports
+      // (a session cached under a role that has since been retired, or one
+      // of the web-only admin roles). Sign out cleanly instead of silently
+      // failing to a blank screen, and let the user know why they landed
+      // back at the start.
+      await AuthService.instance.logout();
+      restoredRole = '';
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        rootScaffoldMessengerKey.currentState?.showSnackBar(
+          const SnackBar(
+            content: Text(
+              "This account type isn't supported in the mobile app. "
+              'Please use the web admin portal.',
+            ),
+            backgroundColor: Colors.red,
+          ),
+        );
+      });
+    }
+
     if (!mounted) return;
     setState(() {
-      _restoredRole = role;
+      _restoredRole = restoredRole;
       _hasSeenSplash = hasSeen;
       _isLoading = false;
     });
@@ -75,8 +109,6 @@ class _SplashRouterState extends State<SplashRouter> {
         return const RotcMainShell();
       case 'officer':
         return const CwtsOfficerMainShell();
-      case 'instructor':
-        return const CwtsTrainerMainShell();
       default:
         return null;
     }

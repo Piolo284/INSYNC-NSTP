@@ -49,7 +49,7 @@ class SubmissionService {
     return ApiService.mapOf(response);
   }
 
-  /// Officer/instructor grading. Pass [rubricScores] to let the server total
+  /// Officer grading. Pass [rubricScores] to let the server total
   /// them, or a flat [score] when there is no rubric.
   Future<Map<String, dynamic>> grade(
     String id, {

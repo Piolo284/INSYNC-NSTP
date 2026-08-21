@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -33,12 +34,27 @@ class ApiService {
   static final ApiService instance = ApiService._();
 
   final http.Client _client = http.Client();
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
   String? _token;
 
   /// Called once at start-up so a signed-in user stays signed in.
+  ///
+  /// The JWT now lives in secure storage (Android Keystore / iOS Keychain)
+  /// instead of plaintext SharedPreferences. On the first run after this
+  /// change, a token may still be sitting in the old SharedPreferences spot
+  /// from before — if so it is copied over once and the plaintext copy is
+  /// wiped, so an already-signed-in user is not forced to log in again.
   Future<void> loadToken() async {
+    _token = await _secureStorage.read(key: AppConfig.tokenKey);
+    if (_token != null && _token!.isNotEmpty) return;
+
     final prefs = await SharedPreferences.getInstance();
-    _token = prefs.getString(AppConfig.tokenKey);
+    final legacyToken = prefs.getString(AppConfig.tokenKey);
+    if (legacyToken != null && legacyToken.isNotEmpty) {
+      _token = legacyToken;
+      await _secureStorage.write(key: AppConfig.tokenKey, value: legacyToken);
+      await prefs.remove(AppConfig.tokenKey);
+    }
   }
 
   String? get token => _token;
@@ -46,11 +62,10 @@ class ApiService {
 
   Future<void> setToken(String? token) async {
     _token = token;
-    final prefs = await SharedPreferences.getInstance();
     if (token == null) {
-      await prefs.remove(AppConfig.tokenKey);
+      await _secureStorage.delete(key: AppConfig.tokenKey);
     } else {
-      await prefs.setString(AppConfig.tokenKey, token);
+      await _secureStorage.write(key: AppConfig.tokenKey, value: token);
     }
   }
 

@@ -1,4 +1,9 @@
 import 'package:flutter/material.dart';
+import 'side_menu/profile/cwts_personal_info_screen.dart';
+import 'side_menu/account_security/cwts_account_security_screen.dart';
+import 'side_menu/documents/cwts_documents_screen.dart';
+import 'side_menu/help_support/cwts_help_support_screen.dart';
+import 'screens/cwts_officer_students_screen.dart';
 import '../auth/cwts_officer_login_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
@@ -63,32 +68,41 @@ class CwtsOfficerDrawer extends StatelessWidget {
                   _buildMenuItem(
                     icon: Icons.person_outline,
                     label: 'My Profile',
-                    onTap: () {},
+                    onTap: () =>
+                        _navigateTo(context, const CwtsPersonalInfoScreen()),
                   ),
                   _buildMenuItem(
                     icon: Icons.people_outline,
                     label: 'Manage Students',
-                    onTap: () {},
+                    onTap: () =>
+                        _navigateTo(context, const CwtsOfficerStudentsScreen()),
                   ),
                   _buildMenuItem(
                     icon: Icons.grade_outlined,
                     label: 'Grades & Records',
-                    onTap: () {},
+                    // Grades live on the per-student detail screen (its
+                    // "Grades" tab), reached by picking a student here first —
+                    // there is no standalone all-students grade list.
+                    onTap: () =>
+                        _navigateTo(context, const CwtsOfficerStudentsScreen()),
                   ),
                   _buildMenuItem(
                     icon: Icons.description_outlined,
                     label: 'Document Review',
-                    onTap: () {},
+                    onTap: () =>
+                        _navigateTo(context, const CwtsDocumentsScreen()),
                   ),
                   _buildMenuItem(
                     icon: Icons.settings_outlined,
                     label: 'Settings',
-                    onTap: () {},
+                    onTap: () => _navigateTo(
+                        context, const CwtsAccountSecurityScreen()),
                   ),
                   _buildMenuItem(
                     icon: Icons.help_outline,
                     label: 'Help & Support',
-                    onTap: () {},
+                    onTap: () =>
+                        _navigateTo(context, const CwtsHelpSupportScreen()),
                   ),
                 ],
               ),
@@ -140,6 +154,14 @@ class CwtsOfficerDrawer extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+
+  void _navigateTo(BuildContext context, Widget screen) {
+    Navigator.pop(context); // Close drawer
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => screen),
     );
   }
 

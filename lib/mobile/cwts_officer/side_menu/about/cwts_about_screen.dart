@@ -76,7 +76,7 @@ class CwtsAboutScreen extends StatelessWidget {
             const SizedBox(height: 20),
             // Description
             Text(
-              'The CWTS Portal is a platform designed to help students, officers, instructors and admins to manage Community Welfare Training Service efficiently',
+              'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,

@@ -386,7 +386,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     final lines = raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
     if (lines.isNotEmpty) return lines;
     return const [
-      'Follow the format given by your instructor',
+      'Follow the format given in the instructions',
       'Use your own words',
       'Submit before the deadline',
     ];
@@ -514,7 +514,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                 const SizedBox(height: 2),
                 Text(
                   fileUrl.isEmpty
-                      ? 'Nothing attached by your instructor'
+                      ? 'Nothing attached for this activity'
                       : Fmt.fileSize(_module['fileSize']),
                   style: TextStyle(
                     fontSize: 11,

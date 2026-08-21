@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:marsu_nstp_portal/mobile/auth/cwts_login_screen.dart';
 import 'package:marsu_nstp_portal/mobile/auth/cwts_officer_login_screen.dart';
-import 'package:marsu_nstp_portal/mobile/auth/cwts_trainer_login_screen.dart';
 import '../../core/constants/app_colors.dart';
 
 class RoleSelectionScreen extends StatelessWidget {
@@ -54,18 +53,6 @@ class RoleSelectionScreen extends StatelessWidget {
                   MaterialPageRoute(builder: (_) => const CwtsOfficerLoginScreen()),
                 );
               },
-            ),
-            const SizedBox(height: 20),
-
-            // ===== TRAINING STAFF =====
-            _buildRoleButton(
-              label: 'TRAINING STAFF',
-              onTap: () {
-  Navigator.push(
-    context,
-    MaterialPageRoute(builder: (_) => const CwtsTrainerLoginScreen()),
-  );
-},
             ),
 
             const Spacer(flex: 3),

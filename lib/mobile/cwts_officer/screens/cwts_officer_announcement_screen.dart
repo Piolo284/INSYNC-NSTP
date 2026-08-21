@@ -361,7 +361,6 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
     'Students',
     'Cadets',
     'Officers',
-    'Instructors',
   ];
 
   bool get _isEditing => widget.existing != null;

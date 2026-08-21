@@ -1,7 +1,7 @@
 import 'api_service.dart';
 import 'session.dart';
 
-/// Users, students and cadets — the rosters the officer/instructor/admin
+/// Users, students and cadets — the rosters the officer/admin
 /// screens read from.
 class UserService {
   UserService._();

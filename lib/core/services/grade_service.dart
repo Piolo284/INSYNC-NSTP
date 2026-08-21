@@ -7,7 +7,7 @@ class GradeService {
   static final GradeService instance = GradeService._();
   final ApiService _api = ApiService.instance;
 
-  /// Returns `{ stats: {...}, data: [...] }` for the instructor students screen.
+  /// Returns `{ stats: {...}, data: [...] }` for the officer students screen.
   Future<Map<String, dynamic>> list({
     String? program,
     String? remarks,

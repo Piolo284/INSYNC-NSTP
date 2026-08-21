@@ -1,15 +1,17 @@
 import 'dart:convert';
 
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../config/app_config.dart';
 
-/// The signed-in user, cached in memory and mirrored to SharedPreferences so a
+/// The signed-in user, cached in memory and mirrored to secure storage so a
 /// restart does not force a fresh login.
 class Session {
   Session._();
 
   static final Session instance = Session._();
+  static const FlutterSecureStorage _secureStorage = FlutterSecureStorage();
 
   Map<String, dynamic>? _user;
   Map<String, dynamic>? _profile;
@@ -38,7 +40,7 @@ class Session {
       (_profile?['profileImage'] ?? _user?['profileImage'] ?? '').toString();
 
   bool get isTrainee => role == 'student' || role == 'cadet';
-  bool get isStaff => role == 'officer' || role == 'instructor' || role == 'admin';
+  bool get isStaff => role == 'officer';
 
   Future<void> save({
     required Map<String, dynamic> user,
@@ -47,24 +49,50 @@ class Session {
     _user = user;
     _profile = profile;
 
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(AppConfig.userKey, jsonEncode(user));
+    await _secureStorage.write(
+      key: AppConfig.userKey,
+      value: jsonEncode(user),
+    );
     if (profile != null) {
-      await prefs.setString(AppConfig.profileKey, jsonEncode(profile));
+      await _secureStorage.write(
+        key: AppConfig.profileKey,
+        value: jsonEncode(profile),
+      );
     } else {
-      await prefs.remove(AppConfig.profileKey);
+      await _secureStorage.delete(key: AppConfig.profileKey);
     }
   }
 
   /// Restores a previous session from disk. Returns true when one was found.
+  ///
+  /// The cached user/profile now lives in secure storage. The first time
+  /// this runs after that change, it may still find the old plaintext
+  /// SharedPreferences copy — if so, it is moved over once and the
+  /// plaintext copy is cleared.
   Future<bool> restore() async {
-    final prefs = await SharedPreferences.getInstance();
-    final rawUser = prefs.getString(AppConfig.userKey);
-    if (rawUser == null) return false;
+    var rawUser = await _secureStorage.read(key: AppConfig.userKey);
+    var rawProfile = await _secureStorage.read(key: AppConfig.profileKey);
+
+    if (rawUser == null) {
+      final prefs = await SharedPreferences.getInstance();
+      final legacyUser = prefs.getString(AppConfig.userKey);
+      if (legacyUser == null) return false;
+
+      rawUser = legacyUser;
+      rawProfile = prefs.getString(AppConfig.profileKey);
+      await _secureStorage.write(key: AppConfig.userKey, value: rawUser);
+      if (rawProfile != null) {
+        await _secureStorage.write(
+          key: AppConfig.profileKey,
+          value: rawProfile,
+        );
+      }
+      await prefs.remove(AppConfig.userKey);
+      await prefs.remove(AppConfig.profileKey);
+    }
 
     try {
       _user = jsonDecode(rawUser) as Map<String, dynamic>;
-      final rawProfile = prefs.getString(AppConfig.profileKey);
       _profile = rawProfile == null
           ? null
           : jsonDecode(rawProfile) as Map<String, dynamic>;
@@ -78,8 +106,7 @@ class Session {
   Future<void> clear() async {
     _user = null;
     _profile = null;
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.remove(AppConfig.userKey);
-    await prefs.remove(AppConfig.profileKey);
+    await _secureStorage.delete(key: AppConfig.userKey);
+    await _secureStorage.delete(key: AppConfig.profileKey);
   }
 }

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
 import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
@@ -13,9 +14,13 @@ import '../../core/widgets/async_view.dart';
 /// the session window, blocks duplicate attendance, records the row, and emails
 /// a verification code that this screen then confirms.
 ///
-/// The project has no camera plugin, so the code is entered/pasted in a sheet.
-/// Swapping in a real scanner later only means calling [submitSessionCode] with
-/// the decoded QR payload.
+/// The 280×280 frame now hosts a live [MobileScanner] camera preview. A
+/// successful detection calls [submitSessionCode] with the decoded QR
+/// payload, exactly the same call the manual-entry fallback makes — so the
+/// rest of the flow (verification-code dialog, success screen) is unaware of
+/// how the code was collected. The manual entry sheet is kept as a "Can't
+/// scan? Enter code manually" link, for accessibility or when the camera
+/// permission is denied.
 class QrAttendanceScaffold extends StatefulWidget {
   final Color accentColor;
   final VoidCallback? onBackToDashboard;
@@ -32,6 +37,21 @@ class QrAttendanceScaffold extends StatefulWidget {
 
 class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
   bool _isBusy = false;
+
+  final MobileScannerController _scannerController = MobileScannerController(
+    formats: const [BarcodeFormat.qrCode],
+    detectionSpeed: DetectionSpeed.noDuplicates,
+  );
+
+  /// Guards against firing [submitSessionCode] more than once per detected
+  /// code while the first submission is still in flight.
+  bool _hasPendingDetection = false;
+
+  @override
+  void dispose() {
+    _scannerController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -86,18 +106,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                   borderRadius: BorderRadius.circular(18),
                   child: Container(
                     color: Colors.grey.shade900,
-                    child: Center(
-                      child: _isBusy
-                          ? const CircularProgressIndicator(
-                              valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white54),
-                            )
-                          : const Icon(
-                              Icons.qr_code_scanner,
-                              color: Colors.white24,
-                              size: 100,
-                            ),
-                    ),
+                    child: _buildScannerFrame(),
                   ),
                 ),
               ),
@@ -105,28 +114,18 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
           ),
           const SizedBox(height: 40),
           Padding(
-            padding: const EdgeInsets.all(20),
-            child: SizedBox(
-              width: double.infinity,
-              height: 50,
-              child: ElevatedButton(
-                onPressed: _isBusy ? null : _promptForSessionCode,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: widget.accentColor,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor:
-                      widget.accentColor.withValues(alpha: 0.5),
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Scan Attendance QR',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w600,
-                  ),
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: TextButton(
+              onPressed: _isBusy ? null : _promptForSessionCode,
+              style: TextButton.styleFrom(
+                foregroundColor: Colors.white,
+              ),
+              child: const Text(
+                "Can't scan? Enter code manually",
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  decoration: TextDecoration.underline,
                 ),
               ),
             ),
@@ -137,8 +136,78 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
     );
   }
 
+  /// The live camera preview, or a busy/permission-error state in its place.
+  Widget _buildScannerFrame() {
+    if (_isBusy) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+        ),
+      );
+    }
+
+    return MobileScanner(
+      controller: _scannerController,
+      onDetect: _onBarcodeDetected,
+      errorBuilder: (context, error) => _buildScannerError(error),
+      placeholderBuilder: (context) => const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(Colors.white54),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScannerError(MobileScannerException error) {
+    final isPermissionDenied =
+        error.errorCode == MobileScannerErrorCode.permissionDenied;
+
+    return Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.no_photography_outlined,
+            color: Colors.white24,
+            size: 64,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            isPermissionDenied
+                ? 'Camera permission was denied. Enable it in your device '
+                    'settings, or enter the code manually below.'
+                : 'Camera unavailable. Enter the code manually below.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey.shade400, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Called by [MobileScanner] whenever it decodes one or more barcodes.
+  /// Only the first QR payload of the first detection is used — later
+  /// detections are ignored until [_isBusy] clears again.
+  void _onBarcodeDetected(BarcodeCapture capture) {
+    if (_isBusy || _hasPendingDetection) return;
+
+    final value = capture.barcodes
+        .map((barcode) => barcode.rawValue ?? '')
+        .firstWhere((v) => v.isNotEmpty, orElse: () => '');
+    if (value.isEmpty) return;
+
+    _hasPendingDetection = true;
+    submitSessionCode(value.trim()).whenComplete(() {
+      _hasPendingDetection = false;
+    });
+  }
+
   /// Collects the QR payload, then hands it to [submitSessionCode].
   Future<void> _promptForSessionCode() async {
+    // Pause camera detections while the manual-entry dialog is open, so a
+    // code caught in the background does not also fire a submission.
+    _hasPendingDetection = true;
     final controller = TextEditingController();
 
     final code = await showDialog<String>(
@@ -202,8 +271,12 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
     );
 
     controller.dispose();
-    if (code == null || code.isEmpty) return;
+    if (code == null || code.isEmpty) {
+      _hasPendingDetection = false;
+      return;
+    }
     await submitSessionCode(code);
+    _hasPendingDetection = false;
   }
 
   /// Step 1: validate the session and trigger the verification email.

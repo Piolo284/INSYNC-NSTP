@@ -29,13 +29,6 @@ class DashboardService {
     return ApiService.mapOf(response);
   }
 
-  Future<Map<String, dynamic>> instructor({String? program}) async {
-    final response = await _api.get('/dashboard/instructor', query: {
-      'program': program ?? Session.instance.program,
-    });
-    return ApiService.mapOf(response);
-  }
-
   Future<Map<String, dynamic>> admin() async {
     final response = await _api.get('/dashboard/admin');
     return ApiService.mapOf(response);

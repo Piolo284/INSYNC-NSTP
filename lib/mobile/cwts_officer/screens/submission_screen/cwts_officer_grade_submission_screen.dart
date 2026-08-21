@@ -5,7 +5,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
-/// Officer/instructor grading screen.
+/// Officer grading screen.
 ///
 /// The rubric rows come from the module in MongoDB instead of the hard-coded
 /// four-item list, the running total is still summed the same way, and

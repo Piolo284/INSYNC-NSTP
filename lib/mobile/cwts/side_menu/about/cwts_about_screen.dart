@@ -81,8 +81,8 @@ class CwtsAboutScreen extends StatelessWidget {
             // Description
             Text(
               program == 'ROTC'
-                  ? 'The ROTC Portal is a platform designed to help cadets, officers, instructors and admins to manage Reserve Officers\' Training Corps activities efficiently.'
-                  : 'The CWTS Portal is a platform designed to help students, officers, instructors and admins to manage Community Welfare Training Service efficiently.',
+                  ? 'The ROTC Portal is a platform designed to help cadets, officers and admins to manage Reserve Officers\' Training Corps activities efficiently.'
+                  : 'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently.',
               textAlign: TextAlign.center,
               style: TextStyle(
                 fontSize: 13,
