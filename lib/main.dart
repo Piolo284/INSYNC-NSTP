@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'core/constants/app_colors.dart';
+import 'core/constants/app_theme.dart';
 import 'core/services/services.dart';
 import 'mobile/splash/splash_screen.dart';
 import 'mobile/splash/welcome_screen.dart';
@@ -29,11 +29,7 @@ class MyApp extends StatelessWidget {
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
       title: 'MARSU-NSTP',
-      theme: ThemeData(
-        useMaterial3: true,
-        primaryColor: AppColors.primaryMaroon,
-        scaffoldBackgroundColor: AppColors.white,
-      ),
+      theme: buildAppTheme(),
       home: const SplashRouter(),
     );
   }
