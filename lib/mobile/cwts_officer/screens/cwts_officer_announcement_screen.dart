@@ -1,0 +1,676 @@
+import 'package:flutter/material.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/services.dart';
+import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/async_view.dart';
+
+class CwtsOfficerAnnouncementScreen extends StatefulWidget {
+  const CwtsOfficerAnnouncementScreen({super.key});
+
+  @override
+  State<CwtsOfficerAnnouncementScreen> createState() =>
+      _CwtsOfficerAnnouncementScreenState();
+}
+
+class _CwtsOfficerAnnouncementScreenState
+    extends State<CwtsOfficerAnnouncementScreen> {
+  LoadState _state = LoadState.loading;
+  String _error = '';
+  List<Map<String, dynamic>> _announcements = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _state = LoadState.loading;
+      _error = '';
+    });
+
+    try {
+      final items = await AnnouncementService.instance.list(
+        program: Session.instance.program,
+      );
+      if (!mounted) return;
+      setState(() {
+        _announcements = items;
+        _state = items.isEmpty ? LoadState.empty : LoadState.ready;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _state = LoadState.error;
+        _error = describeError(error);
+      });
+    }
+  }
+
+  Future<void> _openEditor({Map<String, dynamic>? existing}) async {
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (_) => _AnnouncementEditor(existing: existing),
+    );
+
+    if (saved == true) await _load();
+  }
+
+  Future<void> _delete(Map<String, dynamic> announcement) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text(
+          'Delete announcement?',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'This removes "${Fmt.str(announcement['title'], 'this announcement')}" permanently.',
+          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child:
+                Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red.shade600,
+              foregroundColor: Colors.white,
+              elevation: 0,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await AnnouncementService.instance.delete(Fmt.str(announcement['_id']));
+      if (!mounted) return;
+      AppSnack.success(context, 'Announcement deleted.');
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
+  }
+
+  Future<void> _resend(Map<String, dynamic> announcement) async {
+    try {
+      final count =
+          await AnnouncementService.instance.send(Fmt.str(announcement['_id']));
+      if (!mounted) return;
+      AppSnack.success(context, 'Sent to $count user(s).');
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.grey.shade50,
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryMaroon,
+        elevation: 0,
+        centerTitle: true,
+        title: const Text(
+          'Announcements',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _load,
+          ),
+          IconButton(
+            icon: const Icon(Icons.add, color: Colors.white),
+            onPressed: () => _openEditor(),
+          ),
+        ],
+      ),
+      body: AsyncView(
+        state: _state,
+        message: _error,
+        onRetry: _load,
+        emptyText: 'No announcements yet. Tap + to post one.',
+        emptyIcon: Icons.campaign_outlined,
+        child: RefreshIndicator(
+          color: AppColors.primaryMaroon,
+          onRefresh: _load,
+          child: ListView.builder(
+            physics: const AlwaysScrollableScrollPhysics(),
+            padding: const EdgeInsets.all(16),
+            itemCount: _announcements.length,
+            itemBuilder: (context, index) {
+              return _buildAnnouncementCard(_announcements[index]);
+            },
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _openEditor(),
+        backgroundColor: AppColors.primaryMaroon,
+        child: const Icon(Icons.add, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
+    final isPinned = announcement['isPinned'] == true;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFF3E0),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.campaign,
+                    color: Colors.deepOrange,
+                    size: 24,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        Fmt.str(announcement['title'], 'Announcement'),
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.black87,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        [
+                          Fmt.date(announcement['date']),
+                          Fmt.str(announcement['location']),
+                          Fmt.str(announcement['targetAudience'], 'All'),
+                        ].where((s) => s.isNotEmpty && s != '—').join(' • '),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.grey.shade500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (isPinned)
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryMaroon.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'Pinned',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryMaroon,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              Fmt.str(announcement['content']),
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey.shade600,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                _buildActionButton(
+                  icon: Icons.send_outlined,
+                  label: 'Send',
+                  onTap: () => _resend(announcement),
+                ),
+                const SizedBox(width: 8),
+                _buildActionButton(
+                  icon: Icons.edit_outlined,
+                  label: 'Edit',
+                  onTap: () => _openEditor(existing: announcement),
+                ),
+                const SizedBox(width: 8),
+                _buildActionButton(
+                  icon: Icons.delete_outline,
+                  label: 'Delete',
+                  onTap: () => _delete(announcement),
+                  isDestructive: true,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+    bool isDestructive = false,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isDestructive ? Colors.red.shade50 : Colors.grey.shade100,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 14,
+              color: isDestructive ? Colors.red.shade600 : Colors.grey.shade700,
+            ),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w500,
+                color:
+                    isDestructive ? Colors.red.shade600 : Colors.grey.shade700,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Create / edit sheet shared by the + button and the Edit action.
+class _AnnouncementEditor extends StatefulWidget {
+  final Map<String, dynamic>? existing;
+
+  const _AnnouncementEditor({this.existing});
+
+  @override
+  State<_AnnouncementEditor> createState() => _AnnouncementEditorState();
+}
+
+class _AnnouncementEditorState extends State<_AnnouncementEditor> {
+  final TextEditingController _titleController = TextEditingController();
+  final TextEditingController _contentController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _timeController = TextEditingController();
+
+  String _audience = 'All';
+  DateTime _date = DateTime.now();
+  bool _isPinned = false;
+  bool _isSaving = false;
+
+  static const List<String> _audiences = [
+    'All',
+    'Students',
+    'Cadets',
+    'Officers',
+    'Instructors',
+  ];
+
+  bool get _isEditing => widget.existing != null;
+
+  @override
+  void initState() {
+    super.initState();
+    final existing = widget.existing;
+    if (existing != null) {
+      _titleController.text = Fmt.str(existing['title']);
+      _contentController.text = Fmt.str(existing['content']);
+      _locationController.text = Fmt.str(existing['location']);
+      _timeController.text = Fmt.str(existing['time']);
+      _audience = _audiences.contains(Fmt.str(existing['targetAudience']))
+          ? Fmt.str(existing['targetAudience'])
+          : 'All';
+      _date = Fmt.parse(existing['date']) ?? DateTime.now();
+      _isPinned = existing['isPinned'] == true;
+    }
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _contentController.dispose();
+    _locationController.dispose();
+    _timeController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2024),
+      lastDate: DateTime(2030),
+      builder: (context, child) => Theme(
+        data: Theme.of(context).copyWith(
+          colorScheme:
+              const ColorScheme.light(primary: AppColors.primaryMaroon),
+        ),
+        child: child!,
+      ),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _save() async {
+    if (_titleController.text.trim().isEmpty) {
+      AppSnack.error(context, 'Please enter a title.');
+      return;
+    }
+    if (_contentController.text.trim().isEmpty) {
+      AppSnack.error(context, 'Please enter the announcement details.');
+      return;
+    }
+
+    setState(() => _isSaving = true);
+
+    try {
+      if (_isEditing) {
+        await AnnouncementService.instance
+            .update(Fmt.str(widget.existing!['_id']), {
+          'title': _titleController.text.trim(),
+          'content': _contentController.text.trim(),
+          'location': _locationController.text.trim(),
+          'time': _timeController.text.trim(),
+          'targetAudience': _audience,
+          'date': _date.toIso8601String(),
+          'isPinned': _isPinned,
+        });
+      } else {
+        await AnnouncementService.instance.create(
+          title: _titleController.text.trim(),
+          content: _contentController.text.trim(),
+          program: Session.instance.program,
+          targetAudience: _audience,
+          location: _locationController.text.trim(),
+          time: _timeController.text.trim(),
+          date: _date,
+          isPinned: _isPinned,
+        );
+      }
+
+      if (!mounted) return;
+      AppSnack.success(
+        context,
+        _isEditing ? 'Announcement updated.' : 'Announcement posted.',
+      );
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: DraggableScrollableSheet(
+        initialChildSize: 0.85,
+        maxChildSize: 0.95,
+        minChildSize: 0.5,
+        expand: false,
+        builder: (context, controller) => ListView(
+          controller: controller,
+          padding: const EdgeInsets.all(20),
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: Colors.grey.shade300,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _isEditing ? 'Edit Announcement' : 'New Announcement',
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            _label('Title'),
+            const SizedBox(height: 8),
+            _field(_titleController, 'e.g. Coastal Clean-Up Activity'),
+            const SizedBox(height: 16),
+
+            _label('Details'),
+            const SizedBox(height: 8),
+            _field(_contentController, 'Write the announcement…', maxLines: 5),
+            const SizedBox(height: 16),
+
+            _label('Send to'),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade300),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: _audience,
+                  icon: Icon(Icons.keyboard_arrow_down,
+                      color: Colors.grey.shade600),
+                  style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+                  onChanged: (v) => setState(() => _audience = v!),
+                  items: _audiences
+                      .map((a) => DropdownMenuItem(value: a, child: Text(a)))
+                      .toList(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            _label('Date'),
+            const SizedBox(height: 8),
+            GestureDetector(
+              onTap: _pickDate,
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        Fmt.dateWithDay(_date),
+                        style: TextStyle(
+                            fontSize: 14, color: Colors.grey.shade800),
+                      ),
+                    ),
+                    Icon(Icons.calendar_today_outlined,
+                        size: 18, color: Colors.grey.shade500),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('Time'),
+                      const SizedBox(height: 8),
+                      _field(_timeController, 'e.g. 8:00 AM'),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _label('Location'),
+                      const SizedBox(height: 8),
+                      _field(_locationController, 'e.g. MARSU Gym'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+
+            CheckboxListTile(
+              value: _isPinned,
+              onChanged: (v) => setState(() => _isPinned = v ?? false),
+              activeColor: AppColors.primaryMaroon,
+              contentPadding: EdgeInsets.zero,
+              controlAffinity: ListTileControlAffinity.leading,
+              title: const Text(
+                'Pin to the top',
+                style: TextStyle(fontSize: 13, color: Colors.black87),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _isSaving ? null : _save,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primaryMaroon,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: Colors.grey.shade300,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                  elevation: 0,
+                ),
+                child: _isSaving
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          valueColor:
+                              AlwaysStoppedAnimation<Color>(Colors.white),
+                        ),
+                      )
+                    : Text(
+                        _isEditing ? 'Save Changes' : 'Post Announcement',
+                        style: const TextStyle(
+                            fontSize: 14, fontWeight: FontWeight.w600),
+                      ),
+              ),
+            ),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _label(String text) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w600,
+          color: Colors.black87,
+        ),
+      );
+
+  Widget _field(
+    TextEditingController controller,
+    String hint, {
+    int maxLines = 1,
+  }) {
+    return TextField(
+      controller: controller,
+      maxLines: maxLines,
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: BorderSide(color: Colors.grey.shade300),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide:
+              const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
+        ),
+        contentPadding:
+            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      ),
+    );
+  }
+}

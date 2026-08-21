@@ -1,0 +1,107 @@
+import 'api_service.dart';
+import 'session.dart';
+
+/// Users, students and cadets — the rosters the officer/instructor/admin
+/// screens read from.
+class UserService {
+  UserService._();
+
+  static final UserService instance = UserService._();
+  final ApiService _api = ApiService.instance;
+
+  // ---- Students (CWTS) ----
+
+  /// Returns `{ stats: {...}, data: [...] }`.
+  Future<Map<String, dynamic>> students({
+    String? search,
+    String? status,
+    String? section,
+    String? brigade,
+  }) async {
+    final response = await _api.get('/students', query: {
+      'search': search,
+      'status': status,
+      'section': section,
+      'brigade': brigade,
+    });
+    return {
+      'stats': (response['stats'] as Map?)?.cast<String, dynamic>() ?? {},
+      'data': ApiService.listOf(response),
+    };
+  }
+
+  Future<Map<String, dynamic>> student([String? id]) async {
+    final response = await _api.get('/students/${id ?? Session.instance.userId}');
+    return ApiService.mapOf(response);
+  }
+
+  // ---- Cadets (ROTC) ----
+
+  Future<Map<String, dynamic>> cadets({String? search, String? status}) async {
+    final response = await _api.get('/cadets', query: {
+      'search': search,
+      'status': status,
+    });
+    return {
+      'stats': (response['stats'] as Map?)?.cast<String, dynamic>() ?? {},
+      'data': ApiService.listOf(response),
+    };
+  }
+
+  Future<Map<String, dynamic>> cadet([String? id]) async {
+    final response = await _api.get('/cadets/${id ?? Session.instance.userId}');
+    return ApiService.mapOf(response);
+  }
+
+  /// Roster for whichever program is active — used by manual attendance search.
+  Future<List<Map<String, dynamic>>> roster({String? program, String? search}) async {
+    final p = program ?? Session.instance.program;
+    final result = p == 'ROTC'
+        ? await cadets(search: search, status: 'Active')
+        : await students(search: search, status: 'Active');
+    return (result['data'] as List).cast<Map<String, dynamic>>();
+  }
+
+  // ---- Users ----
+
+  Future<List<Map<String, dynamic>>> users({
+    String? role,
+    String? program,
+    String? status,
+    String? search,
+  }) async {
+    final response = await _api.get('/users', query: {
+      'role': role,
+      'program': program,
+      'status': status,
+      'search': search,
+    });
+    return ApiService.listOf(response);
+  }
+
+  Future<Map<String, dynamic>> user(String id) async {
+    final response = await _api.get('/users/$id');
+    return ApiService.mapOf(response);
+  }
+
+  /// Updates the User and its role profile in one request.
+  Future<Map<String, dynamic>> updateUser(String id, Map<String, dynamic> body) async {
+    final response = await _api.put('/users/$id', body: body);
+    return ApiService.mapOf(response);
+  }
+
+  Future<void> deleteUser(String id) => _api.delete('/users/$id');
+
+  /// Updates the signed-in trainee's own student/cadet profile.
+  Future<Map<String, dynamic>> updateMyProfile(Map<String, dynamic> body) async {
+    final id = Session.instance.userId;
+    final path = Session.instance.role == 'cadet' ? '/cadets/$id' : '/students/$id';
+    final response = await _api.put(path, body: body);
+    return ApiService.mapOf(response);
+  }
+
+  Future<Map<String, dynamic>> stats() async {
+    final response = await _api.get('/users/stats/overview');
+    return ApiService.mapOf(response);
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(node -e ' *)",
+      "Bash(mongod --version)",
+      "Bash(sc query *)",
+      "PowerShell(Test-NetConnection -ComputerName 127.0.0.1 -Port 27017 -InformationLevel Quiet)",
+      "Bash(\"C:/src/flutter/bin/flutter.bat\" pub *)",
+      "Bash(node seed/devMongo.js)"
+    ]
+  }
+}

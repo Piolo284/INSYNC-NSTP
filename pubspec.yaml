@@ -1,0 +1,30 @@
+name: marsu_nstp_portal
+description: "Marinduque State University NSTP Management System"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.10.7
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  intl: ^0.19.0
+  shared_preferences: ^2.2.3
+  http: ^1.2.2
+  file_picker: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/images/marsu_logo.png
+    - assets/images/cwts_logo.png
+    - assets/images/rotc_logo.png
+    - assets/images/marsu_nstp_logo.png
+    - assets/images/default_profile.png

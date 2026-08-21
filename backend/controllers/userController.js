@@ -1,0 +1,136 @@
+const User = require('../models/User');
+const Student = require('../models/Student');
+const Cadet = require('../models/Cadet');
+const Officer = require('../models/Officer');
+const Instructor = require('../models/Instructor');
+const ApiError = require('../utils/ApiError');
+const asyncHandler = require('../utils/asyncHandler');
+const { assertSelfOrStaff } = require('../middleware/auth');
+const { profileFor } = require('./authController');
+
+function buildUserQuery(query) {
+  const filter = {};
+  if (query.role) filter.role = query.role;
+  if (query.program) filter.program = query.program;
+  if (query.status) filter.status = query.status;
+  if (query.search) {
+    const rx = new RegExp(String(query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ name: rx }, { email: rx }, { studentId: rx }];
+  }
+  return filter;
+}
+
+/** GET /api/users */
+exports.list = asyncHandler(async (req, res) => {
+  const users = await User.find(buildUserQuery(req.query)).sort({ createdAt: -1 });
+  res.json({ success: true, count: users.length, data: users });
+});
+
+/** GET /api/users/:id */
+exports.get = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw ApiError.notFound('User not found.');
+  assertSelfOrStaff(req, user._id);
+  const profile = await profileFor(user);
+  res.json({ success: true, data: { user, profile } });
+});
+
+const PROFILE_MODELS = {
+  student: Student,
+  cadet: Cadet,
+  officer: Officer,
+  instructor: Instructor,
+};
+
+/** PUT /api/users/:id — updates the User plus its role profile in one call. */
+exports.update = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw ApiError.notFound('User not found.');
+
+  const isSelf = String(req.user._id) === String(user._id);
+  const isAdmin = ['admin', 'instructor'].includes(req.user.role);
+  if (!isSelf && !isAdmin) {
+    throw ApiError.forbidden('You can only update your own profile.');
+  }
+
+  const userFields = ['name', 'email', 'profileImage', 'contactNumber', 'yearLevel', 'section'];
+  if (isAdmin) userFields.push('status', 'role', 'program', 'studentId');
+
+  userFields.forEach((f) => {
+    if (req.body[f] !== undefined) user[f] = req.body[f];
+  });
+  await user.save();
+
+  const Model = PROFILE_MODELS[user.role];
+  let profile = null;
+
+  if (Model) {
+    const profileFields = [
+      'fullName',
+      'email',
+      'course',
+      'yearLevel',
+      'section',
+      'brigade',
+      'contactNumber',
+      'address',
+      'emergencyContact',
+      'profileImage',
+      'platoon',
+      'company',
+      'position',
+      'department',
+    ];
+    if (isAdmin) profileFields.push('status');
+
+    const updates = {};
+    profileFields.forEach((f) => {
+      if (req.body[f] !== undefined) updates[f] = req.body[f];
+    });
+    if (req.body.name !== undefined) updates.fullName = req.body.name;
+
+    profile = await Model.findOneAndUpdate({ userId: user._id }, updates, { new: true });
+  }
+
+  res.json({ success: true, data: { user: user.toPublic(), profile } });
+});
+
+/** DELETE /api/users/:id — removes the user and its role profile. */
+exports.remove = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) throw ApiError.notFound('User not found.');
+
+  if (String(user._id) === String(req.user._id)) {
+    throw ApiError.badRequest('You cannot delete your own account.');
+  }
+
+  const Model = PROFILE_MODELS[user.role];
+  if (Model) await Model.deleteOne({ userId: user._id });
+  await user.deleteOne();
+
+  res.json({ success: true, message: 'User deleted.' });
+});
+
+/** GET /api/users/stats/overview — powers admin/staff dashboard counters. */
+exports.stats = asyncHandler(async (_req, res) => {
+  const [byRole, byProgram, total, active] = await Promise.all([
+    User.aggregate([{ $group: { _id: '$role', count: { $sum: 1 } } }]),
+    User.aggregate([{ $group: { _id: '$program', count: { $sum: 1 } } }]),
+    User.countDocuments(),
+    User.countDocuments({ status: 'Active' }),
+  ]);
+
+  const toMap = (rows) =>
+    Object.fromEntries(rows.filter((r) => r._id).map((r) => [r._id, r.count]));
+
+  res.json({
+    success: true,
+    data: {
+      total,
+      active,
+      inactive: total - active,
+      byRole: toMap(byRole),
+      byProgram: toMap(byProgram),
+    },
+  });
+});
