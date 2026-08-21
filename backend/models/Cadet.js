@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { USER_STATUSES } = require('../config/constants');
+const { USER_STATUSES, SPECIAL_CATEGORIES } = require('../config/constants');
 
 const cadetSchema = new mongoose.Schema(
   {
@@ -23,6 +23,9 @@ const cadetSchema = new mongoose.Schema(
     address: { type: String, trim: true, default: '' },
     emergencyContact: { type: String, trim: true, default: '' },
     profileImage: { type: String, default: '' },
+    // Collected on the "Additional Information" registration step — drives
+    // which requirement documents the cadet is asked to submit.
+    specialCategory: { type: String, enum: SPECIAL_CATEGORIES, default: 'None' },
     status: { type: String, enum: USER_STATUSES, default: 'Active', index: true },
   },
   { timestamps: true }

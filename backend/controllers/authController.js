@@ -6,7 +6,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { signToken } = require('../middleware/auth');
 const { requireFields, requireOneOf, isValidEmail } = require('../utils/validate');
-const { PROGRAMS } = require('../config/constants');
+const { PROGRAMS, SPECIAL_CATEGORIES } = require('../config/constants');
 
 /** Loads the role-specific profile that goes with a User document. */
 async function profileFor(user) {
@@ -86,6 +86,7 @@ exports.register = asyncHandler(async (req, res) => {
     yearLevel = '',
     section = '',
     contactNumber = '',
+    specialCategory = 'None',
   } = req.body;
 
   requireFields(req.body, ['name', 'email', 'password', 'studentId']);
@@ -98,6 +99,9 @@ exports.register = asyncHandler(async (req, res) => {
   }
   if (!PROGRAMS.includes(program)) {
     throw ApiError.badRequest(`Program must be one of: ${PROGRAMS.join(', ')}.`);
+  }
+  if (!SPECIAL_CATEGORIES.includes(specialCategory)) {
+    throw ApiError.badRequest(`specialCategory must be one of: ${SPECIAL_CATEGORIES.join(', ')}.`);
   }
 
   const existing = await User.findOne({
@@ -135,6 +139,7 @@ exports.register = asyncHandler(async (req, res) => {
     yearLevel,
     section,
     contactNumber,
+    specialCategory,
     status: 'Active',
   };
 

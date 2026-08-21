@@ -35,6 +35,7 @@ class AuthService {
     String yearLevel = '',
     String section = '',
     String contactNumber = '',
+    String specialCategory = 'None',
   }) async {
     final response = await _api.post('/auth/register', body: {
       'name': name.trim(),
@@ -46,6 +47,7 @@ class AuthService {
       'yearLevel': yearLevel,
       'section': section,
       'contactNumber': contactNumber,
+      'specialCategory': specialCategory,
     });
 
     return _persist(response);

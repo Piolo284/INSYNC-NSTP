@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'register_screen.dart';
+import 'register/register_basic_info_screen.dart';
 import '../splash/nstp_selection_screen.dart'; // Adjust kung iba ang filename (e.g., nstp_selection_screen.dart)
 import '../rotc/rotc_main_shell.dart';
 import '../../core/constants/app_colors.dart';
@@ -356,7 +356,7 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
                             context,
                             MaterialPageRoute(
                               builder: (_) =>
-                                  const RegisterScreen(portalType: 'cwts'),
+                                  const RegisterBasicInfoScreen(portalType: 'rotc'),
                             ),
                           );
                         },

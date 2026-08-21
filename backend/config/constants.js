@@ -24,6 +24,10 @@ const SUBMISSION_STATUSES = ['To Do', 'Submitted', 'Graded', 'Missing'];
 
 const TARGET_AUDIENCES = ['All', 'Students', 'Cadets', 'Officers'];
 
+/** Special-consideration category collected at registration (drives which
+ * requirement documents a trainee is asked to submit). */
+const SPECIAL_CATEGORIES = ['None', 'PWD', 'SK Chairperson', 'Medical Condition'];
+
 const SESSION_STATUSES = ['Active', 'Closed', 'Cancelled'];
 
 const NOTIFICATION_TYPES = [
@@ -69,6 +73,7 @@ module.exports = {
   ATTENDANCE_METHODS,
   SUBMISSION_STATUSES,
   TARGET_AUDIENCES,
+  SPECIAL_CATEGORIES,
   SESSION_STATUSES,
   NOTIFICATION_TYPES,
   grading,

@@ -1,24 +1,24 @@
 import 'package:flutter/material.dart';
-import 'cwts_login_screen.dart';
-import 'rotc_login_screen.dart';
-import '../../core/constants/app_colors.dart';
-import '../../core/services/services.dart';
-import '../../core/utils/login_validators.dart';
-import '../../core/widgets/async_view.dart';
+import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/login_validators.dart';
+import '../../../core/widgets/async_view.dart';
+import 'register_additional_info_screen.dart';
+import 'register_draft.dart';
 
-class RegisterScreen extends StatefulWidget {
+/// Step 1 of 3 — the account's basic details. Collects everything the old
+/// single-page registration form used to, then hands a [RegisterDraft] on to
+/// [RegisterAdditionalInfoScreen] instead of submitting immediately.
+class RegisterBasicInfoScreen extends StatefulWidget {
   final String portalType; // 'cwts' or 'rotc'
 
-  const RegisterScreen({
-    super.key,
-    required this.portalType,
-  });
+  const RegisterBasicInfoScreen({super.key, required this.portalType});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  State<RegisterBasicInfoScreen> createState() =>
+      _RegisterBasicInfoScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
+class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
   final TextEditingController _studentIdController = TextEditingController();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
@@ -26,7 +26,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
   String? _selectedProgram;
   String? _selectedYear;
-  bool _isSubmitting = false;
   bool _obscurePassword = true;
 
   final List<String> programs = [
@@ -45,9 +44,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     '4th Year',
   ];
 
-  /// The NSTP component this registration belongs to (not the degree program).
-  String get _nstpProgram => widget.portalType == 'rotc' ? 'ROTC' : 'CWTS';
-
   @override
   void dispose() {
     _studentIdController.dispose();
@@ -55,20 +51,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
-  }
-
-  void _goToLogin() {
-    if (widget.portalType == 'rotc') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const RotcLoginScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const CwtsLoginScreen()),
-      );
-    }
   }
 
   String? _validate() {
@@ -93,41 +75,27 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return null;
   }
 
-  Future<void> _submitRegister() async {
+  void _goNext() {
     final error = _validate();
     if (error != null) {
       AppSnack.error(context, error);
       return;
     }
 
-    setState(() => _isSubmitting = true);
+    final draft = RegisterDraft(portalType: widget.portalType)
+      ..studentId = _studentIdController.text.trim()
+      ..name = _nameController.text.trim()
+      ..email = _emailController.text.trim()
+      ..password = _passwordController.text
+      ..course = _selectedProgram ?? ''
+      ..yearLevel = _selectedYear ?? '';
 
-    try {
-      await AuthService.instance.register(
-        name: _nameController.text.trim(),
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-        studentId: _studentIdController.text.trim(),
-        program: _nstpProgram,
-        course: _selectedProgram ?? '',
-        yearLevel: _selectedYear ?? '',
-      );
-
-      if (!mounted) return;
-
-      // Registration signs the account in; send them back to the portal login
-      // so the flow matches what the screen already promised ("NEXT" → Login).
-      await AuthService.instance.logout();
-      if (!mounted) return;
-
-      AppSnack.success(context, 'Account created. You can now log in.');
-      _goToLogin();
-    } catch (err) {
-      if (!mounted) return;
-      AppSnack.error(context, describeError(err));
-    } finally {
-      if (mounted) setState(() => _isSubmitting = false);
-    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RegisterAdditionalInfoScreen(draft: draft),
+      ),
+    );
   }
 
   @override
@@ -189,7 +157,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'Fill in the details below to get started',
+                'Step 1 of 3 — fill in your basic details',
                 style: TextStyle(
                   fontSize: 13,
                   color: Colors.grey.shade500,
@@ -267,35 +235,23 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isSubmitting ? null : _submitRegister,
+                  onPressed: _goNext,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryMaroon,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor:
-                        AppColors.primaryMaroon.withValues(alpha: 0.6),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(10),
                     ),
                   ),
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : const Text(
-                          'NEXT',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 1,
-                          ),
-                        ),
+                  child: const Text(
+                    'NEXT',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1,
+                    ),
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -310,7 +266,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   GestureDetector(
-                    onTap: _goToLogin,
+                    onTap: () => Navigator.pop(context),
                     child: const Text(
                       'Login',
                       style: TextStyle(
