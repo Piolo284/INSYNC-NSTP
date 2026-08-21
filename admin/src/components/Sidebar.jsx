@@ -1,27 +1,50 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserCog, GraduationCap, FileText,
-  Megaphone, FolderOpen, BarChart3, Award, LogOut, ChevronRight,
-  Eye
+  LayoutDashboard, Users, UserCog, FileText, ClipboardCheck, BookOpen, FileCheck2,
+  Megaphone, FolderOpen, BarChart3, Award, LogOut, ChevronRight, Eye, Settings, CalendarClock,
 } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
 
-const navItems = [
-  { path: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/students', label: 'Students', icon: Users },
-  { path: '/monitor-students', label: 'Monitor Students', icon: Eye },
-  { path: '/officers', label: 'Officers', icon: UserCog },
-  { path: '/instructors', label: 'Instructors', icon: GraduationCap },
-  { path: '/grades', label: 'Grades', icon: FileText },
-  { path: '/announcements', label: 'Announcements', icon: Megaphone },
-  { path: '/documents', label: 'Documents', icon: FolderOpen },
-  { path: '/reports', label: 'Reports', icon: BarChart3 },
-  { path: '/certificate', label: 'Certificate Request', icon: Award },
-];
+const ROLE_LABELS = {
+  super_admin: 'Super Admin',
+  admin_cwts: 'CWTS Administrator',
+  admin_rotc: 'ROTC Administrator',
+};
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser, logout, isSuperAdmin, programView, setProgramView } = useAuth();
+
+  const navItems = [
+    { path: '/', label: 'Dashboard', icon: LayoutDashboard },
+    { path: '/students', label: 'Students', icon: Users },
+    { path: '/monitor-students', label: 'Monitor Students', icon: Eye },
+    { path: '/officers', label: 'Officers', icon: UserCog },
+    { path: '/activities', label: 'Activities', icon: CalendarClock },
+    { path: '/attendance', label: 'Attendance', icon: ClipboardCheck },
+    { path: '/modules', label: 'Modules', icon: BookOpen },
+    { path: '/submissions', label: 'Submissions', icon: FileCheck2 },
+    { path: '/grades', label: 'Grades', icon: FileText },
+    { path: '/announcements', label: 'Announcements', icon: Megaphone },
+    { path: '/documents', label: 'Documents', icon: FolderOpen },
+    { path: '/reports', label: 'Reports', icon: BarChart3 },
+    { path: '/certificate', label: 'Certificate Request', icon: Award },
+    { path: '/settings', label: 'Settings', icon: Settings },
+  ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login', { replace: true });
+  };
+
+  const initials = (currentUser?.name || '?')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('');
 
   return (
     <aside style={{
@@ -32,24 +55,19 @@ export default function Sidebar() {
       <div style={{ padding: '24px 20px 20px' }}>
         {/* ===== LOGO SECTION ===== */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          {/* Option A: Image Logo */}
           <img
-            src="images/marsulogo.png"
+            src="/images/marsulogo.png"
             alt="MARSU Logo"
-            style={{
-              width: '44px',
-              height: '44px',
-              borderRadius: '50%',
-              objectFit: 'cover'
-            }}
+            style={{ width: '44px', height: '44px', borderRadius: '50%', objectFit: 'cover', background: '#fff', flexShrink: 0 }}
+            onError={(e) => { e.currentTarget.style.display = 'none'; }}
           />
 
           <div>
             <h1 style={{ fontSize: '16px', fontWeight: 800, letterSpacing: '0.5px', margin: 0, lineHeight: 1.2 }}>
-              MARSU â NSTP
+              MARSU — NSTP
             </h1>
             <p style={{ fontSize: '10px', color: 'var(--gold-light)', margin: '2px 0 0', letterSpacing: '0.8px', opacity: 0.9 }}>
-              Excellence â¢ Service â¢ Leadership
+              Excellence • Service • Leadership
             </p>
           </div>
         </div>
@@ -65,18 +83,46 @@ export default function Sidebar() {
             background: 'rgba(255,255,255,0.15)', display: 'flex',
             alignItems: 'center', justifyContent: 'center', flexShrink: 0
           }}>
-            <Users size={18} color="#fff" />
+            {initials ? (
+              <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{initials}</span>
+            ) : (
+              <Users size={18} color="#fff" />
+            )}
           </div>
           <div style={{ overflow: 'hidden', minWidth: 0 }}>
-            {/* Palitan mo ito kung gusto mong baguhin yung pangalan at role */}
             <p style={{ fontSize: '13px', fontWeight: 600, margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              Admin
+              {currentUser?.name || 'Admin'}
             </p>
             <p style={{ fontSize: '11px', color: 'rgba(255,255,255,0.55)', margin: '2px 0 0' }}>
-              NSTP Director
+              {ROLE_LABELS[currentUser?.role] || currentUser?.role}
             </p>
           </div>
         </div>
+
+        {/* ===== PROGRAM SWITCHER (super_admin only) ===== */}
+        {isSuperAdmin && (
+          <div style={{ marginTop: '14px' }}>
+            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.6px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px', textTransform: 'uppercase' }}>
+              Program View
+            </p>
+            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.06)', padding: '4px', borderRadius: '10px' }}>
+              {['All', 'CWTS', 'ROTC'].map((opt) => (
+                <button
+                  key={opt}
+                  onClick={() => setProgramView(opt)}
+                  style={{
+                    flex: 1, padding: '7px 0', borderRadius: '7px', border: 'none', cursor: 'pointer',
+                    background: programView === opt ? 'var(--gold)' : 'transparent',
+                    color: programView === opt ? 'var(--sidebar-bg)' : 'rgba(255,255,255,0.75)',
+                    fontSize: '11px', fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s ease',
+                  }}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       <nav style={{ flex: 1, padding: '8px 14px' }}>
@@ -101,7 +147,7 @@ export default function Sidebar() {
       </nav>
 
       <div style={{ padding: '16px 14px 20px', borderTop: '1px solid rgba(255,255,255,0.08)' }}>
-        <button onClick={() => navigate('/')} style={{
+        <button onClick={handleLogout} style={{
           display: 'flex', alignItems: 'center', gap: '14px', width: '100%',
           padding: '12px 16px', background: 'transparent', border: 'none',
           color: 'rgba(255,255,255,0.75)', fontSize: '14px', fontWeight: 500,

@@ -2,10 +2,13 @@ import React from 'react';
 
 const configs = {
   students: { bg: '#FEF3C7', color: '#B45309' },
+  cadets: { bg: '#DBEAFE', color: '#1D4ED8' },
   officers: { bg: '#FEF3C7', color: '#B45309' },
-  instructors: { bg: '#F3E8FF', color: '#7C3AED' },
+  activities: { bg: '#F3E8FF', color: '#7C3AED' },
+  attendance: { bg: '#ECFDF5', color: '#059669' },
   announcements: { bg: '#FEF3C7', color: '#B45309' },
   certificates: { bg: '#FEF3C7', color: '#B45309' },
+  grades: { bg: '#ECFDF5', color: '#059669' },
 };
 
 export default function StatCard({ title, value, subtitle, icon: Icon, type = 'students' }) {
