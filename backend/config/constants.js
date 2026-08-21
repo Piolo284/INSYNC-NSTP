@@ -12,7 +12,7 @@ const USER_STATUSES = ['Active', 'Inactive', 'Dropped', 'Pending'];
 const PROGRAM_ADMIN_ROLES = ['admin_cwts', 'admin_rotc'];
 /** Every role with admin-level rights, program-scoped or system-wide. */
 const ADMIN_ROLES = ['admin_cwts', 'admin_rotc', 'super_admin'];
-/** Non-trainee roles — replaces the old hand-typed ['officer','instructor','admin']. */
+/** Non-trainee roles — centralizes what used to be hand-typed per file. */
 const STAFF_ROLES = ['officer', 'admin_cwts', 'admin_rotc', 'super_admin'];
 /** Trainee roles — unchanged. */
 const TRAINEE_ROLES = ['student', 'cadet'];
