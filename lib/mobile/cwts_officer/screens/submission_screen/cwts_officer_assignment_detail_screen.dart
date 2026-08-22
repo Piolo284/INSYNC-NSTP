@@ -3,7 +3,10 @@ import 'cwts_officer_student_submission_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerAssignmentDetailScreen extends StatefulWidget {
@@ -80,104 +83,87 @@ class _CwtsOfficerAssignmentDetailScreenState
     final rubrics = ((_module['rubrics'] as List?) ?? const [])
         .cast<Map<String, dynamic>>();
 
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Rubric',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.primaryMaroon,
-                ),
-              ),
-              const SizedBox(height: 12),
-              if (rubrics.isEmpty)
-                Text(
-                  'No rubric was set for this assignment. Grading uses a single '
-                  'score out of ${Fmt.toInt(_module['totalPoints'], 100)}.',
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
-                )
-              else
-                ...rubrics.map(
-                  (r) => Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                Fmt.str(r['title'], 'Criterion'),
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.black87,
+    showAppBottomSheet(
+      context,
+      title: 'Rubric',
+      child: rubrics.isEmpty
+          ? Text(
+              'No rubric was set for this assignment. Grading uses a single '
+              'score out of ${Fmt.toInt(_module['totalPoints'], 100)}.',
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            )
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: rubrics
+                  .map(
+                    (r) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  Fmt.str(r['title'], 'Criterion'),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppColors.textPrimary,
+                                  ),
                                 ),
                               ),
-                            ),
-                            Text(
-                              '${Fmt.toInt(r['points'])} pts',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade600,
+                              Text(
+                                '${Fmt.toInt(r['points'])} pts',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: AppColors.textSecondary,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          Fmt.str(r['description']),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            height: 1.4,
+                            ],
                           ),
-                        ),
-                      ],
+                          const SizedBox(height: 4),
+                          Text(
+                            Fmt.str(r['description']),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                              height: 1.4,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
+                  )
+                  .toList(),
+            ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Assignment Details',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -189,98 +175,84 @@ class _CwtsOfficerAssignmentDetailScreenState
         child: Column(
           children: [
             // ===== ASSIGNMENT INFO CARD =====
-            Container(
-              margin: const EdgeInsets.all(16),
+            Padding(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.grey.shade200),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.04),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF3E0),
-                          borderRadius: BorderRadius.circular(10),
+              child: AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: AppColors.orangeLight,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.assignment_outlined,
+                              color: AppColors.orange, size: 20),
                         ),
-                        child: const Icon(Icons.assignment_outlined,
-                            color: Colors.deepOrange, size: 20),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          Fmt.str(_module['title'], 'Assignment'),
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            Fmt.str(_module['title'], 'Assignment'),
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
+                            ),
                           ),
                         ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    InfoRow(
+                      icon: Icons.menu_book_outlined,
+                      label: 'Module',
+                      value: Fmt.str(_module['moduleCode'], '—'),
+                    ),
+                    InfoRow(
+                      icon: Icons.event_outlined,
+                      label: 'Due Date',
+                      value: Fmt.dateWithDay(_module['deadline']),
+                    ),
+                    InfoRow(
+                      icon: Icons.grade_outlined,
+                      label: 'Total Points',
+                      value: '${Fmt.toInt(_module['totalPoints'], 100)}',
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      Fmt.str(
+                        _module['description'],
+                        'No description was provided for this assignment.',
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  _buildInfoRow('Module', Fmt.str(_module['moduleCode'], '—')),
-                  const SizedBox(height: 8),
-                  _buildInfoRow(
-                      'Due Date', Fmt.dateWithDay(_module['deadline'])),
-                  const SizedBox(height: 8),
-                  _buildInfoRow('Total Points',
-                      '${Fmt.toInt(_module['totalPoints'], 100)}'),
-                  const SizedBox(height: 12),
-                  Text(
-                    Fmt.str(
-                      _module['description'],
-                      'No description was provided for this assignment.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                        height: 1.4,
+                      ),
                     ),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      height: 1.4,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: TextButton.icon(
-                      onPressed: _showRubric,
-                      icon: const Icon(Icons.description_outlined,
-                          size: 16, color: AppColors.primaryMaroon),
-                      label: const Text(
-                        'View Rubric',
-                        style: TextStyle(
-                          color: AppColors.primaryMaroon,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
+                    const SizedBox(height: 12),
+                    Center(
+                      child: TextButton.icon(
+                        onPressed: _showRubric,
+                        icon: const Icon(Icons.description_outlined, size: 16),
+                        label: const Text(
+                          'View Rubric',
+                          style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
             // ===== TABS =====
             TabBar(
               controller: _tabController,
-              indicatorColor: AppColors.primaryMaroon,
-              indicatorWeight: 3,
-              labelColor: AppColors.primaryMaroon,
-              unselectedLabelColor: Colors.grey.shade500,
-              labelStyle:
-                  const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               tabs: [
                 Tab(text: 'Graded (${_graded.length})'),
                 Tab(text: 'To Grade (${_toGrade.length})'),
@@ -305,33 +277,6 @@ class _CwtsOfficerAssignmentDetailScreenState
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade500,
-            ),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
   Widget _buildStudentList(
     List<Map<String, dynamic>> submissions,
     String emptyText,
@@ -352,12 +297,13 @@ class _CwtsOfficerAssignmentDetailScreenState
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
         itemCount: submissions.length,
-        separatorBuilder: (_, __) => Divider(color: Colors.grey.shade200),
+        separatorBuilder: (_, _) => const Divider(color: AppColors.border),
         itemBuilder: (context, index) {
           final s = submissions[index];
           final student = s['studentId'];
           final user = student is Map ? student : const {};
           final score = s['score'];
+          final status = Fmt.str(s['status'], 'Submitted');
 
           return GestureDetector(
             onTap: () {
@@ -391,15 +337,15 @@ class _CwtsOfficerAssignmentDetailScreenState
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
                         Text(
                           Fmt.dateTimeShort(s['submittedAt']),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 11,
-                            color: Colors.grey.shade500,
+                            color: AppColors.textSecondary,
                           ),
                         ),
                       ],
@@ -414,29 +360,15 @@ class _CwtsOfficerAssignmentDetailScreenState
                           style: const TextStyle(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: AppColors.textPrimary,
                           ),
                         ),
-                        Text(
-                          'Graded',
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: Colors.green.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
+                        const SizedBox(height: 3),
+                        StatusBadge(status, dense: true),
                       ],
                     )
                   else
-                    Text(
-                      '---\nTo Grade',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.amber.shade700,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
+                    StatusBadge('To Grade', dense: true),
                 ],
               ),
             ),

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerActivityParticipantsScreen extends StatefulWidget {
@@ -76,57 +78,28 @@ class _CwtsOfficerActivityParticipantsScreenState
     }).toList();
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Present':
-        return Colors.green;
-      case 'Late':
-        return Colors.amber.shade700;
-      case 'Absent':
-        return Colors.red;
-      case 'Excused':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
-  }
-
   /// Lets an officer correct a participant's status inline.
   Future<void> _changeStatus(Map<String, dynamic> participant) async {
     const options = ['Present', 'Late', 'Absent', 'Excused'];
 
-    final picked = await showModalBottomSheet<String>(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(height: 16),
-            Text(
-              Fmt.str(participant['name'], 'Trainee'),
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            ...options.map(
+    final picked = await showAppBottomSheet<String>(
+      context,
+      title: Fmt.str(participant['name'], 'Trainee'),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: options
+            .map(
               (option) => ListTile(
-                leading: Icon(Icons.circle, size: 12, color: _statusColor(option)),
+                contentPadding: EdgeInsets.zero,
+                leading: StatusBadge(option, dense: true),
                 title: Text(option, style: const TextStyle(fontSize: 14)),
                 trailing: participant['status'] == option
                     ? const Icon(Icons.check, color: AppColors.primaryMaroon)
                     : null,
-                onTap: () => Navigator.pop(sheetContext, option),
+                onTap: () => Navigator.pop(context, option),
               ),
-            ),
-            const SizedBox(height: 8),
-          ],
-        ),
+            )
+            .toList(),
       ),
     );
 
@@ -149,26 +122,26 @@ class _CwtsOfficerActivityParticipantsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Participants',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -177,7 +150,7 @@ class _CwtsOfficerActivityParticipantsScreenState
         children: [
           // ===== STATS CARDS =====
           Container(
-            color: Colors.white,
+            color: AppColors.white,
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
             child: Row(
               children: [
@@ -185,7 +158,7 @@ class _CwtsOfficerActivityParticipantsScreenState
                   child: _buildStatCard(
                     label: 'Present',
                     value: '${Fmt.toInt(_stats['present'])}',
-                    color: Colors.green,
+                    color: AppColors.success,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -193,7 +166,7 @@ class _CwtsOfficerActivityParticipantsScreenState
                   child: _buildStatCard(
                     label: 'Late',
                     value: '${Fmt.toInt(_stats['late'])}',
-                    color: Colors.amber.shade700,
+                    color: AppColors.warning,
                   ),
                 ),
                 const SizedBox(width: 10),
@@ -201,38 +174,27 @@ class _CwtsOfficerActivityParticipantsScreenState
                   child: _buildStatCard(
                     label: 'Absent',
                     value: '${Fmt.toInt(_stats['absent'])}',
-                    color: Colors.red,
+                    color: AppColors.error,
                   ),
                 ),
               ],
             ),
           ),
-          Divider(color: Colors.grey.shade200, height: 1),
+          const Divider(height: 1),
 
           // ===== SEARCH BAR =====
           Padding(
             padding: const EdgeInsets.all(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Search trainee..',
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 14,
-                  ),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
+            child: TextField(
+              controller: _searchController,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: 'Search trainee..',
+                prefixIcon: const Icon(Icons.search),
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
               ),
             ),
@@ -244,20 +206,20 @@ class _CwtsOfficerActivityParticipantsScreenState
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(
+                const Text(
                   'Trainee List',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
-                    color: Colors.grey.shade800,
+                    color: AppColors.textPrimary,
                     letterSpacing: 0.5,
                   ),
                 ),
                 Text(
                   '${_filteredParticipants.length} of ${_participants.length}',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -280,10 +242,7 @@ class _CwtsOfficerActivityParticipantsScreenState
                   physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   itemCount: _filteredParticipants.length,
-                  separatorBuilder: (_, __) => Divider(
-                    color: Colors.grey.shade200,
-                    height: 1,
-                  ),
+                  separatorBuilder: (_, _) => const Divider(height: 1),
                   itemBuilder: (context, index) {
                     return _buildParticipantTile(_filteredParticipants[index]);
                   },
@@ -305,7 +264,7 @@ class _CwtsOfficerActivityParticipantsScreenState
       padding: const EdgeInsets.symmetric(vertical: 14),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -334,7 +293,6 @@ class _CwtsOfficerActivityParticipantsScreenState
 
   Widget _buildParticipantTile(Map<String, dynamic> participant) {
     final status = Fmt.str(participant['status'], 'Present');
-    final statusColor = _statusColor(status);
 
     return InkWell(
       onTap: () => _changeStatus(participant),
@@ -361,7 +319,7 @@ class _CwtsOfficerActivityParticipantsScreenState
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -371,30 +329,15 @@ class _CwtsOfficerActivityParticipantsScreenState
                       Fmt.str(participant['course']),
                       Fmt.str(participant['yearLevel']),
                     ].where((s) => s.isNotEmpty).join(' • '),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade500,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
-            // Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: statusColor.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: statusColor,
-                ),
-              ),
-            ),
+            StatusBadge(status),
           ],
         ),
       ),

@@ -5,7 +5,9 @@ import 'cwts_officer_manual_attendance_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerAttendanceScreen extends StatefulWidget {
@@ -86,7 +88,7 @@ class _CwtsOfficerAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -95,14 +97,14 @@ class _CwtsOfficerAttendanceScreenState
         title: const Text(
           'Attendance',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -119,10 +121,10 @@ class _CwtsOfficerAttendanceScreenState
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // ===== DATE DROPDOWN =====
+                // ===== DATE PICKER =====
                 Container(
                   width: double.infinity,
-                  color: Colors.white,
+                  color: AppColors.cardBg,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   child: Center(
                     child: GestureDetector(
@@ -131,24 +133,24 @@ class _CwtsOfficerAttendanceScreenState
                         padding: const EdgeInsets.symmetric(
                             horizontal: 16, vertical: 10),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: AppColors.cardBg,
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.grey.shade300),
+                          border: Border.all(color: AppColors.border),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Text(
                               Fmt.dateWithDay(_selectedDate),
-                              style: TextStyle(
+                              style: const TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
-                                color: Colors.grey.shade800,
+                                color: AppColors.textPrimary,
                               ),
                             ),
                             const SizedBox(width: 8),
-                            Icon(Icons.calendar_today_outlined,
-                                size: 16, color: Colors.grey.shade600),
+                            const Icon(Icons.calendar_today_outlined,
+                                size: 16, color: AppColors.textSecondary),
                           ],
                         ),
                       ),
@@ -158,36 +160,33 @@ class _CwtsOfficerAttendanceScreenState
 
                 // ===== STATS CARDS =====
                 Container(
-                  color: Colors.white,
+                  color: AppColors.cardBg,
                   padding:
                       const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Row(
                     children: [
-                      _buildStatCard(
+                      _StatCard(
                         label: 'Present',
                         value: '${Fmt.toInt(_today['present'])}',
                         percentage:
                             '(${Fmt.toDouble(_today['presentPercent']).toStringAsFixed(1)}%)',
-                        bgColor: const Color(0xFFE8F5E9),
-                        valueColor: Colors.green.shade700,
+                        status: 'Present',
                       ),
                       const SizedBox(width: 10),
-                      _buildStatCard(
+                      _StatCard(
                         label: 'Late',
                         value: '${Fmt.toInt(_today['late'])}',
                         percentage:
                             '(${Fmt.toDouble(_today['latePercent']).toStringAsFixed(1)}%)',
-                        bgColor: const Color(0xFFFFF9C4),
-                        valueColor: Colors.amber.shade800,
+                        status: 'Late',
                       ),
                       const SizedBox(width: 10),
-                      _buildStatCard(
+                      _StatCard(
                         label: 'Absent',
                         value: '${Fmt.toInt(_today['absent'])}',
                         percentage:
                             '(${Fmt.toDouble(_today['absentPercent']).toStringAsFixed(1)}%)',
-                        bgColor: const Color(0xFFFFEBEE),
-                        valueColor: Colors.red.shade700,
+                        status: 'Absent',
                       ),
                     ],
                   ),
@@ -211,7 +210,7 @@ class _CwtsOfficerAttendanceScreenState
                             ).then((_) => _load());
                           },
                           icon: const Icon(Icons.qr_code, size: 18),
-                          label: const Text('Create Qr Code'),
+                          label: const Text('Create QR Code'),
                           style: OutlinedButton.styleFrom(
                             foregroundColor: AppColors.primaryMaroon,
                             side: const BorderSide(
@@ -238,7 +237,7 @@ class _CwtsOfficerAttendanceScreenState
                           label: const Text('Manual Attendance'),
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.primaryMaroon,
-                            foregroundColor: Colors.white,
+                            foregroundColor: AppColors.white,
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(12)),
@@ -254,62 +253,41 @@ class _CwtsOfficerAttendanceScreenState
                 // ===== STUDENTS NEAR ABSENCE LIMIT =====
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'STUDENTS NEAR ABSENCE LIMIT',
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) =>
-                                  const CwtsOfficerAttendanceListScreen(
-                                category: 'At-Risk Students',
-                              ),
-                            ),
-                          ).then((_) => _load());
-                        },
-                        child: const Text(
-                          'See All',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primaryMaroon,
+                  child: SectionHeader(
+                    title: 'Students Near Absence Limit',
+                    actionLabel: 'See All',
+                    onAction: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const CwtsOfficerAttendanceListScreen(
+                            category: 'At-Risk Students',
                           ),
                         ),
-                      ),
-                    ],
+                      ).then((_) => _load());
+                    },
                   ),
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: _atRiskStudents.isEmpty
-                      ? const AsyncView(
-                          state: LoadState.empty,
-                          compact: true,
-                          emptyText: 'No trainee is near the absence limit.',
-                          emptyIcon: Icons.verified_outlined,
-                          child: SizedBox.shrink(),
-                        )
-                      : Column(
-                          children:
-                              _atRiskStudents.take(3).toList().asMap().entries.map(
-                            (entry) {
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AppCard(
+                    padding: EdgeInsets.zero,
+                    child: _atRiskStudents.isEmpty
+                        ? const AsyncView(
+                            state: LoadState.empty,
+                            compact: true,
+                            emptyText: 'No trainee is near the absence limit.',
+                            emptyIcon: Icons.verified_outlined,
+                            child: SizedBox.shrink(),
+                          )
+                        : Column(
+                            children: _atRiskStudents
+                                .take(3)
+                                .toList()
+                                .asMap()
+                                .entries
+                                .map((entry) {
                               final s = entry.value;
                               final isLast = entry.key ==
                                   _atRiskStudents.take(3).length - 1;
@@ -319,7 +297,7 @@ class _CwtsOfficerAttendanceScreenState
                                     padding: const EdgeInsets.all(14),
                                     child: Row(
                                       children: [
-                                        UserAvatar(
+                                        const UserAvatar(
                                           imagePath: null,
                                           radius: 20,
                                           iconSize: 18,
@@ -337,15 +315,16 @@ class _CwtsOfficerAttendanceScreenState
                                                 style: const TextStyle(
                                                   fontSize: 14,
                                                   fontWeight: FontWeight.w600,
-                                                  color: Colors.black87,
+                                                  color: AppColors.textPrimary,
                                                 ),
                                               ),
                                               const SizedBox(height: 2),
                                               Text(
                                                 '${Fmt.toInt(s['absents'])}/${Fmt.toInt(s['totalSessions'])} Absents',
-                                                style: TextStyle(
+                                                style: const TextStyle(
                                                   fontSize: 11,
-                                                  color: Colors.grey.shade500,
+                                                  color:
+                                                      AppColors.textSecondary,
                                                 ),
                                               ),
                                             ],
@@ -354,13 +333,13 @@ class _CwtsOfficerAttendanceScreenState
                                         Container(
                                           width: 28,
                                           height: 28,
-                                          decoration: BoxDecoration(
-                                            color: Colors.red.shade50,
+                                          decoration: const BoxDecoration(
+                                            color: AppColors.errorLight,
                                             shape: BoxShape.circle,
                                           ),
-                                          child: Icon(
+                                          child: const Icon(
                                             Icons.error_outline,
-                                            color: Colors.red.shade600,
+                                            color: AppColors.error,
                                             size: 16,
                                           ),
                                         ),
@@ -368,96 +347,84 @@ class _CwtsOfficerAttendanceScreenState
                                     ),
                                   ),
                                   if (!isLast)
-                                    Divider(
-                                        color: Colors.grey.shade100, height: 1),
+                                    const Divider(
+                                        color: AppColors.border, height: 1),
                                 ],
                               );
-                            },
-                          ).toList(),
-                        ),
+                            }).toList(),
+                          ),
+                  ),
                 ),
                 const SizedBox(height: 24),
 
                 // ===== ATTENDANCE TREND =====
                 const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'ATTENDANCE TREND (This Month)',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
+                  child: SectionHeader(title: 'Attendance Trend (This Month)'),
                 ),
                 const SizedBox(height: 12),
-                Container(
-                  margin: const EdgeInsets.symmetric(horizontal: 16),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: _trendData.length < 2
-                      ? const AsyncView(
-                          state: LoadState.empty,
-                          compact: true,
-                          emptyText:
-                              'Not enough attendance data for a trend yet.',
-                          emptyIcon: Icons.show_chart,
-                          child: SizedBox.shrink(),
-                        )
-                      : Column(
-                          children: [
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Column(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    _buildYLabel('100%'),
-                                    _buildYLabel('75%'),
-                                    _buildYLabel('50%'),
-                                    _buildYLabel('25%'),
-                                    _buildYLabel('0%'),
-                                  ],
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 140,
-                                    child: CustomPaint(
-                                      size: const Size(double.infinity, 140),
-                                      painter:
-                                          _LineChartPainter(data: _trendData),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: AppCard(
+                    child: _trendData.length < 2
+                        ? const AsyncView(
+                            state: LoadState.empty,
+                            compact: true,
+                            emptyText:
+                                'Not enough attendance data for a trend yet.',
+                            emptyIcon: Icons.show_chart,
+                            child: SizedBox.shrink(),
+                          )
+                        : Column(
+                            children: [
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Column(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _buildYLabel('100%'),
+                                      _buildYLabel('75%'),
+                                      _buildYLabel('50%'),
+                                      _buildYLabel('25%'),
+                                      _buildYLabel('0%'),
+                                    ],
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: SizedBox(
+                                      height: 140,
+                                      child: CustomPaint(
+                                        size: const Size(double.infinity, 140),
+                                        painter:
+                                            _LineChartPainter(data: _trendData),
+                                      ),
                                     ),
                                   ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 32),
-                              child: Row(
-                                mainAxisAlignment:
-                                    MainAxisAlignment.spaceBetween,
-                                children: _trendLabels()
-                                    .map(
-                                      (label) => Text(
-                                        label,
-                                        style: TextStyle(
-                                            fontSize: 10,
-                                            color: Colors.grey.shade500),
-                                      ),
-                                    )
-                                    .toList(),
+                                ],
                               ),
-                            ),
-                          ],
-                        ),
+                              const SizedBox(height: 8),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 32),
+                                child: Row(
+                                  mainAxisAlignment:
+                                      MainAxisAlignment.spaceBetween,
+                                  children: _trendLabels()
+                                      .map(
+                                        (label) => Text(
+                                          label,
+                                          style: const TextStyle(
+                                              fontSize: 10,
+                                              color: AppColors.textSecondary),
+                                        ),
+                                      )
+                                      .toList(),
+                                ),
+                              ),
+                            ],
+                          ),
+                  ),
                 ),
                 const SizedBox(height: 24),
               ],
@@ -480,18 +447,41 @@ class _CwtsOfficerAttendanceScreenState
     });
   }
 
-  Widget _buildStatCard({
-    required String label,
-    required String value,
-    required String percentage,
-    required Color bgColor,
-    required Color valueColor,
-  }) {
+  Widget _buildYLabel(String text) {
+    return SizedBox(
+      height: 28,
+      child: Text(
+        text,
+        style: const TextStyle(fontSize: 10, color: AppColors.textSecondary),
+      ),
+    );
+  }
+}
+
+/// One "Present/Late/Absent" count tile — color follows the same
+/// status→color mapping [StatusBadge] uses, so the dashboard summary and any
+/// status badge shown elsewhere always agree visually.
+class _StatCard extends StatelessWidget {
+  const _StatCard({
+    required this.label,
+    required this.value,
+    required this.percentage,
+    required this.status,
+  });
+
+  final String label;
+  final String value;
+  final String percentage;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = StatusStyle.of(status);
     return Expanded(
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 16),
         decoration: BoxDecoration(
-          color: bgColor,
+          color: style.background,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -501,7 +491,7 @@ class _CwtsOfficerAttendanceScreenState
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: valueColor,
+                color: style.color,
               ),
             ),
             const SizedBox(height: 8),
@@ -510,7 +500,7 @@ class _CwtsOfficerAttendanceScreenState
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: valueColor,
+                color: style.color,
               ),
             ),
             const SizedBox(height: 4),
@@ -518,21 +508,11 @@ class _CwtsOfficerAttendanceScreenState
               percentage,
               style: TextStyle(
                 fontSize: 11,
-                color: valueColor.withValues(alpha: 0.8),
+                color: style.color.withValues(alpha: 0.8),
               ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildYLabel(String text) {
-    return SizedBox(
-      height: 28,
-      child: Text(
-        text,
-        style: TextStyle(fontSize: 10, color: Colors.grey.shade500),
       ),
     );
   }
@@ -556,7 +536,7 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = AppColors.border
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
@@ -585,7 +565,7 @@ class _LineChartPainter extends CustomPainter {
     final radius = data.length > 12 ? 3.0 : 5.0;
     for (final point in points) {
       canvas.drawCircle(point, radius, dotPaint);
-      canvas.drawCircle(point, radius / 2, Paint()..color = Colors.white);
+      canvas.drawCircle(point, radius / 2, Paint()..color = AppColors.white);
     }
   }
 

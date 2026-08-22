@@ -4,8 +4,9 @@ import 'cwts_officer_announcement_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
-import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/profile_header.dart';
 
 class CwtsOfficerDashboardScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
@@ -73,6 +74,9 @@ class _CwtsOfficerDashboardScreenState
   @override
   Widget build(BuildContext context) {
     final session = Session.instance;
+    final subtitle = session.brigade.isNotEmpty
+        ? session.brigade
+        : '${session.program} Officer';
 
     return Scaffold(
       backgroundColor: AppColors.primaryMaroon,
@@ -87,80 +91,32 @@ class _CwtsOfficerDashboardScreenState
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   IconButton(
-                    icon: const Icon(Icons.menu, color: Colors.white, size: 24),
+                    icon: const Icon(Icons.menu, color: AppColors.white, size: 24),
                     onPressed: widget.onOpenDrawer,
                   ),
                   IconButton(
                     icon: const Icon(Icons.refresh,
-                        color: Colors.white, size: 24),
+                        color: AppColors.white, size: 24),
                     onPressed: _load,
                   ),
                 ],
               ),
             ),
 
-            // ===== PROFILE INFO =====
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Text(
-                              '${Fmt.greeting()}! ',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.w400,
-                              ),
-                            ),
-                            const Text('👋', style: TextStyle(fontSize: 14)),
-                          ],
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          session.name.isEmpty ? 'Officer' : session.name,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.2,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          Fmt.dayDateLong(DateTime.now()),
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.85),
-                            fontSize: 13,
-                            fontWeight: FontWeight.w400,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  UserAvatar(
-                    imagePath: session.profileImage,
-                    radius: 34,
-                    backgroundColor: Colors.white.withValues(alpha: 0.25),
-                    iconSize: 28,
-                  ),
-                ],
-              ),
+            // ===== PROFILE HEADER =====
+            ProfileHeader(
+              greeting: '${Fmt.greeting()} 👋',
+              name: session.name.isEmpty ? 'Officer' : session.name,
+              subtitle: subtitle,
+              imagePath: session.profileImage,
             ),
-            const SizedBox(height: 28),
 
             // ===== WHITE CONTENT SHEET =====
             Expanded(
               child: Container(
                 width: double.infinity,
                 decoration: const BoxDecoration(
-                  color: Colors.white,
+                  color: AppColors.white,
                   borderRadius: BorderRadius.only(
                     topLeft: Radius.circular(32),
                     topRight: Radius.circular(32),
@@ -180,21 +136,12 @@ class _CwtsOfficerDashboardScreenState
                       onRefresh: _load,
                       child: SingleChildScrollView(
                         physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
+                        padding: const EdgeInsets.fromLTRB(20, 24, 20, 32),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ===== SECTION TITLE =====
-                            const Text(
-                              'OVERVIEW',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                                letterSpacing: 1.2,
-                              ),
-                            ),
-                            const SizedBox(height: 18),
+                            const SectionHeader(title: 'Overview'),
+                            const SizedBox(height: 14),
 
                             // ===== ROW 1: PRESENTS & ABSENTS =====
                             Row(
@@ -202,7 +149,7 @@ class _CwtsOfficerDashboardScreenState
                                 Expanded(
                                   child: _buildStatCard(
                                     icon: Icons.check_rounded,
-                                    iconBgColor: const Color(0xFF6B1A2A),
+                                    iconBgColor: AppColors.primaryMaroon,
                                     label: 'Presents',
                                     value: Fmt.count(_overview['presents']),
                                     onTap: () => _navigateToList('Presents'),
@@ -212,7 +159,7 @@ class _CwtsOfficerDashboardScreenState
                                 Expanded(
                                   child: _buildStatCard(
                                     icon: Icons.close_rounded,
-                                    iconBgColor: const Color(0xFF6B1A2A),
+                                    iconBgColor: AppColors.primaryMaroon,
                                     label: 'Absents',
                                     value: Fmt.count(_overview['absents']),
                                     onTap: () => _navigateToList('Absents'),
@@ -228,7 +175,7 @@ class _CwtsOfficerDashboardScreenState
                                 Expanded(
                                   child: _buildStatCard(
                                     icon: Icons.access_time_rounded,
-                                    iconBgColor: const Color(0xFFF5A623),
+                                    iconBgColor: AppColors.warning,
                                     label: 'Late',
                                     value: Fmt.count(_overview['late']),
                                     onTap: () =>
@@ -239,7 +186,7 @@ class _CwtsOfficerDashboardScreenState
                                 Expanded(
                                   child: _buildStatCard(
                                     icon: Icons.warning_amber_rounded,
-                                    iconBgColor: const Color(0xFFE53935),
+                                    iconBgColor: AppColors.error,
                                     label: 'At - Risk',
                                     value: Fmt.count(_overview['atRisk']),
                                     onTap: () =>
@@ -250,21 +197,27 @@ class _CwtsOfficerDashboardScreenState
                             ),
                             const SizedBox(height: 12),
 
-                            // ===== ROW 3: TOTAL STUDENTS (CENTERED) =====
+                            // ===== ROW 3: EXCUSED & TOTAL STUDENTS =====
                             Row(
                               children: [
-                                const Spacer(),
+                                Expanded(
+                                  child: _buildStatCard(
+                                    icon: Icons.event_available_rounded,
+                                    iconBgColor: AppColors.blue,
+                                    label: 'Excused',
+                                    value: Fmt.count(_overview['excused']),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
                                 Expanded(
                                   child: _buildStatCard(
                                     icon: Icons.people_rounded,
-                                    iconBgColor: const Color(0xFF6B1A2A),
+                                    iconBgColor: AppColors.primaryMaroon,
                                     label: 'Total Students',
                                     value:
                                         Fmt.count(_overview['totalStudents']),
-                                    onTap: () {},
                                   ),
                                 ),
-                                const Spacer(),
                               ],
                             ),
                             const SizedBox(height: 28),
@@ -298,74 +251,60 @@ class _CwtsOfficerDashboardScreenState
     required String value,
     VoidCallback? onTap,
   }) {
-    return GestureDetector(
+    return AppCard(
       onTap: onTap,
-      behavior: HitTestBehavior.opaque,
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade100),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 12,
-              spreadRadius: 0,
-              offset: const Offset(0, 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          // Icon Circle
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: iconBgColor,
+              shape: BoxShape.circle,
             ),
-          ],
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            // Icon Circle
-            Container(
-              width: 46,
-              height: 46,
-              decoration: BoxDecoration(
-                color: iconBgColor,
-                shape: BoxShape.circle,
+            child: Center(
+              child: Icon(
+                icon,
+                color: AppColors.white,
+                size: 22,
               ),
-              child: Center(
-                child: Icon(
-                  icon,
-                  color: Colors.white,
-                  size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          // Label & Value
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    height: 1.2,
+                  ),
                 ),
-              ),
-            ),
-            const SizedBox(width: 14),
-            // Label & Value
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w500,
-                      height: 1.2,
-                    ),
+                const SizedBox(height: 6),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryMaroon,
+                    height: 1.0,
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    value,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.primaryMaroon,
-                      height: 1.0,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -375,31 +314,12 @@ class _CwtsOfficerDashboardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'ATTENDANCE TREND (This Month)',
-          style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-            letterSpacing: 0.8,
-          ),
+        const SectionHeader(
+          title: 'Attendance Trend',
+          subtitle: 'This month',
         ),
-        const SizedBox(height: 16),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade100),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.03),
-                blurRadius: 10,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
+        const SizedBox(height: 14),
+        AppCard(
           child: _trendData.length < 2
               ? const AsyncView(
                   state: LoadState.empty,
@@ -444,9 +364,9 @@ class _CwtsOfficerDashboardScreenState
                             .map(
                               (label) => Text(
                                 label,
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 10,
-                                  color: Colors.grey.shade500,
+                                  color: AppColors.textSecondary,
                                   fontWeight: FontWeight.w500,
                                 ),
                               ),
@@ -479,9 +399,9 @@ class _CwtsOfficerDashboardScreenState
       height: 28,
       child: Text(
         text,
-        style: TextStyle(
+        style: const TextStyle(
           fontSize: 10,
-          color: Colors.grey.shade500,
+          color: AppColors.textSecondary,
           fontWeight: FontWeight.w500,
         ),
       ),
@@ -493,50 +413,22 @@ class _CwtsOfficerDashboardScreenState
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            const Text(
-              'RECENT ANNOUNCEMENTS',
-              style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-                letterSpacing: 0.8,
+        SectionHeader(
+          title: 'Recent Announcements',
+          actionLabel: 'View all',
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const CwtsOfficerAnnouncementScreen(),
               ),
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const CwtsOfficerAnnouncementScreen(),
-                  ),
-                ).then((_) => _load());
-              },
-              child: const Text(
-                'View All',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primaryMaroon,
-                ),
-              ),
-            ),
-          ],
+            ).then((_) => _load());
+          },
         ),
         const SizedBox(height: 14),
         if (_announcements.isEmpty)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.grey.shade100),
-            ),
-            child: const AsyncView(
+          const AppCard(
+            child: AsyncView(
               state: LoadState.empty,
               compact: true,
               emptyText: 'No announcements yet.',
@@ -551,22 +443,8 @@ class _CwtsOfficerDashboardScreenState
   }
 
   Widget _buildAnnouncementTile(Map<String, dynamic> announcement) {
-    return Container(
-      width: double.infinity,
+    return AppCard(
       margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade100),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
-            blurRadius: 10,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -574,12 +452,12 @@ class _CwtsOfficerDashboardScreenState
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
+              color: AppColors.orangeLight,
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Icon(
               Icons.campaign_rounded,
-              color: Colors.deepOrange,
+              color: AppColors.warning,
               size: 22,
             ),
           ),
@@ -595,7 +473,7 @@ class _CwtsOfficerDashboardScreenState
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
@@ -604,9 +482,11 @@ class _CwtsOfficerDashboardScreenState
                     Fmt.date(announcement['date']),
                     Fmt.str(announcement['location']),
                   ].where((s) => s.isNotEmpty && s != '—').join(' • '),
-                  style: TextStyle(
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                     fontWeight: FontWeight.w400,
                   ),
                 ),
@@ -640,7 +520,7 @@ class _LineChartPainter extends CustomPainter {
       ..style = PaintingStyle.fill;
 
     final gridPaint = Paint()
-      ..color = Colors.grey.shade200
+      ..color = AppColors.border
       ..strokeWidth = 1
       ..style = PaintingStyle.stroke;
 
@@ -677,7 +557,7 @@ class _LineChartPainter extends CustomPainter {
     final radius = data.length > 12 ? 3.0 : 5.0;
     for (final point in points) {
       canvas.drawCircle(point, radius, dotPaint);
-      canvas.drawCircle(point, radius / 2, Paint()..color = Colors.white);
+      canvas.drawCircle(point, radius / 2, Paint()..color = AppColors.white);
     }
   }
 

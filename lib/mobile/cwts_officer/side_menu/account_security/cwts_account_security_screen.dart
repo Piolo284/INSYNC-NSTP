@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/login_validators.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 
 class CwtsAccountSecurityScreen extends StatelessWidget {
   const CwtsAccountSecurityScreen({super.key});
@@ -26,24 +28,16 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
             TextField(
               controller: currentController,
               obscureText: true,
-              decoration: InputDecoration(
-                labelText: 'Current password',
-                labelStyle: const TextStyle(fontSize: 13),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-              ),
+              decoration: const InputDecoration(labelText: 'Current password'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: newController,
               obscureText: true,
-              decoration: InputDecoration(
+              decoration: const InputDecoration(
                 labelText: 'New password',
-                labelStyle: const TextStyle(fontSize: 13),
                 helperText: '8+ chars, 1 uppercase, 1 number, 1 symbol',
-                helperStyle: const TextStyle(fontSize: 11),
-                border:
-                    OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                helperStyle: TextStyle(fontSize: 11),
               ),
             ),
           ],
@@ -51,18 +45,13 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, [
               currentController.text,
               newController.text,
             ]),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryMaroon,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
             child: const Text('Update'),
           ),
         ],
@@ -105,18 +94,18 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Account & Security',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -127,22 +116,10 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Account Setting
-            const Text(
-              'Account Setting',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
+            const SectionHeader(title: 'Account Setting'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
                   _buildMenuItem(
@@ -155,15 +132,15 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
                     icon: Icons.mail_outline,
                     label: 'Change Email',
                     subtitle: Session.instance.email,
+                    available: false,
                     onTap: () => _notYetAvailable(context, 'Changing your email'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.phone_android_outlined,
                     label: 'Change Contact Number',
-                    subtitle: Session.instance.user?['contactNumber']
-                            ?.toString() ??
-                        '',
+                    subtitle: Session.instance.user?['contactNumber']?.toString() ?? '',
+                    available: false,
                     onTap: () => _notYetAvailable(
                         context, 'Changing your contact number'),
                   ),
@@ -171,28 +148,17 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 24),
-            // Security
-            const Text(
-              'Security',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
+            const SectionHeader(title: 'Security'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
                   _buildMenuItem(
                     icon: Icons.mail_outline,
                     label: 'Two-Factor Authentication',
                     subtitle: 'Attendance already uses email verification',
+                    available: false,
                     onTap: () =>
                         _notYetAvailable(context, 'Two-factor authentication'),
                   ),
@@ -200,18 +166,21 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
                   _buildMenuItem(
                     icon: Icons.devices_outlined,
                     label: 'Login Devices',
+                    available: false,
                     onTap: () => _notYetAvailable(context, 'Device history'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.timer_outlined,
                     label: 'Active Sessions',
+                    available: false,
                     onTap: () => _notYetAvailable(context, 'Session history'),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.logout_outlined,
                     label: 'Logout All Devices',
+                    available: false,
                     onTap: () =>
                         _notYetAvailable(context, 'Logging out all devices'),
                   ),
@@ -230,44 +199,38 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
     required String label,
     required VoidCallback onTap,
     String subtitle = '',
+    bool available = true,
   }) {
     return ListTile(
       onTap: onTap,
       contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       leading: Icon(
         icon,
-        color: AppColors.primaryMaroon,
+        color: available ? AppColors.primaryMaroon : AppColors.textSecondary,
         size: 22,
       ),
       title: Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          color: available ? AppColors.textPrimary : AppColors.textSecondary,
         ),
       ),
       subtitle: subtitle.isEmpty
           ? null
           : Text(
               subtitle,
-              style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
+              style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
               overflow: TextOverflow.ellipsis,
             ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: Colors.grey.shade400,
-        size: 14,
-      ),
+      trailing: available
+          ? const Icon(Icons.arrow_forward_ios, color: AppColors.textSecondary, size: 14)
+          : const StatusBadge('Not available yet', dense: true),
     );
   }
 
   Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      color: Colors.grey.shade200,
-      indent: 16,
-      endIndent: 16,
-    );
+    return const Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16);
   }
 }

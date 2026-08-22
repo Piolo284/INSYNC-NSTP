@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 /// Officer manual attendance. Search hits the real roster, the status is
@@ -189,12 +191,11 @@ class _CwtsOfficerManualAttendanceScreenState
               Container(
                 width: 64,
                 height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
+                decoration: const BoxDecoration(
+                  color: AppColors.greenLight,
                   shape: BoxShape.circle,
                 ),
-                child:
-                    Icon(Icons.check, color: Colors.green.shade600, size: 32),
+                child: const Icon(Icons.check, color: AppColors.success, size: 32),
               ),
               const SizedBox(height: 20),
               const Text(
@@ -202,16 +203,16 @@ class _CwtsOfficerManualAttendanceScreenState
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 '$count student(s) have been marked\nas $_selectedStatus manually',
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   height: 1.4,
                 ),
               ),
@@ -219,8 +220,17 @@ class _CwtsOfficerManualAttendanceScreenState
               _buildSummaryRow('Date', Fmt.dateWithDay(_selectedDate)),
               const SizedBox(height: 8),
               _buildSummaryRow('Brigade', _selectedBrigade),
-              const SizedBox(height: 8),
-              _buildSummaryRow('Status', _selectedStatus),
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Status',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                  StatusBadge(_selectedStatus, dense: true),
+                ],
+              ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -231,7 +241,7 @@ class _CwtsOfficerManualAttendanceScreenState
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -254,297 +264,324 @@ class _CwtsOfficerManualAttendanceScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Manual Attendance',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ===== SELECT DATE =====
-            _buildLabel('Select Date'),
-            const SizedBox(height: 8),
-            GestureDetector(
-              onTap: _pickDate,
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        Fmt.dateWithDay(_selectedDate),
-                        style: TextStyle(
-                            fontSize: 14, color: Colors.grey.shade800),
-                      ),
-                    ),
-                    Icon(Icons.calendar_today_outlined,
-                        size: 18, color: Colors.grey.shade500),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ===== SELECT BRIGADE =====
-            _buildLabel('Select Brigade'),
-            const SizedBox(height: 8),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: _selectedBrigade,
-                  icon: Icon(Icons.keyboard_arrow_down,
-                      color: Colors.grey.shade600),
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
-                  onChanged: (v) => setState(() => _selectedBrigade = v!),
-                  items: _brigades
-                      .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                      .toList(),
-                ),
-              ),
-            ),
-            const SizedBox(height: 20),
-
-            // ===== MARK AS =====
-            _buildLabel('Mark As'),
-            const SizedBox(height: 8),
-            Row(
-              children: _statuses.map((status) {
-                final isSelected = _selectedStatus == status;
-                return Expanded(
-                  child: GestureDetector(
-                    onTap: () => setState(() => _selectedStatus = status),
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // ===== SELECT DATE =====
+                  _buildLabel('Select Date'),
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: _pickDate,
                     child: Container(
-                      margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
                       decoration: BoxDecoration(
-                        color: isSelected
-                            ? AppColors.primaryMaroon
-                            : Colors.grey.shade100,
-                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      child: Text(
-                        status,
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w600,
-                          color: isSelected
-                              ? Colors.white
-                              : Colors.grey.shade600,
-                        ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              Fmt.dateWithDay(_selectedDate),
+                              style: const TextStyle(
+                                  fontSize: 14, color: AppColors.textPrimary),
+                            ),
+                          ),
+                          const Icon(Icons.calendar_today_outlined,
+                              size: 18, color: AppColors.textSecondary),
+                        ],
                       ),
                     ),
                   ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
+                  const SizedBox(height: 20),
 
-            // ===== ADD STUDENTS =====
-            _buildLabel('Add Students'),
-            const SizedBox(height: 8),
-            Container(
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search student by name or ID...',
-                  hintStyle:
-                      TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: Icon(Icons.close,
-                              size: 18, color: Colors.grey.shade500),
-                          onPressed: () {
-                            _searchController.clear();
-                            _loadRoster();
-                          },
+                  // ===== SELECT BRIGADE =====
+                  _buildLabel('Select Brigade'),
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: DropdownButtonHideUnderline(
+                      child: DropdownButton<String>(
+                        isExpanded: true,
+                        value: _selectedBrigade,
+                        icon: const Icon(Icons.keyboard_arrow_down,
+                            color: AppColors.textSecondary),
+                        style: const TextStyle(
+                            fontSize: 14, color: AppColors.textPrimary),
+                        onChanged: (v) => setState(() => _selectedBrigade = v!),
+                        items: _brigades
+                            .map((b) =>
+                                DropdownMenuItem(value: b, child: Text(b)))
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // ===== MARK AS =====
+                  _buildLabel('Mark As'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: _statuses.map((status) {
+                      final isSelected = _selectedStatus == status;
+                      final style = StatusStyle.of(status);
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _selectedStatus = status),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 10),
+                            decoration: BoxDecoration(
+                              color: isSelected
+                                  ? style.color
+                                  : AppColors.grey100,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              status,
+                              textAlign: TextAlign.center,
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: isSelected
+                                    ? AppColors.white
+                                    : AppColors.textSecondary,
+                              ),
+                            ),
+                          ),
                         ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                ),
+                      );
+                    }).toList(),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 16),
 
-            // ===== ADDED STUDENTS =====
-            if (_addedStudents.isNotEmpty) ...[
-              Text(
-                'Added Students (${_addedStudents.length})',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 12),
-              Container(
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade200),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Column(
-                  children: _addedStudents.asMap().entries.map((entry) {
-                    final s = entry.value;
-                    final isLast = entry.key == _addedStudents.length - 1;
-                    return Column(
-                      children: [
-                        Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            children: [
-                              UserAvatar(
-                                imagePath: Fmt.str(s['profileImage']),
-                                radius: 20,
-                                iconSize: 18,
+            // ===== ADD STUDENTS =====
+            AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  _buildLabel('Add Students'),
+                  const SizedBox(height: 8),
+                  Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.border),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: TextField(
+                      controller: _searchController,
+                      onChanged: _onSearchChanged,
+                      decoration: InputDecoration(
+                        hintText: 'Search student by name or ID...',
+                        hintStyle: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
+                        prefixIcon: const Icon(Icons.search,
+                            color: AppColors.textSecondary),
+                        suffixIcon: _searchController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                icon: const Icon(Icons.close,
+                                    size: 18, color: AppColors.textSecondary),
+                                onPressed: () {
+                                  _searchController.clear();
+                                  _loadRoster();
+                                },
                               ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment:
-                                      CrossAxisAlignment.start,
+                        border: InputBorder.none,
+                        contentPadding:
+                            const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // ===== SUGGESTED / SEARCH RESULTS =====
+                  Text(
+                    _searchController.text.isEmpty
+                        ? 'Suggested Students'
+                        : 'Search Results',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: _rosterState == LoadState.ready ? null : 160,
+                    child: AsyncView(
+                      state: _rosterState,
+                      message: _rosterError,
+                      onRetry: _loadRoster,
+                      compact: true,
+                      emptyText: _searchController.text.isEmpty
+                          ? 'No trainees enrolled yet.'
+                          : 'No match for "${_searchController.text}".',
+                      emptyIcon: Icons.person_search_outlined,
+                      child: Column(
+                        children: _suggestedStudents
+                            .take(20)
+                            .map(_buildSuggestedStudentTile)
+                            .toList(),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            if (_addedStudents.isNotEmpty) ...[
+              const SizedBox(height: 16),
+              AppCard(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Added Students (${_addedStudents.length})',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.border),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        children: _addedStudents.asMap().entries.map((entry) {
+                          final s = entry.value;
+                          final isLast =
+                              entry.key == _addedStudents.length - 1;
+                          return Column(
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.all(12),
+                                child: Row(
                                   children: [
-                                    Text(
-                                      Fmt.str(s['fullName'], 'Trainee'),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 14,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.black87,
+                                    UserAvatar(
+                                      imagePath: Fmt.str(s['profileImage']),
+                                      radius: 20,
+                                      iconSize: 18,
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            Fmt.str(s['fullName'], 'Trainee'),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w600,
+                                              color: AppColors.textPrimary,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            _infoOf(s),
+                                            style: const TextStyle(
+                                              fontSize: 11,
+                                              color: AppColors.textSecondary,
+                                              height: 1.4,
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      _infoOf(s),
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        color: Colors.grey.shade500,
-                                        height: 1.4,
+                                    GestureDetector(
+                                      onTap: () => _removeStudent(s),
+                                      child: const Text(
+                                        'Remove',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: AppColors.error,
+                                        ),
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              GestureDetector(
-                                onTap: () => _removeStudent(s),
-                                child: Text(
-                                  'Remove',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.red.shade600,
-                                  ),
-                                ),
-                              ),
+                              if (!isLast)
+                                const Divider(
+                                    color: AppColors.border, height: 1),
                             ],
-                          ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // ===== NOTES =====
+                    _buildLabel('Notes (Optional)'),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _notesController,
+                      maxLines: 4,
+                      maxLength: 100,
+                      decoration: InputDecoration(
+                        hintText: 'Add a reason or note for manual attendance',
+                        hintStyle: const TextStyle(
+                            color: AppColors.textSecondary, fontSize: 13),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
                         ),
-                        if (!isLast)
-                          Divider(color: Colors.grey.shade100, height: 1),
-                      ],
-                    );
-                  }).toList(),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(color: AppColors.border),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: AppColors.primaryMaroon, width: 1.5),
+                        ),
+                        contentPadding: const EdgeInsets.all(14),
+                        counterStyle: const TextStyle(
+                            fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 20),
-
-              // ===== NOTES =====
-              _buildLabel('Notes (Optional)'),
-              const SizedBox(height: 8),
-              TextField(
-                controller: _notesController,
-                maxLines: 4,
-                maxLength: 100,
-                decoration: InputDecoration(
-                  hintText: 'Add a reason or note for manual attendance',
-                  hintStyle:
-                      TextStyle(color: Colors.grey.shade400, fontSize: 13),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: BorderSide(color: Colors.grey.shade300),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(
-                        color: AppColors.primaryMaroon, width: 1.5),
-                  ),
-                  contentPadding: const EdgeInsets.all(14),
-                  counterStyle:
-                      TextStyle(fontSize: 11, color: Colors.grey.shade400),
-                ),
-              ),
-              const SizedBox(height: 20),
             ],
-
-            // ===== SUGGESTED / SEARCH RESULTS =====
-            Text(
-              _searchController.text.isEmpty
-                  ? 'Suggested Students'
-                  : 'Search Results',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.grey.shade600,
-              ),
-            ),
-            const SizedBox(height: 12),
-            SizedBox(
-              height: _rosterState == LoadState.ready ? null : 160,
-              child: AsyncView(
-                state: _rosterState,
-                message: _rosterError,
-                onRetry: _loadRoster,
-                compact: true,
-                emptyText: _searchController.text.isEmpty
-                    ? 'No trainees enrolled yet.'
-                    : 'No match for "${_searchController.text}".',
-                emptyIcon: Icons.person_search_outlined,
-                child: Column(
-                  children: _suggestedStudents
-                      .take(20)
-                      .map(_buildSuggestedStudentTile)
-                      .toList(),
-                ),
-              ),
-            ),
             const SizedBox(height: 24),
 
             SizedBox(
@@ -554,8 +591,8 @@ class _CwtsOfficerManualAttendanceScreenState
                     (_addedStudents.isEmpty || _isSaving) ? null : _save,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AppColors.primaryMaroon,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
+                  foregroundColor: AppColors.white,
+                  disabledBackgroundColor: AppColors.grey300,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12)),
@@ -568,7 +605,7 @@ class _CwtsOfficerManualAttendanceScreenState
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
                           valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                              AlwaysStoppedAnimation<Color>(AppColors.white),
                         ),
                       )
                     : const Text(
@@ -609,15 +646,15 @@ class _CwtsOfficerManualAttendanceScreenState
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
                 Text(
                   _infoOf(s),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                     height: 1.4,
                   ),
                 ),
@@ -630,19 +667,16 @@ class _CwtsOfficerManualAttendanceScreenState
               width: 32,
               height: 32,
               decoration: BoxDecoration(
-                color: isAdded ? Colors.green.shade50 : Colors.transparent,
+                color: isAdded ? AppColors.greenLight : Colors.transparent,
                 border: Border.all(
-                  color: isAdded
-                      ? Colors.green.shade300
-                      : Colors.grey.shade300,
+                  color: isAdded ? AppColors.success : AppColors.border,
                 ),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Icon(
                 isAdded ? Icons.check : Icons.add,
                 size: 18,
-                color:
-                    isAdded ? Colors.green.shade600 : Colors.grey.shade700,
+                color: isAdded ? AppColors.success : AppColors.textSecondary,
               ),
             ),
           ),
@@ -657,7 +691,7 @@ class _CwtsOfficerManualAttendanceScreenState
       style: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        color: AppColors.textPrimary,
       ),
     );
   }
@@ -668,14 +702,14 @@ class _CwtsOfficerManualAttendanceScreenState
       children: [
         Text(
           label,
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+          style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
         ),
         Text(
           value,
           style: const TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: AppColors.textPrimary,
           ),
         ),
       ],

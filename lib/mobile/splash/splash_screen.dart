@@ -69,7 +69,7 @@ class _SplashScreenState extends State<SplashScreen>
                 'assets/images/marsu_logo.png',
                 width: 140,
                 height: 140,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
               ),
               const SizedBox(height: 16),
               // MARSU - NSTP
@@ -103,7 +103,7 @@ class _SplashScreenState extends State<SplashScreen>
                         Text(
                           'Excellence',
                           style: TextStyle(
-                            color: AppColors.white.withOpacity(0.8),
+                            color: AppColors.white.withValues(alpha: 0.8),
                             fontSize: 11,
                           ),
                         ),
@@ -121,7 +121,7 @@ class _SplashScreenState extends State<SplashScreen>
                         Text(
                           'Service',
                           style: TextStyle(
-                            color: AppColors.white.withOpacity(0.8),
+                            color: AppColors.white.withValues(alpha: 0.8),
                             fontSize: 11,
                           ),
                         ),
@@ -139,7 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
                         Text(
                           'Leadership',
                           style: TextStyle(
-                            color: AppColors.white.withOpacity(0.8),
+                            color: AppColors.white.withValues(alpha: 0.8),
                             fontSize: 11,
                           ),
                         ),

@@ -4,7 +4,9 @@ import '../../../core/config/app_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class CwtsActivitiesModulesScreen extends StatefulWidget {
   final VoidCallback? onBackToDashboard;
@@ -65,28 +67,15 @@ class _CwtsActivitiesModulesScreenState
     }
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Graded':
-        return Colors.green;
-      case 'Submitted':
-        return Colors.amber.shade700;
-      case 'Missing':
-        return Colors.red;
-      default:
-        return Colors.blue;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => widget.onBackToDashboard != null
               ? widget.onBackToDashboard!()
               : Navigator.maybePop(context),
@@ -94,14 +83,14 @@ class _CwtsActivitiesModulesScreenState
         title: const Text(
           'Activities',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -109,12 +98,10 @@ class _CwtsActivitiesModulesScreenState
       body: Column(
         children: [
           Container(
-            decoration: const BoxDecoration(
-              color: AppColors.primaryMaroon,
-            ),
+            decoration: const BoxDecoration(color: AppColors.primaryMaroon),
             child: Container(
               decoration: const BoxDecoration(
-                color: Colors.white,
+                color: AppColors.white,
                 borderRadius: BorderRadius.only(
                   topLeft: Radius.circular(24),
                   topRight: Radius.circular(24),
@@ -123,7 +110,7 @@ class _CwtsActivitiesModulesScreenState
               child: TabBar(
                 controller: _tabController,
                 labelColor: AppColors.primaryMaroon,
-                unselectedLabelColor: Colors.grey.shade500,
+                unselectedLabelColor: AppColors.textSecondary,
                 indicatorColor: AppColors.primaryMaroon,
                 indicatorWeight: 2,
                 labelStyle: const TextStyle(
@@ -178,12 +165,22 @@ class _CwtsActivitiesModulesScreenState
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        itemCount: activities.length,
+        itemCount: activities.length + 1,
         itemBuilder: (context, index) {
-          final activity = activities[index];
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SectionHeader(
+                title: 'Activities',
+                subtitle: '${activities.length} assigned to you',
+              ),
+            );
+          }
+          final activity = activities[index - 1];
           final status = Fmt.str(activity['myStatus'], 'To Do');
 
-          return GestureDetector(
+          return AppCard(
+            margin: const EdgeInsets.only(bottom: 12),
             onTap: () {
               Navigator.push(
                 context,
@@ -193,71 +190,69 @@ class _CwtsActivitiesModulesScreenState
                     title: Fmt.str(activity['title'], 'Activity'),
                     dueDate: Fmt.dateTime(activity['deadline']),
                     status: status,
-                    statusColor: _statusColor(status),
                   ),
                 ),
               ).then((_) => _load());
             },
-            child: Container(
-              margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    width: 44,
-                    height: 44,
-                    decoration: BoxDecoration(
-                      color: const Color(0xFFE3F2FD),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: const Icon(
-                      Icons.menu_book,
-                      color: Colors.blue,
-                      size: 22,
-                    ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.blueLight,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          Fmt.str(activity['title'], 'Activity'),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                  child: const Icon(
+                    Icons.menu_book,
+                    color: AppColors.blue,
+                    size: 22,
+                  ),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: Text(
+                              Fmt.str(activity['title'], 'Activity'),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
                           ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          Fmt.dateTime(activity['deadline']),
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade500,
+                          const SizedBox(width: 8),
+                          StatusBadge(status, dense: true),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        children: [
+                          const Icon(Icons.event_outlined,
+                              size: 13, color: AppColors.textSecondary),
+                          const SizedBox(width: 4),
+                          Text(
+                            Fmt.dateTime(activity['deadline']),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textSecondary,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: _statusColor(status),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           );
         },
@@ -281,19 +276,22 @@ class _CwtsActivitiesModulesScreenState
       child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
-        itemCount: modules.length,
+        itemCount: modules.length + 1,
         itemBuilder: (context, index) {
-          final module = modules[index];
+          if (index == 0) {
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: SectionHeader(
+                title: 'Modules',
+                subtitle: '${modules.length} posted',
+              ),
+            );
+          }
+          final module = modules[index - 1];
           final fileUrl = Fmt.str(module['fileUrl']);
 
-          return Container(
+          return AppCard(
             margin: const EdgeInsets.only(bottom: 12),
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: Colors.grey.shade200),
-            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -301,12 +299,12 @@ class _CwtsActivitiesModulesScreenState
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE3F2FD),
+                    color: AppColors.blueLight,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Icon(
                     Icons.menu_book,
-                    color: Colors.blue,
+                    color: AppColors.blue,
                     size: 22,
                   ),
                 ),
@@ -320,15 +318,15 @@ class _CwtsActivitiesModulesScreenState
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Colors.black87,
+                          color: AppColors.textPrimary,
                         ),
                       ),
                       const SizedBox(height: 4),
                       Text(
                         Fmt.date(module['createdAt']),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade500,
+                          color: AppColors.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -337,9 +335,9 @@ class _CwtsActivitiesModulesScreenState
                           module['description'],
                           'No description provided.',
                         ),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 12,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           height: 1.4,
                         ),
                       ),

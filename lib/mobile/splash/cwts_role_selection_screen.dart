@@ -9,44 +9,42 @@ class RoleSelectionScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.primaryMaroon, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'SELECT YOUR ROLE',
-          style: TextStyle(
-            color: AppColors.primaryMaroon,
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
+          style: TextStyle(fontSize: 14, letterSpacing: 1.2),
         ),
       ),
       body: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 40),
+        padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Spacer(flex: 2),
-
-            // ===== TRAINEE =====
-            _buildRoleButton(
+            Text(
+              'I am signing in as a...',
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
+            _RoleCard(
+              icon: Icons.school_outlined,
               label: 'TRAINEE',
+              description: 'A student enrolled in the CWTS program.',
               onTap: () {
                 Navigator.push(context, MaterialPageRoute(builder: (_) => const CwtsLoginScreen()));
               },
             ),
-            const SizedBox(height: 20),
-
-            // ===== OFFICER =====
-            _buildRoleButton(
+            const SizedBox(height: 16),
+            _RoleCard(
+              icon: Icons.admin_panel_settings_outlined,
               label: 'OFFICER',
+              description: 'Manages attendance, activities and records.',
               onTap: () {
                 Navigator.push(
                   context,
@@ -54,44 +52,85 @@ class RoleSelectionScreen extends StatelessWidget {
                 );
               },
             ),
-
             const Spacer(flex: 3),
           ],
         ),
       ),
     );
   }
+}
 
-  Widget _buildRoleButton({
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 22),
-        decoration: BoxDecoration(
-          color: AppColors.primaryMaroon,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.primaryMaroon.withOpacity(0.25),
-              blurRadius: 12,
-              spreadRadius: 0,
-              offset: const Offset(0, 6),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            label,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 1.0,
-            ),
+class _RoleCard extends StatelessWidget {
+  const _RoleCard({
+    required this.icon,
+    required this.label,
+    required this.description,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final String description;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.primaryMaroon,
+      borderRadius: BorderRadius.circular(AppColors.radius),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppColors.radius),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppColors.radius),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primaryMaroon.withValues(alpha: 0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppColors.white.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppColors.white, size: 22),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      description,
+                      style: TextStyle(
+                        color: AppColors.white.withValues(alpha: 0.85),
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.white, size: 20),
+            ],
           ),
         ),
       ),

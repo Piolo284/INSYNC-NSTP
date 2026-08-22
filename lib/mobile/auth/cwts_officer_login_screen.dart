@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:marsu_nstp_portal/core/utils/login_validators.dart';
 import 'package:marsu_nstp_portal/mobile/cwts_officer/cwts_officer_main_shell.dart';
-import '../../../core/constants/app_colors.dart';
+import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/widgets/async_view.dart';
 
@@ -55,11 +55,9 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
   Color get _passwordHintColor {
     final password = _passwordController.text;
     if (password.isEmpty) {
-      return Colors.grey.shade500;
+      return AppColors.textSecondary;
     }
-    return LoginValidators.isStrongPassword(password)
-        ? Colors.green.shade700
-        : Colors.orange.shade700;
+    return LoginValidators.isStrongPassword(password) ? AppColors.success : AppColors.orange;
   }
 
   Future<void> _submitLogin() async {
@@ -67,12 +65,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
     final passwordError = _validatePassword();
 
     if (emailError != null || passwordError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(emailError ?? passwordError ?? 'Invalid login details.'),
-          backgroundColor: Colors.red.shade700,
-        ),
-      );
+      AppSnack.error(context, emailError ?? passwordError ?? 'Invalid login details.');
       return;
     }
 
@@ -109,7 +102,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -127,10 +120,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                       gradient: LinearGradient(
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
-                        colors: [
-                          AppColors.primaryMaroon,
-                          Color(0xFF6B1A2A),
-                        ],
+                        colors: [AppColors.primaryMaroon, AppColors.primaryDark],
                       ),
                     ),
                   ),
@@ -143,11 +133,11 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                     height: 100,
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
-                      color: Colors.white,
+                      color: AppColors.white,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.12),
+                          color: AppColors.black.withValues(alpha: 0.12),
                           blurRadius: 12,
                           offset: const Offset(0, 4),
                         ),
@@ -157,7 +147,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                       child: Image.asset(
                         'assets/images/marsu_logo.png',
                         fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(
+                        errorBuilder: (_, _, _) => const Icon(
                           Icons.school,
                           color: AppColors.primaryMaroon,
                           size: 40,
@@ -199,12 +189,12 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
               width: 64,
               height: 64,
               decoration: BoxDecoration(
-                color: const Color(0xFFFFF3E0),
+                color: AppColors.cwtsCardBg,
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
                 Icons.admin_panel_settings_outlined,
-                color: Colors.deepOrange,
+                color: AppColors.orange,
                 size: 32,
               ),
             ),
@@ -216,20 +206,16 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
               style: TextStyle(
                 fontSize: 20,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 8),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 40),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 40),
               child: Text(
                 'Sign in to manage attendance, activities, and student records.',
                 textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 13,
-                  color: Colors.grey.shade600,
-                  height: 1.4,
-                ),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
               ),
             ),
             const SizedBox(height: 28),
@@ -243,36 +229,15 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                   // Email
                   const Text(
                     'Email Address',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: InputDecoration(
+                    decoration: const InputDecoration(
                       hintText: 'Enter your email',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(Icons.email_outlined, color: Colors.grey.shade400, size: 20),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
+                      prefixIcon: Icon(Icons.email_outlined, color: AppColors.textSecondary, size: 20),
                     ),
                   ),
                   const SizedBox(height: 20),
@@ -280,11 +245,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                   // Password
                   const Text(
                     'Password',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -293,44 +254,21 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                     onChanged: (_) => setState(() {}),
                     decoration: InputDecoration(
                       hintText: 'Enter your password',
-                      hintStyle: TextStyle(
-                        color: Colors.grey.shade400,
-                        fontSize: 14,
-                      ),
-                      prefixIcon: Icon(Icons.lock_outline, color: Colors.grey.shade400, size: 20),
+                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textSecondary, size: 20),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: Colors.grey.shade500,
+                          color: AppColors.textSecondary,
                           size: 20,
                         ),
-                        onPressed: () {
-                          setState(() => _obscurePassword = !_obscurePassword);
-                        },
+                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                       ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: Colors.grey.shade300),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(vertical: 16),
                     ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     _passwordHintText,
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      color: _passwordHintColor,
-                      fontWeight: FontWeight.w500,
-                    ),
+                    style: TextStyle(fontSize: 11.5, color: _passwordHintColor, fontWeight: FontWeight.w500),
                   ),
                   const SizedBox(height: 16),
 
@@ -342,25 +280,17 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           SizedBox(
-                            width: 20,
-                            height: 20,
+                            width: 22,
+                            height: 22,
                             child: Checkbox(
                               value: _rememberMe,
                               onChanged: (v) => setState(() => _rememberMe = v ?? false),
-                              activeColor: AppColors.primaryMaroon,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                              side: BorderSide(color: Colors.grey.shade400),
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          Text(
+                          const SizedBox(width: 6),
+                          const Text(
                             'Remember me',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                            ),
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                           ),
                         ],
                       ),
@@ -371,7 +301,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                             'Please contact your administrator to reset your password.',
                           );
                         },
-                        child: Text(
+                        child: const Text(
                           'Forgot password?',
                           style: TextStyle(
                             fontSize: 12,
@@ -389,34 +319,18 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: _isSubmitting ? null : _submitLogin,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryMaroon,
-                        foregroundColor: Colors.white,
-                        disabledBackgroundColor:
-                            AppColors.primaryMaroon.withValues(alpha: 0.6),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        elevation: 0,
-                      ),
                       child: _isSubmitting
                           ? const SizedBox(
                               width: 20,
                               height: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                valueColor:
-                                    AlwaysStoppedAnimation<Color>(Colors.white),
+                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
                               ),
                             )
                           : const Text(
                               'Sign In',
-                              style: TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w600,
-                                letterSpacing: 0.5,
-                              ),
+                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5),
                             ),
                     ),
                   ),
@@ -425,18 +339,15 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                   // OR Divider
                   Row(
                     children: [
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      const Expanded(child: Divider()),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 16),
                         child: Text(
                           'or',
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: Colors.grey.shade500,
-                          ),
+                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
                         ),
                       ),
-                      Expanded(child: Divider(color: Colors.grey.shade300)),
+                      const Expanded(child: Divider()),
                     ],
                   ),
                   const SizedBox(height: 20),
@@ -455,23 +366,9 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                         'assets/images/google_icon.png',
                         width: 20,
                         height: 20,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.g_mobiledata, size: 20),
+                        errorBuilder: (_, _, _) => const Icon(Icons.g_mobiledata, size: 20),
                       ),
-                      label: const Text(
-                        'Sign in with Google',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Colors.black87,
-                        ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        side: BorderSide(color: Colors.grey.shade300),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
+                      label: const Text('Sign in with Google'),
                     ),
                   ),
                 ],
@@ -485,9 +382,9 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
               child: Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF8F0),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: const Color(0xFFFFE0B2)),
+                  color: AppColors.orangeLight,
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
                 ),
                 child: Row(
                   children: [
@@ -495,14 +392,10 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: const Color(0xFFFFF3E0),
+                        color: AppColors.cwtsCardBg,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(
-                        Icons.menu_book_outlined,
-                        color: Colors.deepOrange,
-                        size: 20,
-                      ),
+                      child: const Icon(Icons.menu_book_outlined, color: AppColors.orange, size: 20),
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -511,20 +404,12 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
                         children: [
                           const Text(
                             'Officer Access',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
+                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                           ),
                           const SizedBox(height: 2),
-                          Text(
+                          const Text(
                             'Manage attendance, activities, and student submissions.',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade600,
-                              height: 1.4,
-                            ),
+                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
                           ),
                         ],
                       ),
@@ -536,21 +421,15 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
             const SizedBox(height: 20),
 
             // ===== HELP TEXT =====
-            Center(
+            const Center(
               child: Text.rich(
                 TextSpan(
                   text: 'Need help? ',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
-                  children: const [
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  children: [
                     TextSpan(
                       text: 'Contact your administrator.',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryMaroon,
-                      ),
+                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primaryMaroon),
                     ),
                   ],
                 ),
@@ -567,7 +446,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
     return Text(
       text,
       style: TextStyle(
-        color: AppColors.primaryMaroon.withOpacity(0.85),
+        color: AppColors.primaryMaroon.withValues(alpha: 0.85),
         fontSize: 11,
         fontWeight: FontWeight.w500,
       ),
@@ -580,10 +459,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
       child: Container(
         width: 3,
         height: 3,
-        decoration: const BoxDecoration(
-          color: AppColors.primaryMaroon,
-          shape: BoxShape.circle,
-        ),
+        decoration: const BoxDecoration(color: AppColors.primaryMaroon, shape: BoxShape.circle),
       ),
     );
   }

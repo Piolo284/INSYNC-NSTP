@@ -8,7 +8,7 @@ class WelcomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 40),
@@ -20,7 +20,7 @@ class WelcomeScreen extends StatelessWidget {
                 'assets/images/marsu_logo.png',
                 width: 150,
                 height: 150,
-                errorBuilder: (_, __, ___) => Container(
+                errorBuilder: (_, _, _) => Container(
                   width: 150,
                   height: 150,
                   decoration: BoxDecoration(
@@ -59,14 +59,6 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                     );
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   child: const Text(
                     'Continue',
                     style: TextStyle(
@@ -91,48 +83,39 @@ class WelcomeScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Text(
+                  const Text(
                     'Excellence',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Container(
                       width: 4,
                       height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade500,
+                      decoration: const BoxDecoration(
+                        color: AppColors.grey500,
                         shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                  Text(
+                  const Text(
                     'Service',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
                   ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 6),
                     child: Container(
                       width: 4,
                       height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade500,
+                      decoration: const BoxDecoration(
+                        color: AppColors.grey500,
                         shape: BoxShape.circle,
                       ),
                     ),
                   ),
-                  Text(
+                  const Text(
                     'Leadership',
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: Colors.grey.shade600,
-                    ),
+                    style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
                   ),
                 ],
               ),

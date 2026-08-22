@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
+import '../../../../core/widgets/app_card.dart';
 
 /// These are per-device delivery preferences, so they are stored with
 /// SharedPreferences (keyed by user) rather than in MongoDB. Previously the
@@ -61,18 +62,18 @@ class _CwtsNotificationSettingsScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Notification Settings',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -83,22 +84,10 @@ class _CwtsNotificationSettingsScreenState
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Push Notification
-            const Text(
-              'Push Notification',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
+            const SectionHeader(title: 'Push Notifications'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
               child: Column(
                 children: [
                   _buildToggleItem(
@@ -146,22 +135,10 @@ class _CwtsNotificationSettingsScreenState
               ),
             ),
             const SizedBox(height: 24),
-            // Email Notification
-            const Text(
-              'Email Notification',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade200),
-              ),
+            const SectionHeader(title: 'Email Notifications'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
               child: _buildToggleItem(
                 label: 'Email Notification',
                 value: emailNotification,
@@ -182,37 +159,27 @@ class _CwtsNotificationSettingsScreenState
     required ValueChanged<bool> onChanged,
   }) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: const TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+                color: AppColors.textPrimary,
+              ),
             ),
           ),
-          Switch(
-            value: value,
-            onChanged: onChanged,
-            activeThumbColor: Colors.white,
-            activeTrackColor: AppColors.primaryMaroon,
-            inactiveThumbColor: Colors.white,
-            inactiveTrackColor: Colors.grey.shade300,
-          ),
+          Switch(value: value, onChanged: onChanged),
         ],
       ),
     );
   }
 
   Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      color: Colors.grey.shade200,
-      indent: 16,
-      endIndent: 16,
-    );
+    return const Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16);
   }
 }

@@ -92,10 +92,21 @@ class UserService {
 
   Future<void> deleteUser(String id) => _api.delete('/users/$id');
 
-  /// Updates the signed-in trainee's own student/cadet profile.
+  /// Updates the signed-in user's own profile — routed to the collection
+  /// that actually matches their role (previously this always fell through
+  /// to `/students/:id` for anyone who wasn't a cadet, so an officer editing
+  /// their own contact number would 404 against the Student collection).
   Future<Map<String, dynamic>> updateMyProfile(Map<String, dynamic> body) async {
     final id = Session.instance.userId;
-    final path = Session.instance.role == 'cadet' ? '/cadets/$id' : '/students/$id';
+    final String path;
+    switch (Session.instance.role) {
+      case 'cadet':
+        path = '/cadets/$id';
+      case 'officer':
+        path = '/officers/$id';
+      default:
+        path = '/students/$id';
+    }
     final response = await _api.put(path, body: body);
     return ApiService.mapOf(response);
   }

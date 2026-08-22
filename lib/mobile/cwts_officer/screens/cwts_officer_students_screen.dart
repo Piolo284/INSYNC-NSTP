@@ -5,7 +5,9 @@ import 'cwts_officer_student_detail_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerStudentsScreen extends StatefulWidget {
@@ -81,7 +83,7 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
     final isRotc = Session.instance.program == 'ROTC';
 
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -109,116 +111,51 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
         children: [
           // ===== SEARCH BAR =====
           Padding(
-            padding: const EdgeInsets.all(16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: isRotc ? 'Search cadet..' : 'Search student..',
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 14,
-                  ),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          icon: Icon(Icons.close,
-                              size: 18, color: Colors.grey.shade500),
-                          onPressed: () {
-                            _searchController.clear();
-                            _load();
-                          },
-                        ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 14,
-                  ),
-                ),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: isRotc ? 'Search cadet…' : 'Search student…',
+                prefixIcon: const Icon(Icons.search, color: AppColors.textSecondary),
+                suffixIcon: _searchController.text.isEmpty
+                    ? null
+                    : IconButton(
+                        icon: const Icon(Icons.close,
+                            size: 18, color: AppColors.textSecondary),
+                        onPressed: () {
+                          _searchController.clear();
+                          _load();
+                        },
+                      ),
               ),
             ),
           ),
 
           // ===== STATS ROW =====
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Row(
               children: [
-                // Total Students
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        isRotc ? 'Total Cadets' : 'Total Students',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade600,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        Fmt.count(_stats['total'] ?? 0),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryMaroon,
-                        ),
-                      ),
-                    ],
+                  child: _statTile(
+                    isRotc ? 'Total Cadets' : 'Total Students',
+                    Fmt.count(_stats['total'] ?? 0),
                   ),
                 ),
-                // Active
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 8,
-                          height: 8,
-                          decoration: const BoxDecoration(
-                            color: Colors.green,
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                        const SizedBox(width: 6),
-                        Text(
-                          'Active',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: Colors.grey.shade600,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      Fmt.count(_stats['active'] ?? 0),
-                      style: const TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primaryMaroon,
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: _statTile(
+                    'Active',
+                    Fmt.count(_stats['active'] ?? 0),
+                    dotColor: AppColors.success,
+                  ),
                 ),
               ],
             ),
           ),
 
-          const SizedBox(height: 12),
-          Divider(color: Colors.grey.shade200, height: 1),
-          const SizedBox(height: 4),
+          const SizedBox(height: 8),
 
           // ===== STUDENT LIST =====
           Expanded(
@@ -233,16 +170,12 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
               child: RefreshIndicator(
                 color: AppColors.primaryMaroon,
                 onRefresh: _load,
-                child: ListView.separated(
+                child: ListView.builder(
                   physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                   itemCount: _students.length,
-                  separatorBuilder: (_, __) => Divider(
-                    color: Colors.grey.shade200,
-                    height: 1,
-                  ),
                   itemBuilder: (context, index) {
-                    return _buildStudentTile(_students[index]);
+                    return _buildStudentCard(_students[index]);
                   },
                 ),
               ),
@@ -253,11 +186,58 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
     );
   }
 
-  Widget _buildStudentTile(Map<String, dynamic> student) {
-    final status = Fmt.str(student['status'], 'Active');
-    final isActive = status == 'Active';
+  Widget _statTile(String label, String value, {Color? dotColor}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      decoration: BoxDecoration(
+        color: AppColors.cardBg,
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              if (dotColor != null) ...[
+                Container(
+                  width: 8,
+                  height: 8,
+                  decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                label,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: AppColors.primaryMaroon,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return InkWell(
+  Widget _buildStudentCard(Map<String, dynamic> student) {
+    final status = Fmt.str(student['status'], 'Active');
+    final subtitle =
+        '${_idOf(student)} – ${Fmt.str(student['course'], Fmt.str(student['section'], '—'))}';
+
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 10),
       onTap: () {
         Navigator.push(
           context,
@@ -273,76 +253,50 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
           ),
         ).then((_) => _load());
       },
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Row(
-          children: [
-            // Avatar
-            UserAvatar(
-              imagePath: Fmt.str(student['profileImage']),
-              radius: 22,
-              iconSize: 20,
-            ),
-            const SizedBox(width: 14),
-            // Info
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    Fmt.str(student['fullName'], 'Trainee'),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+      child: Row(
+        children: [
+          UserAvatar(
+            imagePath: Fmt.str(student['profileImage']),
+            radius: 22,
+            iconSize: 20,
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(student['fullName'], 'Trainee'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${_idOf(student)} – ${Fmt.str(student['course'], Fmt.str(student['section'], '—'))}',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
-                ],
-              ),
-            ),
-            // Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color:
-                    isActive ? const Color(0xFFF0FDF4) : const Color(0xFFFEF2F2),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color:
-                      isActive ? Colors.green.shade400 : AppColors.primaryMaroon,
-                  width: 1.2,
                 ),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isActive
-                      ? Colors.green.shade600
-                      : AppColors.primaryMaroon,
-                ),
-              ),
+              ],
             ),
-            const SizedBox(width: 10),
-            // Chevron
-            Icon(
-              Icons.chevron_right,
-              color: Colors.grey.shade400,
-              size: 20,
-            ),
-          ],
-        ),
+          ),
+          const SizedBox(width: 8),
+          StatusBadge(status, dense: true),
+          const SizedBox(width: 6),
+          const Icon(
+            Icons.chevron_right,
+            color: AppColors.textSecondary,
+            size: 20,
+          ),
+        ],
       ),
     );
   }

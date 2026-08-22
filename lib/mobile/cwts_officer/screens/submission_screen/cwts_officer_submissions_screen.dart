@@ -5,6 +5,7 @@ import 'cwts_officer_assignment_detail_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 
 class CwtsOfficerSubmissionsScreen extends StatefulWidget {
@@ -90,6 +91,8 @@ class _CwtsOfficerSubmissionsScreenState
     return ['All Modules', ...codes];
   }
 
+  // Everything below filters/sorts the assignment list that was already
+  // fetched above — no extra API calls are made for filter/sort changes.
   List<Map<String, dynamic>> get _visibleAssignments {
     var list = [..._assignments];
 
@@ -129,9 +132,9 @@ class _CwtsOfficerSubmissionsScreenState
   }
 
   Color _progressColor(int percentage) {
-    if (percentage >= 80) return Colors.green;
-    if (percentage >= 40) return Colors.amber;
-    return Colors.grey;
+    if (percentage >= 80) return AppColors.success;
+    if (percentage >= 40) return AppColors.warning;
+    return AppColors.textSecondary;
   }
 
   @override
@@ -141,7 +144,7 @@ class _CwtsOfficerSubmissionsScreenState
         moduleOptions.contains(_selectedModule) ? _selectedModule : 'All Modules';
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -149,7 +152,7 @@ class _CwtsOfficerSubmissionsScreenState
         leading: IconButton(
           icon: const Icon(
             Icons.arrow_back_ios,
-            color: Colors.white,
+            color: AppColors.white,
             size: 20,
           ),
           onPressed: () => Navigator.maybePop(context),
@@ -157,14 +160,14 @@ class _CwtsOfficerSubmissionsScreenState
         title: const Text(
           'Submissions',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -173,23 +176,23 @@ class _CwtsOfficerSubmissionsScreenState
         children: [
           // ===== MODULE DROPDOWN =====
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                border: Border.all(color: AppColors.border),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: moduleValue,
-                  icon: Icon(
+                  icon: const Icon(
                     Icons.keyboard_arrow_down,
-                    color: Colors.grey.shade600,
+                    color: AppColors.textSecondary,
                   ),
-                  style: const TextStyle(color: Colors.black87, fontSize: 14),
+                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
                   onChanged: (v) {
                     setState(() => _selectedModule = v!);
                     _load();
@@ -201,6 +204,7 @@ class _CwtsOfficerSubmissionsScreenState
               ),
             ),
           ),
+          const SizedBox(height: 12),
 
           // ===== FILTER TABS =====
           Padding(
@@ -227,8 +231,8 @@ class _CwtsOfficerSubmissionsScreenState
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
                           color: isSelected
-                              ? Colors.white
-                              : Colors.grey.shade600,
+                              ? AppColors.white
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ),
@@ -242,24 +246,16 @@ class _CwtsOfficerSubmissionsScreenState
           // ===== SEARCH =====
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TextField(
-                controller: _searchController,
-                onChanged: _onSearchChanged,
-                decoration: InputDecoration(
-                  hintText: 'Search assignments...',
-                  hintStyle: TextStyle(
-                    color: Colors.grey.shade400,
-                    fontSize: 13,
-                  ),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+            child: TextField(
+              controller: _searchController,
+              onChanged: _onSearchChanged,
+              decoration: InputDecoration(
+                hintText: 'Search assignments...',
+                prefixIcon: const Icon(Icons.search),
+                contentPadding: const EdgeInsets.symmetric(vertical: 4),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  borderSide: const BorderSide(color: AppColors.border),
                 ),
               ),
             ),
@@ -275,21 +271,21 @@ class _CwtsOfficerSubmissionsScreenState
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: DropdownButtonHideUnderline(
                       child: DropdownButton<String>(
                         isExpanded: true,
                         value: _selectedSort,
-                        icon: Icon(
+                        icon: const Icon(
                           Icons.keyboard_arrow_down,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           size: 18,
                         ),
-                        style: TextStyle(
-                          color: Colors.grey.shade700,
+                        style: const TextStyle(
+                          color: AppColors.textSecondary,
                           fontSize: 13,
                         ),
                         onChanged: (v) => setState(() => _selectedSort = v!),
@@ -308,14 +304,14 @@ class _CwtsOfficerSubmissionsScreenState
                     padding: const EdgeInsets.symmetric(
                         horizontal: 12, vertical: 12),
                     decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.grey.shade300),
+                      color: AppColors.white,
+                      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                      border: Border.all(color: AppColors.border),
                     ),
                     child: Text(
                       '${_visibleAssignments.length} assignment(s)',
-                      style: TextStyle(
-                        color: Colors.grey.shade700,
+                      style: const TextStyle(
+                        color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
                     ),
@@ -368,7 +364,8 @@ class _CwtsOfficerSubmissionsScreenState
     final submitted = Fmt.toInt(a['submittedCount']);
     final total = Fmt.toInt(a['totalTrainees']);
 
-    return GestureDetector(
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
       onTap: () {
         Navigator.push(
           context,
@@ -379,81 +376,65 @@ class _CwtsOfficerSubmissionsScreenState
           ),
         ).then((_) => _load());
       },
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.grey.shade200),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.04),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(a['title'], 'Assignment'),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Module: ${Fmt.str(a['moduleCode'], '—')}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Due: ${Fmt.date(a['deadline'])}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Submitted: $submitted/$total  •  Graded: ${Fmt.toInt(a['gradedCount'])}',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    Fmt.str(a['title'], 'Assignment'),
-                    style: const TextStyle(
-                      fontSize: 14,
+          ),
+          const SizedBox(width: 16),
+          SizedBox(
+            width: 56,
+            height: 56,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                CircularProgressIndicator(
+                  value: percentage / 100,
+                  strokeWidth: 5,
+                  backgroundColor: AppColors.grey200,
+                  valueColor: AlwaysStoppedAnimation<Color>(color),
+                ),
+                Center(
+                  child: Text(
+                    '$percentage%',
+                    style: TextStyle(
+                      fontSize: 13,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: color,
                     ),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'Module: ${Fmt.str(a['moduleCode'], '—')}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Due: ${Fmt.date(a['deadline'])}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Submitted: $submitted/$total  •  Graded: ${Fmt.toInt(a['gradedCount'])}',
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(width: 16),
-            SizedBox(
-              width: 56,
-              height: 56,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CircularProgressIndicator(
-                    value: percentage / 100,
-                    strokeWidth: 5,
-                    backgroundColor: Colors.grey.shade200,
-                    valueColor: AlwaysStoppedAnimation<Color>(color),
-                  ),
-                  Center(
-                    child: Text(
-                      '$percentage%',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.bold,
-                        color: color,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

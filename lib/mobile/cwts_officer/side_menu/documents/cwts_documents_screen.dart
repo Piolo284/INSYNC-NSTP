@@ -1,9 +1,12 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import '/../core/constants/app_colors.dart';
+import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 
 /// Requirement checklist, backed by the documents collection.
 /// Uploading attaches the real file and moves the item to "Under Review".
@@ -24,7 +27,7 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
   List<Map<String, dynamic>> uploadedDocs = const [];
   List<Map<String, dynamic>> pendingDocs = const [];
 
-  /// Offered when the trainee has no checklist row for them yet.
+  /// Offered when the officer has no checklist row for them yet.
   static const List<String> _standardDocuments = [
     'Registration Form',
     'Medical Certificate',
@@ -86,36 +89,23 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
       }.where((t) => t.isNotEmpty).toList()
         ..sort();
 
-      title = await showModalBottomSheet<String>(
-        context: context,
-        shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        builder: (sheetContext) => SafeArea(
-          child: ListView(
+      title = await showAppBottomSheet<String>(
+        context,
+        title: 'Which document are you uploading?',
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.5,
+          ),
+          child: ListView.builder(
             shrinkWrap: true,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            children: [
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                child: Text(
-                  'Which document are you uploading?',
-                  style: TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-              ),
-              ...known.map(
-                (t) => ListTile(
-                  leading: const Icon(Icons.description_outlined,
-                      color: AppColors.primaryMaroon, size: 20),
-                  title: Text(t, style: const TextStyle(fontSize: 14)),
-                  onTap: () => Navigator.pop(sheetContext, t),
-                ),
-              ),
-            ],
+            itemCount: known.length,
+            itemBuilder: (sheetContext, index) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.description_outlined,
+                  color: AppColors.primaryMaroon, size: 20),
+              title: Text(known[index], style: const TextStyle(fontSize: 14)),
+              onTap: () => Navigator.pop(sheetContext, known[index]),
+            ),
           ),
         ),
       );
@@ -147,60 +137,44 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.white,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Documents',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
       ),
       body: Column(
         children: [
-          // Tab Bar
+          // Tab Bar (colors come from the app-wide TabBarTheme).
           Container(
-            color: Colors.white,
+            color: AppColors.white,
             child: TabBar(
               controller: _tabController,
-              labelColor: AppColors.primaryMaroon,
-              unselectedLabelColor: Colors.grey.shade500,
-              indicatorColor: AppColors.primaryMaroon,
-              indicatorWeight: 2,
-              labelStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
               tabs: [
                 Tab(text: 'Uploaded (${uploadedDocs.length})'),
                 Tab(text: 'Pending (${pendingDocs.length})'),
               ],
             ),
           ),
-          Divider(height: 1, color: Colors.grey.shade200),
+          const Divider(height: 1, color: AppColors.border),
           // Tab Content
           Expanded(
             child: AsyncView(
@@ -212,15 +186,29 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _buildUploadedList(),
-                  _buildPendingList(),
+                  _buildDocList(
+                    uploadedDocs,
+                    emptyText: 'Nothing uploaded yet.',
+                    emptyIcon: Icons.cloud_upload_outlined,
+                    dateField: 'uploadedAt',
+                    datePrefix: 'Uploaded on',
+                    fallbackStatus: 'Uploaded',
+                  ),
+                  _buildDocList(
+                    pendingDocs,
+                    emptyText: 'All requirements are submitted.',
+                    emptyIcon: Icons.verified_outlined,
+                    dateField: 'createdAt',
+                    datePrefix: 'Requested',
+                    fallbackStatus: 'Missing',
+                  ),
                 ],
               ),
             ),
           ),
           // Bottom Button
           Container(
-            color: Colors.white,
+            color: AppColors.white,
             padding: const EdgeInsets.all(20),
             child: SafeArea(
               child: SizedBox(
@@ -228,14 +216,6 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
                 height: 50,
                 child: ElevatedButton(
                   onPressed: () => _uploadDocument(),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   child: const Text(
                     'Upload New Document',
                     style: TextStyle(
@@ -252,212 +232,79 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
     );
   }
 
-  Widget _buildUploadedList() {
-    if (uploadedDocs.isEmpty) {
-      return const AsyncView(
+  Widget _buildDocList(
+    List<Map<String, dynamic>> docs, {
+    required String emptyText,
+    required IconData emptyIcon,
+    required String dateField,
+    required String datePrefix,
+    required String fallbackStatus,
+  }) {
+    if (docs.isEmpty) {
+      return AsyncView(
         state: LoadState.empty,
-        emptyText: 'Nothing uploaded yet.',
-        emptyIcon: Icons.cloud_upload_outlined,
-        child: SizedBox.shrink(),
+        emptyText: emptyText,
+        emptyIcon: emptyIcon,
+        child: const SizedBox.shrink(),
       );
     }
 
     return RefreshIndicator(
       color: AppColors.primaryMaroon,
       onRefresh: _load,
-      child: ListView.separated(
+      child: ListView.builder(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        itemCount: uploadedDocs.length,
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          color: Colors.grey.shade100,
-          indent: 56,
-        ),
+        padding: const EdgeInsets.all(16),
+        itemCount: docs.length,
         itemBuilder: (context, index) {
-          final doc = uploadedDocs[index];
-          return _buildDocumentItem(
-            title: Fmt.str(doc['title'], 'Document'),
-            subtitle:
-                'Uploaded on ${Fmt.date(doc['uploadedAt'], fallback: '—')}',
-            isUploaded: true,
-            onTap: () => _uploadDocument(presetTitle: Fmt.str(doc['title'])),
-          );
-        },
-      ),
-    );
-  }
+          final doc = docs[index];
+          final title = Fmt.str(doc['title'], 'Document');
+          final status = Fmt.str(doc['status'], fallbackStatus);
+          final style = StatusStyle.of(status);
 
-  Widget _buildPendingList() {
-    if (pendingDocs.isEmpty) {
-      return const AsyncView(
-        state: LoadState.empty,
-        emptyText: 'All requirements are submitted.',
-        emptyIcon: Icons.verified_outlined,
-        child: SizedBox.shrink(),
-      );
-    }
-
-    return RefreshIndicator(
-      color: AppColors.primaryMaroon,
-      onRefresh: _load,
-      child: ListView.separated(
-        physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        itemCount: pendingDocs.length,
-        separatorBuilder: (context, index) => Divider(
-          height: 1,
-          color: Colors.grey.shade100,
-          indent: 56,
-        ),
-        itemBuilder: (context, index) {
-          final doc = pendingDocs[index];
-          return _buildPendingItem(
-            title: Fmt.str(doc['title'], 'Document'),
-            subtitle: 'Requested ${Fmt.date(doc['createdAt'], fallback: '—')}',
-            status: Fmt.str(doc['status'], 'Missing'),
-            onTap: () => _uploadDocument(presetTitle: Fmt.str(doc['title'])),
-          );
-        },
-      ),
-    );
-  }
-
-  Widget _buildDocumentItem({
-    required String title,
-    required String subtitle,
-    required bool isUploaded,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: [
-            // Document Icon
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color:
-                    isUploaded ? const Color(0xFFE8F5E9) : Colors.grey.shade100,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.description_outlined,
-                color:
-                    isUploaded ? Colors.green.shade700 : Colors.grey.shade400,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Title & Date
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: isUploaded ? Colors.black87 : Colors.grey.shade500,
-                    ),
+          return AppCard(
+            margin: const EdgeInsets.only(bottom: 12),
+            onTap: () => _uploadDocument(presetTitle: title),
+            child: Row(
+              children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: style.background,
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Checkmark
-            if (isUploaded)
-              Icon(
-                Icons.check_circle,
-                color: Colors.green.shade600,
-                size: 22,
-              ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildPendingItem({
-    required String title,
-    required String subtitle,
-    required String status,
-    VoidCallback? onTap,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 14),
-        child: Row(
-          children: [
-            // Document Icon
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(
-                Icons.description_outlined,
-                color: Colors.orange.shade700,
-                size: 22,
-              ),
-            ),
-            const SizedBox(width: 16),
-            // Title & Date
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            // Status Badge
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-              decoration: BoxDecoration(
-                color: Colors.orange.shade50,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.orange.shade700,
+                  child: Icon(Icons.description_outlined, color: style.color, size: 20),
                 ),
-              ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$datePrefix ${Fmt.date(doc[dateField], fallback: '—')}',
+                        style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 8),
+                StatusBadge(status, dense: true),
+              ],
             ),
-          ],
-        ),
+          );
+        },
       ),
     );
   }

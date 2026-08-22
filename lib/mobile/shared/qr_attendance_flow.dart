@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/async_view.dart';
+import '../../core/widgets/status_badge.dart';
 
 /// Shared QR attendance screen used by both the CWTS and ROTC scanners.
 ///
@@ -56,12 +57,12 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: AppColors.black,
       appBar: AppBar(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.black,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () {
             Navigator.pop(context);
             widget.onBackToDashboard?.call();
@@ -70,7 +71,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
         title: const Text(
           'Scan QR Code',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -79,7 +80,27 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
       ),
       body: Column(
         children: [
-          const SizedBox(height: 40),
+          const SizedBox(height: 28),
+          // Orients a first-time user: Scan → Verification → Confirmation →
+          // Attendance Result. Purely a label — every other step already
+          // renders as its own dialog in that same order.
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+            decoration: BoxDecoration(
+              color: widget.accentColor.withValues(alpha: 0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: const Text(
+              'STEP 1 OF 3 · SCAN',
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.6,
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 40),
             child: Text(
@@ -92,14 +113,14 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
               ),
             ),
           ),
-          const SizedBox(height: 40),
+          const SizedBox(height: 32),
           Expanded(
             child: Center(
               child: Container(
                 width: 280,
                 height: 280,
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.white, width: 2),
+                  border: Border.all(color: AppColors.white, width: 2),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: ClipRRect(
@@ -224,9 +245,9 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
+            const Text(
               'Enter the code shown under the officer\'s QR code.',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             const SizedBox(height: 14),
             TextField(
@@ -236,9 +257,18 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
               decoration: InputDecoration(
                 hintText: 'NSTP-CWTS-XXXXXXXX',
                 hintStyle:
-                    TextStyle(fontSize: 13, color: Colors.grey.shade400),
+                    const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
                 ),
                 contentPadding: const EdgeInsets.symmetric(
                     horizontal: 12, vertical: 14),
@@ -251,9 +281,9 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
+            child: const Text(
               'Cancel',
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
           ElevatedButton(
@@ -261,7 +291,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                 Navigator.pop(dialogContext, controller.text.trim()),
             style: ElevatedButton.styleFrom(
               backgroundColor: widget.accentColor,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.white,
               elevation: 0,
             ),
             child: const Text('Scan'),
@@ -292,6 +322,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
       await _promptForVerificationCode(
         attendanceId: Fmt.str(result['attendanceId']),
         status: Fmt.str(result['status'], 'Present'),
+        time: Fmt.str(result['time']),
         message: Fmt.str(result['message']),
         devCode: Fmt.str(result['devVerificationCode']),
       );
@@ -306,6 +337,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
   Future<void> _promptForVerificationCode({
     required String attendanceId,
     required String status,
+    required String time,
     required String message,
     required String devCode,
   }) async {
@@ -319,18 +351,40 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
           borderRadius: BorderRadius.circular(16),
         ),
         title: const Text(
-          'Verify Attendance',
+          'Verification',
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // QR status + scan time, so the trainee can see their scan was
+            // read correctly before they go looking for the emailed code.
+            Row(
+              children: [
+                const Icon(Icons.qr_code_2, size: 16, color: AppColors.textSecondary),
+                const SizedBox(width: 6),
+                const Text(
+                  'QR code recognized',
+                  style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                ),
+                const Spacer(),
+                StatusBadge(status, dense: true),
+              ],
+            ),
+            if (time.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              Text(
+                'Scanned at $time',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+              ),
+            ],
+            const SizedBox(height: 12),
             Text(
               message.isEmpty
                   ? 'Enter the 6-digit code sent to your email.'
                   : message,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             if (devCode.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -338,15 +392,15 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFFF9E6),
+                  color: AppColors.orangeLight,
                   borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.amber.shade200),
+                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.4)),
                 ),
                 child: Text(
                   'Development mode: email is not configured, so the code is '
                   'filled in for you.',
                   style: TextStyle(
-                      fontSize: 11, color: Colors.amber.shade900, height: 1.3),
+                      fontSize: 11, color: AppColors.warning, height: 1.3),
                 ),
               ),
             ],
@@ -365,12 +419,21 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
               decoration: InputDecoration(
                 counterText: '',
                 hintText: '000000',
-                hintStyle: TextStyle(
-                  color: Colors.grey.shade300,
+                hintStyle: const TextStyle(
+                  color: AppColors.border,
                   letterSpacing: 8,
                 ),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.border),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
                 ),
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
@@ -383,9 +446,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: status == 'Late'
-                    ? Colors.orange.shade800
-                    : Colors.green.shade700,
+                color: StatusStyle.of(status).color,
               ),
             ),
           ],
@@ -393,9 +454,9 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text(
+            child: const Text(
               'Cancel',
-              style: TextStyle(color: Colors.grey.shade700),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
           ),
           ElevatedButton(
@@ -403,7 +464,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                 Navigator.pop(dialogContext, controller.text.trim()),
             style: ElevatedButton.styleFrom(
               backgroundColor: widget.accentColor,
-              foregroundColor: Colors.white,
+              foregroundColor: AppColors.white,
               elevation: 0,
             ),
             child: const Text('Verify'),
@@ -426,10 +487,17 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
 
       if (!mounted) return;
       setState(() => _isBusy = false);
-      await _showSuccessDialog(Fmt.str(
-        result['message'],
-        'Attendance recorded.',
-      ));
+      // `result` is the finalised attendance record (session title, date,
+      // time, status) plus the server's confirmation message — all of it
+      // already returned by the same `verify` call, just now shown in full
+      // instead of only the message string.
+      await _showSuccessDialog(
+        message: Fmt.str(result['message'], 'Attendance recorded.'),
+        sessionTitle: Fmt.str(result['title']),
+        date: Fmt.str(result['date']) ,
+        time: Fmt.str(result['time']),
+        status: Fmt.str(result['status'], 'Present'),
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() => _isBusy = false);
@@ -437,7 +505,13 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
     }
   }
 
-  Future<void> _showSuccessDialog(String message) async {
+  Future<void> _showSuccessDialog({
+    required String message,
+    required String sessionTitle,
+    required String date,
+    required String time,
+    required String status,
+  }) async {
     await showDialog<void>(
       context: context,
       barrierDismissible: false,
@@ -451,32 +525,61 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
               Container(
                 width: 64,
                 height: 64,
-                decoration: BoxDecoration(
-                  color: Colors.green.shade100,
+                decoration: const BoxDecoration(
+                  color: AppColors.greenLight,
                   shape: BoxShape.circle,
                 ),
-                child:
-                    Icon(Icons.check, color: Colors.green.shade600, size: 32),
+                child: const Icon(Icons.check, color: AppColors.success, size: 32),
               ),
               const SizedBox(height: 20),
+              const Text(
+                'Attendance Result',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                  letterSpacing: 0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
               const Text(
                 'Attendance Recorded!',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 8),
               Text(
                 message,
                 textAlign: TextAlign.center,
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade600,
+                  color: AppColors.textSecondary,
                   height: 1.4,
                 ),
               ),
+              if (sessionTitle.isNotEmpty || date.isNotEmpty || time.isNotEmpty) ...[
+                const SizedBox(height: 18),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: AppColors.scaffoldBg,
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  ),
+                  child: Column(
+                    children: [
+                      if (sessionTitle.isNotEmpty)
+                        _resultRow('Session', sessionTitle),
+                      if (date.isNotEmpty) _resultRow('Date', Fmt.date(date)),
+                      if (time.isNotEmpty) _resultRow('Time', time),
+                      _resultStatusRow('Status', status),
+                    ],
+                  ),
+                ),
+              ],
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -488,7 +591,7 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: widget.accentColor,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -504,6 +607,52 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  /// One "label: value" line inside the attendance-result summary box.
+  Widget _resultRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const Spacer(),
+          Flexible(
+            child: Text(
+              value,
+              textAlign: TextAlign.right,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textPrimary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Same as [_resultRow] but renders the value as a [StatusBadge].
+  Widget _resultStatusRow(String label, String status) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+          ),
+          const Spacer(),
+          StatusBadge(status, dense: true),
+        ],
       ),
     );
   }

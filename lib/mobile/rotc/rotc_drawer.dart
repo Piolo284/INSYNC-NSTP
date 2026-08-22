@@ -6,9 +6,10 @@ import '../cwts/side_menu/documents/cwts_documents_screen.dart';
 import '../cwts/side_menu/help_support/cwts_help_support_screen.dart';
 import '../cwts/side_menu/notifications/cwts_notification_settings_screen.dart';
 import '../cwts/side_menu/profile/cwts_personal_info_screen.dart';
-import '../../../core/constants/app_colors.dart';
-import '../../../core/services/services.dart';
-import '../../../core/widgets/user_avatar.dart';
+import '../../core/constants/app_colors.dart';
+import '../../core/services/services.dart';
+import '../../core/widgets/app_dialogs.dart';
+import '../../core/widgets/profile_header.dart';
 
 class RotcDrawer extends StatelessWidget {
   const RotcDrawer({super.key});
@@ -16,97 +17,65 @@ class RotcDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = Session.instance;
+    final subtitle = [
+      session.idNumber.isEmpty ? null : session.idNumber,
+      [
+        session.yearLevel.isEmpty ? null : session.yearLevel,
+        session.program,
+      ].whereType<String>().join(' · '),
+    ].whereType<String>().where((s) => s.isNotEmpty).join('  |  ');
 
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       child: SafeArea(
         child: Column(
           children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 30),
-              child: Column(
-                children: [
-                  UserAvatar(
-                    imagePath: session.profileImage,
-                    radius: 45,
-                    iconColor: Colors.grey,
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    session.idNumber.isEmpty ? '—' : session.idNumber,
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    session.name.isEmpty ? 'Cadet' : session.name,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black87,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    [
-                      session.yearLevel.isEmpty ? null : session.yearLevel,
-                      session.program,
-                    ].whereType<String>().join(' | '),
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
-              ),
+            ProfileHeader(
+              name: session.name.isEmpty ? 'Cadet' : session.name,
+              subtitle: subtitle.isEmpty ? 'ROTC Cadet' : subtitle,
+              imagePath: session.profileImage,
             ),
-            Divider(
-              height: 1,
-              color: Colors.grey.shade200,
-              indent: 20,
-              endIndent: 20,
-            ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 children: [
+                  const _SectionLabel('MY ACCOUNT'),
                   // Reuses the shared side-menu screens, which read the signed-in
                   // cadet's own data from MongoDB.
-                  _buildMenuItem(
+                  _MenuItem(
                     icon: Icons.person_outline,
                     label: 'Personal Information',
                     onTap: () =>
                         _navigateTo(context, const CwtsPersonalInfoScreen()),
                   ),
-                  _buildMenuItem(
+                  _MenuItem(
                     icon: Icons.description_outlined,
                     label: 'Documents',
                     onTap: () =>
                         _navigateTo(context, const CwtsDocumentsScreen()),
                   ),
-                  _buildMenuItem(
+                  _MenuItem(
                     icon: Icons.lock_outline,
                     label: 'Account & Security',
-                    onTap: () => _navigateTo(
-                        context, const CwtsAccountSecurityScreen()),
+                    onTap: () =>
+                        _navigateTo(context, const CwtsAccountSecurityScreen()),
                   ),
-                  _buildMenuItem(
+                  _MenuItem(
                     icon: Icons.mail_outline,
                     label: 'Notification Setting',
                     onTap: () => _navigateTo(
                         context, const CwtsNotificationSettingsScreen()),
                   ),
-                  _buildMenuItem(
+                  const SizedBox(height: 8),
+                  const _SectionLabel('SUPPORT'),
+                  _MenuItem(
                     icon: Icons.help_outline,
                     label: 'Help & Support',
                     onTap: () =>
                         _navigateTo(context, const CwtsHelpSupportScreen()),
                   ),
-                  _buildMenuItem(
+                  _MenuItem(
                     icon: Icons.info_outline,
                     label: 'About ROTC Portal',
                     onTap: () => _navigateTo(
@@ -115,46 +84,18 @@ class RotcDrawer extends StatelessWidget {
                 ],
               ),
             ),
+            const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.all(20),
-              child: GestureDetector(
-                onTap: () async {
-                  await AuthService.instance.logout();
-                  if (!context.mounted) return;
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const RotcLoginScreen(),
-                    ),
-                    (route) => false,
-                  );
-                },
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.logout,
-                        color: AppColors.primaryMaroon,
-                        size: 18,
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'Logout',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryMaroon,
-                        ),
-                      ),
-                    ],
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: () => _confirmLogout(context),
+                  icon: const Icon(Icons.logout, size: 18),
+                  label: const Text('Logout'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.primaryMaroon,
+                    side: const BorderSide(color: AppColors.border),
                   ),
                 ),
               ),
@@ -165,39 +106,100 @@ class RotcDrawer extends StatelessWidget {
     );
   }
 
+  Future<void> _confirmLogout(BuildContext context) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Log out?',
+      message: 'You will need to sign in again to access your ROTC portal.',
+      confirmLabel: 'Logout',
+    );
+    if (!confirmed) return;
+
+    await AuthService.instance.logout();
+    if (!context.mounted) return;
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const RotcLoginScreen()),
+      (route) => false,
+    );
+  }
+
   void _navigateTo(BuildContext context, Widget screen) {
     Navigator.pop(context); // Close drawer
     Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
   }
+}
 
-  Widget _buildMenuItem({
-    required IconData icon,
-    required String label,
-    required VoidCallback onTap,
-  }) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12),
-      leading: Icon(
-        icon,
-        color: AppColors.primaryMaroon,
-        size: 22,
-      ),
-      title: Text(
-        label,
+class _SectionLabel extends StatelessWidget {
+  const _SectionLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+      child: Text(
+        text,
         style: const TextStyle(
-          fontSize: 14,
-          fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textSecondary,
+          letterSpacing: 0.6,
         ),
       ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: Colors.grey.shade400,
-        size: 14,
-      ),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(10),
+    );
+  }
+}
+
+class _MenuItem extends StatelessWidget {
+  const _MenuItem({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: AppColors.goldLight,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(icon, color: AppColors.primaryMaroon, size: 18),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+              ),
+              const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 18),
+            ],
+          ),
+        ),
       ),
     );
   }

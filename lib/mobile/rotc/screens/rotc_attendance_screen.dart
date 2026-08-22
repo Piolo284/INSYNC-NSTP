@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class RotcAttendanceScreen extends StatefulWidget {
   final VoidCallback? onBackToDashboard;
@@ -14,6 +16,14 @@ class RotcAttendanceScreen extends StatefulWidget {
 }
 
 class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
+  static const List<String> _filters = [
+    'All',
+    'Present',
+    'Late',
+    'Absent',
+    'Excused',
+  ];
+
   String _selectedFilter = 'All';
 
   LoadState _state = LoadState.loading;
@@ -51,38 +61,20 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
   List<Map<String, dynamic>> get filteredRecords {
     if (_selectedFilter == 'All') return attendanceRecords;
     return attendanceRecords
-        .where((record) => record['status'] == _selectedFilter)
+        .where((record) => Fmt.str(record['status'], 'Present') == _selectedFilter)
         .toList();
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Present':
-        return Colors.green;
-      case 'Absent':
-        return Colors.red;
-      case 'Late':
-        return Colors.orange.shade800;
-      case 'Excused':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
-  }
+  int _countOf(String status) => attendanceRecords
+      .where((record) => Fmt.str(record['status'], 'Present') == status)
+      .length;
 
-  Color _statusBg(String status) {
-    switch (status) {
-      case 'Present':
-        return const Color(0xFFD4F8D4);
-      case 'Absent':
-        return const Color(0xFFFFD4D4);
-      case 'Late':
-        return const Color(0xFFFFF3CD);
-      case 'Excused':
-        return const Color(0xFFD4E9FF);
-      default:
-        return Colors.grey.shade200;
-    }
+  /// Present + Late both count as "attended" — only Absent/Excused sit outside it.
+  double get _attendanceRate {
+    final total = attendanceRecords.length;
+    if (total == 0) return 0;
+    final attended = _countOf('Present') + _countOf('Late');
+    return attended / total * 100;
   }
 
   String _titleOf(Map<String, dynamic> record) {
@@ -100,26 +92,26 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => widget.onBackToDashboard?.call(),
         ),
         title: const Text(
           'Attendance',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -127,20 +119,13 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
       body: Column(
         children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              border: Border(
-                bottom: BorderSide(color: Colors.grey.shade200),
-              ),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+            decoration: const BoxDecoration(
+              color: AppColors.white,
+              border: Border(bottom: BorderSide(color: AppColors.border)),
             ),
             child: Row(
-              children: [
-                _buildFilterTab('All'),
-                _buildFilterTab('Present'),
-                _buildFilterTab('Absent'),
-                _buildFilterTab('Late'),
-              ],
+              children: _filters.map(_buildFilterTab).toList(),
             ),
           ),
           Expanded(
@@ -150,26 +135,90 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
               onRetry: _load,
               emptyText: 'No attendance records yet.',
               emptyIcon: Icons.event_busy_outlined,
-              child: filteredRecords.isEmpty
-                  ? AsyncView(
-                      state: LoadState.empty,
-                      emptyText: 'No $_selectedFilter records.',
-                      emptyIcon: Icons.filter_alt_off_outlined,
-                      onRetry: () => setState(() => _selectedFilter = 'All'),
-                      child: const SizedBox.shrink(),
-                    )
-                  : RefreshIndicator(
-                      color: AppColors.primaryMaroon,
-                      onRefresh: _load,
-                      child: ListView.builder(
-                        physics: const AlwaysScrollableScrollPhysics(),
-                        padding: const EdgeInsets.all(16),
-                        itemCount: filteredRecords.length,
-                        itemBuilder: (context, index) {
-                          return _buildAttendanceCard(filteredRecords[index]);
-                        },
-                      ),
+              child: RefreshIndicator(
+                color: AppColors.primaryMaroon,
+                onRefresh: _load,
+                child: ListView(
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.all(16),
+                  children: [
+                    _buildSummaryCard(),
+                    const SizedBox(height: 20),
+                    SectionHeader(
+                      title: 'History',
+                      subtitle: '${filteredRecords.length} '
+                          '${filteredRecords.length == 1 ? 'record' : 'records'}',
                     ),
+                    const SizedBox(height: 12),
+                    if (filteredRecords.isEmpty)
+                      AsyncView(
+                        state: LoadState.empty,
+                        compact: true,
+                        emptyText: 'No $_selectedFilter records.',
+                        emptyIcon: Icons.filter_alt_off_outlined,
+                        onRetry: () => setState(() => _selectedFilter = 'All'),
+                        child: const SizedBox.shrink(),
+                      )
+                    else
+                      ...filteredRecords.map(_buildAttendanceCard),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryCard() {
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SectionHeader(title: 'Attendance Summary'),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _StatTile(label: 'Present', count: _countOf('Present'), status: 'Present'),
+              const SizedBox(width: 8),
+              _StatTile(label: 'Late', count: _countOf('Late'), status: 'Late'),
+              const SizedBox(width: 8),
+              _StatTile(label: 'Absent', count: _countOf('Absent'), status: 'Absent'),
+              const SizedBox(width: 8),
+              _StatTile(label: 'Excused', count: _countOf('Excused'), status: 'Excused'),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Attendance Rate',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+              Text(
+                '${_attendanceRate.toStringAsFixed(0)}%',
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.primaryMaroon,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(20),
+            child: LinearProgressIndicator(
+              value: (_attendanceRate / 100).clamp(0.0, 1.0),
+              minHeight: 8,
+              backgroundColor: AppColors.grey100,
+              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primaryMaroon),
             ),
           ),
         ],
@@ -186,11 +235,12 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
           children: [
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: TextStyle(
-                fontSize: 13,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
-                color:
-                    isSelected ? AppColors.primaryMaroon : Colors.grey.shade500,
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
               ),
             ),
             const SizedBox(height: 8),
@@ -208,22 +258,10 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
     final status = Fmt.str(record['status'], 'Present');
     final time = Fmt.str(record['time'], '---');
 
-    return Container(
+    return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Expanded(
             child: Column(
@@ -231,10 +269,7 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
               children: [
                 Text(
                   Fmt.date(record['date']),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 6),
                 Text(
@@ -243,17 +278,17 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 if (Fmt.str(record['remarks']).isNotEmpty) ...[
                   const SizedBox(height: 4),
                   Text(
                     Fmt.str(record['remarks']),
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade500,
+                      color: AppColors.textSecondary,
                       fontStyle: FontStyle.italic,
                     ),
                   ),
@@ -265,33 +300,61 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _statusBg(status),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _statusColor(status),
-                  ),
-                ),
-              ),
+              StatusBadge(status),
               const SizedBox(height: 6),
               Text(
                 time.isEmpty ? '---' : time,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade600,
-                ),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// One count tile inside the attendance summary card — color follows the
+/// same status→color mapping as [StatusBadge] so the summary and the history
+/// list below always agree visually.
+class _StatTile extends StatelessWidget {
+  const _StatTile({required this.label, required this.count, required this.status});
+
+  final String label;
+  final int count;
+  final String status;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = StatusStyle.of(status);
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        decoration: BoxDecoration(
+          color: style.background,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        ),
+        child: Column(
+          children: [
+            Text(
+              '$count',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: style.color,
+              ),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: style.color,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

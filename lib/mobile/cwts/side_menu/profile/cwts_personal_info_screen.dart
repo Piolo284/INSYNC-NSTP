@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 /// Trainee profile, read from MongoDB. Address and emergency contact stay
@@ -67,26 +69,15 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
           autofocus: true,
           maxLines: 3,
           minLines: 1,
-          decoration: InputDecoration(
-            hintText: 'Enter your $label',
-            hintStyle: TextStyle(fontSize: 13, color: Colors.grey.shade400),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-          ),
+          decoration: InputDecoration(hintText: 'Enter your $label'),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(dialogContext),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryMaroon,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
             child: const Text('Save'),
           ),
         ],
@@ -109,19 +100,34 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final idLabel = Session.instance.role == 'cadet' ? 'Cadet Number' : 'Student Number';
+    final idValue = Fmt.str(_profile['studentId'] ?? _profile['cadetId'], '—');
+    final fullName = Fmt.str(_profile['fullName'] ?? _profile['name'], '—');
+    final course = Fmt.str(_profile['course'], '—');
+    final yearSection = [
+      Fmt.str(_profile['yearLevel']),
+      Fmt.str(_profile['section']),
+    ].where((s) => s.isNotEmpty).join(' - ');
+    final nstpProgram = Fmt.str(_profile['program'], '—');
+    final status = Fmt.str(_profile['status'], '—');
+    final email = Fmt.str(_profile['email'], '—');
+    final contactNumber = Fmt.str(_profile['contactNumber'], '—');
+    final address = Fmt.str(_profile['address'], '—');
+    final emergencyContact = Fmt.str(_profile['emergencyContact'], '—');
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Personal Information',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -132,25 +138,27 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
         message: _error,
         onRetry: _load,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 24, 20, 30),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const SizedBox(height: 24),
               Center(
                 child: Column(
                   children: [
                     UserAvatar(
                       imagePath: Fmt.str(_profile['profileImage']),
                       radius: 45,
-                      iconColor: Colors.grey,
+                      backgroundColor: AppColors.goldLight,
+                      iconColor: AppColors.primaryMaroon,
                     ),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 10),
                     GestureDetector(
                       onTap: () => AppSnack.info(
                         context,
                         'Photo uploads are handled by your NSTP officer for now.',
                       ),
                       child: const Text(
-                        'Change Profile',
+                        'Change Photo',
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
@@ -161,98 +169,83 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.shade200),
-                  ),
-                  child: Column(
-                    children: [
-                      _buildInfoTile(
-                        icon: Icons.badge_outlined,
-                        label: Session.instance.role == 'cadet'
-                            ? 'Cadet ID'
-                            : 'Student ID',
-                        value: Fmt.str(
-                          _profile['studentId'] ?? _profile['cadetId'],
-                          '—',
-                        ),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.person_outline,
-                        label: 'Full name',
-                        value: Fmt.str(
-                            _profile['fullName'] ?? _profile['name'], '—'),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.school_outlined,
-                        label: 'Program',
-                        value: Fmt.str(_profile['course'], '—'),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.calendar_today_outlined,
-                        label: 'Year & Section',
-                        value: [
-                          Fmt.str(_profile['yearLevel']),
-                          Fmt.str(_profile['section']),
-                        ].where((s) => s.isNotEmpty).join(' - ').isEmpty
-                            ? '—'
-                            : [
-                                Fmt.str(_profile['yearLevel']),
-                                Fmt.str(_profile['section']),
-                              ].where((s) => s.isNotEmpty).join(' - '),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.mail_outline,
-                        label: 'Email Address',
-                        value: Fmt.str(_profile['email'], '—'),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.phone_android_outlined,
-                        label: 'Contact Number',
-                        value: Fmt.str(_profile['contactNumber'], '—'),
-                        trailing: _editLink(
-                          'Contact Number',
-                          'contactNumber',
-                          Fmt.str(_profile['contactNumber']),
-                        ),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.location_on_outlined,
-                        label: 'Address',
-                        value: Fmt.str(_profile['address'], '—'),
-                        trailing: _editLink(
-                          'Address',
-                          'address',
-                          Fmt.str(_profile['address']),
-                        ),
-                      ),
-                      _buildDivider(),
-                      _buildInfoTile(
-                        icon: Icons.phone_in_talk_outlined,
-                        label: 'Emergency Contact',
-                        value: Fmt.str(_profile['emergencyContact'], '—'),
-                        trailing: _editLink(
-                          'Emergency Contact',
-                          'emergencyContact',
-                          Fmt.str(_profile['emergencyContact']),
-                        ),
-                      ),
-                    ],
-                  ),
+              const SizedBox(height: 28),
+              const SectionHeader(title: 'Basic Information'),
+              const SizedBox(height: 10),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    _infoTile(icon: Icons.badge_outlined, label: idLabel, value: idValue),
+                    _tileDivider(),
+                    _infoTile(icon: Icons.person_outline, label: 'Full Name', value: fullName),
+                    _tileDivider(),
+                    _infoTile(icon: Icons.school_outlined, label: 'Program', value: course),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.calendar_today_outlined,
+                      label: 'Year & Section',
+                      value: yearSection.isEmpty ? '—' : yearSection,
+                    ),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.military_tech_outlined,
+                      label: 'NSTP Program',
+                      value: nstpProgram,
+                    ),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.verified_user_outlined,
+                      label: 'Account Status',
+                      valueWidget: StatusBadge(status),
+                    ),
+                  ],
                 ),
               ),
-              const SizedBox(height: 30),
+              const SizedBox(height: 24),
+              const SectionHeader(title: 'Contact Information'),
+              const SizedBox(height: 10),
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: [
+                    _infoTile(icon: Icons.mail_outline, label: 'Email Address', value: email),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.phone_android_outlined,
+                      label: 'Contact Number',
+                      value: contactNumber,
+                      onEdit: () => _editField(
+                        'Contact Number',
+                        'contactNumber',
+                        contactNumber == '—' ? '' : contactNumber,
+                      ),
+                    ),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.location_on_outlined,
+                      label: 'Address',
+                      value: address,
+                      onEdit: () => _editField(
+                        'Address',
+                        'address',
+                        address == '—' ? '' : address,
+                      ),
+                    ),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.phone_in_talk_outlined,
+                      label: 'Emergency Contact',
+                      value: emergencyContact,
+                      onEdit: () => _editField(
+                        'Emergency Contact',
+                        'emergencyContact',
+                        emergencyContact == '—' ? '' : emergencyContact,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -260,36 +253,19 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
     );
   }
 
-  Widget _editLink(String label, String field, String current) {
-    return GestureDetector(
-      onTap: () => _editField(label, field, current),
-      child: const Text(
-        'Edit',
-        style: TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.primaryMaroon,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoTile({
+  Widget _infoTile({
     required IconData icon,
     required String label,
-    required String value,
-    Widget? trailing,
+    String? value,
+    Widget? valueWidget,
+    VoidCallback? onEdit,
   }) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            icon,
-            color: AppColors.primaryMaroon,
-            size: 22,
-          ),
+          Icon(icon, color: AppColors.primaryMaroon, size: 20),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -297,36 +273,37 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
               children: [
                 Text(
                   label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 4),
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.black87,
-                    height: 1.4,
-                  ),
-                ),
+                valueWidget ??
+                    Text(
+                      value ?? '—',
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: AppColors.textPrimary,
+                        height: 1.4,
+                      ),
+                    ),
               ],
             ),
           ),
-          if (trailing != null) trailing,
+          if (onEdit != null)
+            InkWell(
+              onTap: onEdit,
+              borderRadius: BorderRadius.circular(20),
+              child: const Padding(
+                padding: EdgeInsets.all(6),
+                child: Icon(Icons.edit_outlined, color: AppColors.primaryMaroon, size: 18),
+              ),
+            ),
         ],
       ),
     );
   }
 
-  Widget _buildDivider() {
-    return Divider(
-      height: 1,
-      color: Colors.grey.shade200,
-      indent: 16,
-      endIndent: 16,
-    );
+  Widget _tileDivider() {
+    return const Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16);
   }
 }

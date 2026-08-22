@@ -3,6 +3,8 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
 
 /// Officer QR attendance session builder.
@@ -153,6 +155,15 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     final id = Fmt.str(_session?['_id']);
     if (id.isEmpty) return;
 
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Close Session?',
+      message: 'The QR code will stop working immediately and trainees will '
+          'no longer be able to scan it for attendance.',
+      confirmLabel: 'Close Session',
+    );
+    if (!confirmed) return;
+
     try {
       await AttendanceService.instance.closeSession(id);
       if (!mounted) return;
@@ -176,7 +187,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                 height: 2,
                 color: stepIndex < _currentStep
                     ? AppColors.primaryMaroon
-                    : Colors.grey.shade300,
+                    : AppColors.border,
               ),
             );
           }
@@ -189,15 +200,14 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                 width: 28,
                 height: 28,
                 decoration: BoxDecoration(
-                  color:
-                      isActive ? AppColors.primaryMaroon : Colors.grey.shade300,
+                  color: isActive ? AppColors.primaryMaroon : AppColors.border,
                   shape: BoxShape.circle,
                 ),
                 child: Center(
                   child: Text(
                     '${stepIndex + 1}',
                     style: TextStyle(
-                      color: isActive ? Colors.white : Colors.grey.shade600,
+                      color: isActive ? AppColors.white : AppColors.textSecondary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                     ),
@@ -211,7 +221,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                   fontSize: 10,
                   color: isCurrent
                       ? AppColors.primaryMaroon
-                      : Colors.grey.shade500,
+                      : AppColors.textSecondary,
                   fontWeight: isCurrent ? FontWeight.w600 : FontWeight.normal,
                 ),
               ),
@@ -226,20 +236,20 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF9E6),
+        color: AppColors.orangeLight,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.amber.shade200),
+        border: Border.all(color: AppColors.orange.withValues(alpha: 0.4)),
       ),
       child: Row(
         children: [
-          Icon(Icons.info_outline, color: Colors.amber.shade700, size: 18),
+          const Icon(Icons.info_outline, color: AppColors.warning, size: 18),
           const SizedBox(width: 8),
-          Expanded(
+          const Expanded(
             child: Text(
               'This QR code is only valid within the set time range',
               style: TextStyle(
                 fontSize: 12,
-                color: Colors.amber.shade800,
+                color: AppColors.warning,
               ),
             ),
           ),
@@ -251,13 +261,13 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () {
             if (_currentStep == 0) {
               Navigator.pop(context);
@@ -269,7 +279,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
         title: const Text(
           'Create QR Code',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -277,7 +287,10 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
       ),
       body: Column(
         children: [
-          _buildStepper(),
+          Container(
+            color: AppColors.cardBg,
+            child: _buildStepper(),
+          ),
           Expanded(
             child: _currentStep == 0
                 ? _buildSetupStep()
@@ -297,143 +310,155 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildLabel('Select Date'),
-          const SizedBox(height: 8),
-          GestureDetector(
-            onTap: _pickDate,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      Fmt.dateWithDay(_selectedDate),
-                      style:
-                          TextStyle(fontSize: 14, color: Colors.grey.shade800),
-                    ),
-                  ),
-                  Icon(Icons.calendar_today_outlined,
-                      size: 18, color: Colors.grey.shade500),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          _buildLabel('Set Time Duration'),
-          const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickTime(true),
+          AppCard(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildLabel('Select Date'),
+                const SizedBox(height: 8),
+                GestureDetector(
+                  onTap: _pickDate,
                   child: Container(
                     padding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                      border: Border.all(color: AppColors.border),
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
                         Expanded(
                           child: Text(
-                            _displayTime(_startTime),
-                            style: TextStyle(
-                                fontSize: 14, color: Colors.grey.shade800),
+                            Fmt.dateWithDay(_selectedDate),
+                            style: const TextStyle(
+                                fontSize: 14, color: AppColors.textPrimary),
                           ),
                         ),
-                        Icon(Icons.access_time,
-                            size: 18, color: Colors.grey.shade500),
+                        const Icon(Icons.calendar_today_outlined,
+                            size: 18, color: AppColors.textSecondary),
                       ],
                     ),
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: GestureDetector(
-                  onTap: () => _pickTime(false),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.shade300),
+                const SizedBox(height: 20),
+
+                _buildLabel('Set Time Duration'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickTime(true),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.border),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _displayTime(_startTime),
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textPrimary),
+                                ),
+                              ),
+                              const Icon(Icons.access_time,
+                                  size: 18, color: AppColors.textSecondary),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _pickTime(false),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 14),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppColors.border),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  _displayTime(_endTime),
+                                  style: const TextStyle(
+                                      fontSize: 14,
+                                      color: AppColors.textPrimary),
+                                ),
+                              ),
+                              const Icon(Icons.access_time,
+                                  size: 18, color: AppColors.textSecondary),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+
+                _buildLabel('Select Brigade'),
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppColors.border),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: DropdownButtonHideUnderline(
+                    child: DropdownButton<String>(
+                      isExpanded: true,
+                      value: _selectedBrigade,
+                      icon: const Icon(Icons.keyboard_arrow_down,
+                          color: AppColors.textSecondary),
+                      style: const TextStyle(
+                          fontSize: 14, color: AppColors.textPrimary),
+                      onChanged: (v) => setState(() => _selectedBrigade = v!),
+                      items: _brigades
+                          .map((b) => DropdownMenuItem(value: b, child: Text(b)))
+                          .toList(),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                _buildLabel('Notes (Optional)'),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: _notesController,
+                  maxLines: 4,
+                  maxLength: 100,
+                  decoration: InputDecoration(
+                    hintText: 'e.g. CWTS Training – Day 3',
+                    hintStyle: const TextStyle(
+                        color: AppColors.textSecondary, fontSize: 13),
+                    border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.border),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            _displayTime(_endTime),
-                            style: TextStyle(
-                                fontSize: 14, color: Colors.grey.shade800),
-                          ),
-                        ),
-                        Icon(Icons.access_time,
-                            size: 18, color: Colors.grey.shade500),
-                      ],
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(color: AppColors.border),
                     ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide: const BorderSide(
+                          color: AppColors.primaryMaroon, width: 1.5),
+                    ),
+                    contentPadding: const EdgeInsets.all(14),
+                    counterStyle: const TextStyle(
+                        fontSize: 11, color: AppColors.textSecondary),
                   ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          _buildLabel('Select Brigade'),
-          const SizedBox(height: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                isExpanded: true,
-                value: _selectedBrigade,
-                icon: Icon(Icons.keyboard_arrow_down,
-                    color: Colors.grey.shade600),
-                style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
-                onChanged: (v) => setState(() => _selectedBrigade = v!),
-                items: _brigades
-                    .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                    .toList(),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          _buildLabel('Notes (Optional)'),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _notesController,
-            maxLines: 4,
-            maxLength: 100,
-            decoration: InputDecoration(
-              hintText: 'e.g. CWTS Training – Day 3',
-              hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide(color: Colors.grey.shade300),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: const BorderSide(
-                    color: AppColors.primaryMaroon, width: 1.5),
-              ),
-              contentPadding: const EdgeInsets.all(14),
-              counterStyle:
-                  TextStyle(fontSize: 11, color: Colors.grey.shade400),
+              ],
             ),
           ),
           const SizedBox(height: 24),
@@ -444,8 +469,8 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
               onPressed: _isSaving ? null : _generateSession,
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryMaroon,
-                foregroundColor: Colors.white,
-                disabledBackgroundColor: Colors.grey.shade300,
+                foregroundColor: AppColors.white,
+                disabledBackgroundColor: AppColors.grey300,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -458,7 +483,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
                         valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
+                            AlwaysStoppedAnimation<Color>(AppColors.white),
                       ),
                     )
                   : const Text(
@@ -485,35 +510,46 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'Show this QR code to students to scan',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          Center(child: _buildQrBox()),
-          const SizedBox(height: 12),
-          Center(child: _buildCodeChip()),
-          const SizedBox(height: 24),
+          _buildQrCard(),
+          const SizedBox(height: 20),
 
-          _buildInfoRow('Date', Fmt.dateWithDay(_session?['date'])),
-          const SizedBox(height: 8),
-          _buildInfoRow(
-            'Time',
-            '${_displayTime(_startTime)} – ${_displayTime(_endTime)}',
-          ),
-          const SizedBox(height: 8),
-          _buildInfoRow('Brigade', _selectedBrigade),
-          const SizedBox(height: 8),
-          _buildInfoRow(
-            'Notes',
-            _notesController.text.trim().isEmpty
-                ? '—'
-                : _notesController.text.trim(),
+          AppCard(
+            child: Column(
+              children: [
+                InfoRow(
+                  icon: Icons.calendar_today_outlined,
+                  label: 'Date',
+                  value: Fmt.dateWithDay(_session?['date']),
+                ),
+                InfoRow(
+                  icon: Icons.access_time,
+                  label: 'Time',
+                  value: '${_displayTime(_startTime)} – ${_displayTime(_endTime)}',
+                ),
+                InfoRow(
+                  icon: Icons.groups_outlined,
+                  label: 'Brigade',
+                  value: _selectedBrigade,
+                ),
+                InfoRow(
+                  icon: Icons.notes_outlined,
+                  label: 'Notes',
+                  value: _notesController.text.trim().isEmpty
+                      ? '—'
+                      : _notesController.text.trim(),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 20),
 
@@ -526,8 +562,8 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                 child: OutlinedButton(
                   onPressed: _prevStep,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.black87,
-                    side: BorderSide(color: Colors.grey.shade300),
+                    foregroundColor: AppColors.textPrimary,
+                    side: const BorderSide(color: AppColors.border),
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -542,7 +578,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                   onPressed: _activate,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
+                    foregroundColor: AppColors.white,
                     padding: const EdgeInsets.symmetric(vertical: 14),
                     shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(12)),
@@ -568,22 +604,49 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.greenLight,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: const Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.circle, size: 8, color: AppColors.success),
+                    SizedBox(width: 6),
+                    Text(
+                      'Active',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.success,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           const Text(
             'QR Code Preview',
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Colors.black87,
+              color: AppColors.textPrimary,
             ),
           ),
           const SizedBox(height: 4),
-          Text(
+          const Text(
             'Show this QR code to students to scan',
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
-          Center(child: _buildQrBox()),
+          _buildQrCard(),
           const SizedBox(height: 16),
 
           Center(
@@ -592,12 +655,10 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
               style: const TextStyle(
                 fontSize: 14,
                 fontWeight: FontWeight.w600,
-                color: Colors.black87,
+                color: AppColors.textPrimary,
               ),
             ),
           ),
-          const SizedBox(height: 10),
-          Center(child: _buildCodeChip()),
           const SizedBox(height: 20),
 
           _buildWarningBanner(),
@@ -608,8 +669,8 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
             child: OutlinedButton(
               onPressed: _closeSession,
               style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.primaryMaroon,
-                side: const BorderSide(color: AppColors.primaryMaroon),
+                foregroundColor: AppColors.error,
+                side: const BorderSide(color: AppColors.error),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -627,7 +688,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
               onPressed: () => Navigator.pop(context),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryMaroon,
-                foregroundColor: Colors.white,
+                foregroundColor: AppColors.white,
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12)),
@@ -644,62 +705,65 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     );
   }
 
-  Widget _buildQrBox() {
-    return Container(
-      width: 220,
-      height: 220,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade300),
-      ),
-      child: _sessionCode.isEmpty
-          ? const Center(
-              child: Icon(Icons.qr_code, size: 120, color: Colors.black87),
-            )
-          : QrImageView(
-              data: _sessionCode,
-              version: QrVersions.auto,
-              padding: EdgeInsets.zero,
-              backgroundColor: Colors.white,
-              errorStateBuilder: (context, error) => const Center(
-                child: Icon(Icons.qr_code, size: 120, color: Colors.black87),
+  /// The QR code, prominent and centered, with the session code beneath it
+  /// as a selectable fallback for when the image cannot be scanned.
+  Widget _buildQrCard() {
+    return AppCard(
+      padding: const EdgeInsets.symmetric(vertical: 24),
+      child: Column(
+        children: [
+          Container(
+            width: 220,
+            height: 220,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: _sessionCode.isEmpty
+                ? const Center(
+                    child: Icon(Icons.qr_code,
+                        size: 120, color: AppColors.textPrimary),
+                  )
+                : QrImageView(
+                    data: _sessionCode,
+                    version: QrVersions.auto,
+                    padding: EdgeInsets.zero,
+                    backgroundColor: AppColors.white,
+                    errorStateBuilder: (context, error) => const Center(
+                      child: Icon(Icons.qr_code,
+                          size: 120, color: AppColors.textPrimary),
+                    ),
+                  ),
+          ),
+          if (_sessionCode.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            const Text(
+              'Session code',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.scaffoldBg,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: SelectableText(
+                _sessionCode,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
-    );
-  }
-
-  /// The session code in text form, so a trainee can still record attendance if
-  /// the QR image cannot be displayed or scanned.
-  Widget _buildCodeChip() {
-    if (_sessionCode.isEmpty) return const SizedBox.shrink();
-
-    return Column(
-      children: [
-        Text(
-          'Session code',
-          style: TextStyle(fontSize: 11, color: Colors.grey.shade500),
-        ),
-        const SizedBox(height: 4),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: Colors.grey.shade100,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: SelectableText(
-            _sessionCode,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-      ],
+          ],
+        ],
+      ),
     );
   }
 
@@ -709,33 +773,8 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
       style: const TextStyle(
         fontSize: 13,
         fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        color: AppColors.textPrimary,
       ),
-    );
-  }
-
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(
-          width: 80,
-          child: Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
-          ),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-              color: Colors.black87,
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/status_badge.dart';
 import '../../../core/widgets/user_avatar.dart';
 
 /// Officer view of one trainee: profile, attendance, submissions and grade.
@@ -86,7 +88,7 @@ class _CwtsOfficerStudentDetailScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -114,11 +116,11 @@ class _CwtsOfficerStudentDetailScreenState
         children: [
           _buildHeader(),
           Container(
-            color: Colors.white,
+            color: AppColors.cardBg,
             child: TabBar(
               controller: _tabController,
               labelColor: AppColors.primaryMaroon,
-              unselectedLabelColor: Colors.grey.shade500,
+              unselectedLabelColor: AppColors.textSecondary,
               indicatorColor: AppColors.primaryMaroon,
               labelStyle:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
@@ -154,7 +156,7 @@ class _CwtsOfficerStudentDetailScreenState
 
     return Container(
       width: double.infinity,
-      color: Colors.white,
+      color: AppColors.cardBg,
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 16),
       child: Row(
         children: [
@@ -170,16 +172,18 @@ class _CwtsOfficerStudentDetailScreenState
               children: [
                 Text(
                   widget.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 17,
                     fontWeight: FontWeight.bold,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   widget.idNumber,
-                  style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                  style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -188,13 +192,17 @@ class _CwtsOfficerStudentDetailScreenState
                     Fmt.str(p['yearLevel']),
                     Fmt.str(p['section']),
                   ].where((s) => s.isNotEmpty).join(' • '),
-                  style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 if (Fmt.str(p['email']).isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(
                     Fmt.str(p['email']),
-                    style: TextStyle(fontSize: 12, color: Colors.grey.shade500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ],
               ],
@@ -219,85 +227,62 @@ class _CwtsOfficerStudentDetailScreenState
     final late = _attendance.where((a) => a['status'] == 'Late').length;
     final absent = _attendance.where((a) => a['status'] == 'Absent').length;
 
-    return Column(
+    return ListView(
+      padding: const EdgeInsets.all(16),
       children: [
-        Container(
-          color: Colors.white,
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Expanded(child: _miniStat('Present', present, Colors.green)),
-              const SizedBox(width: 10),
-              Expanded(
-                  child: _miniStat('Late', late, Colors.amber.shade700)),
-              const SizedBox(width: 10),
-              Expanded(child: _miniStat('Absent', absent, Colors.red)),
-            ],
-          ),
+        Row(
+          children: [
+            Expanded(child: _miniStat('Present', present, AppColors.success)),
+            const SizedBox(width: 10),
+            Expanded(child: _miniStat('Late', late, AppColors.warning)),
+            const SizedBox(width: 10),
+            Expanded(child: _miniStat('Absent', absent, AppColors.error)),
+          ],
         ),
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.all(16),
-            itemCount: _attendance.length,
-            separatorBuilder: (_, __) =>
-                Divider(color: Colors.grey.shade200, height: 1),
-            itemBuilder: (context, index) {
-              final record = _attendance[index];
-              final status = Fmt.str(record['status'], 'Present');
-              final activity = record['activityId'];
-              final title = activity is Map
-                  ? Fmt.str(activity['title'], 'Session')
-                  : Fmt.str(record['title'], 'Session');
+        const SizedBox(height: 16),
+        ...List.generate(_attendance.length, (index) {
+          final record = _attendance[index];
+          final status = Fmt.str(record['status'], 'Present');
+          final activity = record['activityId'];
+          final title = activity is Map
+              ? Fmt.str(activity['title'], 'Session')
+              : Fmt.str(record['title'], 'Session');
 
-              return Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            title,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.black87,
-                            ),
-                          ),
-                          const SizedBox(height: 2),
-                          Text(
-                            '${Fmt.date(record['date'])}  •  ${Fmt.str(record['attendanceMethod'], 'Manual')}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 4),
-                      decoration: BoxDecoration(
-                        color: _statusColor(status).withValues(alpha: 0.1),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        status,
-                        style: TextStyle(
-                          fontSize: 11,
+          return AppCard(
+            margin: const EdgeInsets.only(bottom: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: _statusColor(status),
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                    ),
-                  ],
+                      const SizedBox(height: 2),
+                      Text(
+                        '${Fmt.date(record['date'])}  •  ${Fmt.str(record['attendanceMethod'], 'Manual')}',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              );
-            },
-          ),
-        ),
+                const SizedBox(width: 8),
+                StatusBadge(status, dense: true),
+              ],
+            ),
+          );
+        }),
       ],
     );
   }
@@ -312,12 +297,9 @@ class _CwtsOfficerStudentDetailScreenState
       );
     }
 
-    return ListView.separated(
+    return ListView(
       padding: const EdgeInsets.all(16),
-      itemCount: _submissions.length,
-      separatorBuilder: (_, __) =>
-          Divider(color: Colors.grey.shade200, height: 1),
-      itemBuilder: (context, index) {
+      children: List.generate(_submissions.length, (index) {
         final s = _submissions[index];
         final module = s['moduleId'];
         final title = module is Map
@@ -326,8 +308,8 @@ class _CwtsOfficerStudentDetailScreenState
         final status = Fmt.str(s['status'], 'Submitted');
         final score = s['score'];
 
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 12),
+        return AppCard(
+          margin: const EdgeInsets.only(bottom: 10),
           child: Row(
             children: [
               Expanded(
@@ -336,52 +318,47 @@ class _CwtsOfficerStudentDetailScreenState
                   children: [
                     Text(
                       title,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
-                        color: Colors.black87,
+                        color: AppColors.textPrimary,
                       ),
                     ),
                     const SizedBox(height: 2),
                     Text(
                       'Submitted ${Fmt.dateTimeShort(s['submittedAt'], fallback: '—')}',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 12,
-                        color: Colors.grey.shade500,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
                     score == null
-                        ? '---'
+                        ? '—'
                         : '${Fmt.toInt(score)}/${Fmt.toInt(s['totalPoints'], 100)}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: AppColors.textPrimary,
                     ),
                   ),
-                  Text(
-                    status,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                      color: status == 'Graded'
-                          ? Colors.green.shade600
-                          : Colors.amber.shade700,
-                    ),
-                  ),
+                  const SizedBox(height: 2),
+                  StatusBadge(status, dense: true),
                 ],
               ),
             ],
           ),
         );
-      },
+      }),
     );
   }
 
@@ -398,22 +375,19 @@ class _CwtsOfficerStudentDetailScreenState
     final remarks = Fmt.str(_grade['remarks'], 'Incomplete');
     final summary =
         (_grade['attendanceSummary'] as Map?)?.cast<String, dynamic>() ?? {};
+    final moduleScores = (_grade['moduleScores'] as List? ?? []).cast<Map>();
+    final activityScores = (_grade['activityScores'] as List? ?? []).cast<Map>();
 
     return ListView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       children: [
-        Container(
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
+        // ===== Final grade hero =====
+        AppCard(
           child: Column(
             children: [
-              Text(
+              const Text(
                 'Final Grade',
-                style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 8),
               Text(
@@ -425,60 +399,92 @@ class _CwtsOfficerStudentDetailScreenState
                 ),
               ),
               const SizedBox(height: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
-                decoration: BoxDecoration(
-                  color: _remarksColor(remarks).withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(20),
-                ),
-                child: Text(
-                  remarks,
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: _remarksColor(remarks),
-                  ),
-                ),
+              StatusBadge(remarks),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
+
+        // ===== Score breakdown =====
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Score Breakdown'),
+              const SizedBox(height: 4),
+              InfoRow(
+                icon: Icons.assignment_outlined,
+                label: 'Activity Scores',
+                value: _scoreSummary(activityScores),
+              ),
+              InfoRow(
+                icon: Icons.menu_book_outlined,
+                label: 'Module Scores',
+                value: _scoreSummary(moduleScores),
+              ),
+              InfoRow(
+                icon: Icons.event_available_outlined,
+                label: 'Attendance Score',
+                value: '${Fmt.toDouble(_grade['attendanceScore']).toStringAsFixed(2)}%',
+              ),
+              InfoRow(
+                icon: Icons.summarize_outlined,
+                label: 'Total Score',
+                value: Fmt.toDouble(_grade['totalScore']).toStringAsFixed(2),
               ),
             ],
           ),
         ),
         const SizedBox(height: 16),
-        _gradeRow('Attendance Score',
-            '${Fmt.toDouble(_grade['attendanceScore']).toStringAsFixed(2)}%'),
-        _gradeRow('Module Scores',
-            '${(_grade['moduleScores'] as List? ?? []).length} recorded'),
-        _gradeRow('Activity Scores',
-            '${(_grade['activityScores'] as List? ?? []).length} recorded'),
-        _gradeRow('Present', '${Fmt.toInt(summary['present'])}'),
-        _gradeRow('Late', '${Fmt.toInt(summary['late'])}'),
-        _gradeRow('Absent', '${Fmt.toInt(summary['absent'])}'),
-        _gradeRow('Excused', '${Fmt.toInt(summary['excused'])}'),
-        _gradeRow('Total Sessions', '${Fmt.toInt(summary['total'])}'),
+
+        // ===== Attendance summary =====
+        AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SectionHeader(title: 'Attendance Summary'),
+              const SizedBox(height: 4),
+              InfoRow(
+                icon: Icons.check_circle_outline,
+                label: 'Present',
+                value: '${Fmt.toInt(summary['present'])}',
+              ),
+              InfoRow(
+                icon: Icons.schedule_outlined,
+                label: 'Late',
+                value: '${Fmt.toInt(summary['late'])}',
+              ),
+              InfoRow(
+                icon: Icons.cancel_outlined,
+                label: 'Absent',
+                value: '${Fmt.toInt(summary['absent'])}',
+              ),
+              InfoRow(
+                icon: Icons.verified_outlined,
+                label: 'Excused',
+                value: '${Fmt.toInt(summary['excused'])}',
+              ),
+              InfoRow(
+                icon: Icons.event_note_outlined,
+                label: 'Total Sessions',
+                value: '${Fmt.toInt(summary['total'])}',
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
 
-  Widget _gradeRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          Text(label,
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600)),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w600,
-              color: Colors.black87,
-            ),
-          ),
-        ],
-      ),
+  /// "82.50% avg • 3 recorded" summary for a list of `{percentage}` score lines.
+  String _scoreSummary(List<Map> scores) {
+    if (scores.isEmpty) return 'Not yet recorded';
+    final total = scores.fold<double>(
+      0,
+      (sum, s) => sum + Fmt.toDouble(s['percentage']),
     );
+    final avg = total / scores.length;
+    return '${avg.toStringAsFixed(1)}% avg • ${scores.length} recorded';
   }
 
   Widget _miniStat(String label, int value, Color color) {
@@ -486,7 +492,7 @@ class _CwtsOfficerStudentDetailScreenState
       padding: const EdgeInsets.symmetric(vertical: 12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
@@ -505,39 +511,11 @@ class _CwtsOfficerStudentDetailScreenState
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w600,
-              color: color.withValues(alpha: 0.8),
+              color: color.withValues(alpha: 0.85),
             ),
           ),
         ],
       ),
     );
-  }
-
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Present':
-        return Colors.green;
-      case 'Late':
-        return Colors.amber.shade700;
-      case 'Absent':
-        return Colors.red;
-      case 'Excused':
-        return Colors.blue;
-      default:
-        return Colors.grey;
-    }
-  }
-
-  Color _remarksColor(String remarks) {
-    switch (remarks) {
-      case 'Passed':
-        return Colors.green.shade700;
-      case 'Warning':
-        return Colors.orange.shade800;
-      case 'Failed':
-        return Colors.red.shade700;
-      default:
-        return Colors.grey.shade600;
-    }
   }
 }

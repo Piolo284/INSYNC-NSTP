@@ -2,56 +2,54 @@ import 'package:flutter/material.dart';
 import 'package:marsu_nstp_portal/mobile/splash/cwts_role_selection_screen.dart';
 import '../../core/constants/app_colors.dart';
 
+class _ActivityInfo {
+  const _ActivityInfo({
+    required this.title,
+    required this.description,
+    required this.icon,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+}
+
 class CwtsActivitiesScreen extends StatelessWidget {
   const CwtsActivitiesScreen({super.key});
 
-  final List<Map<String, String>> activities = const [
-    {
-      'title': 'Feeding Program',
-      'description': 'Providing meals to undernourished children & families in need.',
-      'image': 'assets/images/feeding_program.png',
-    },
-    {
-      'title': 'Disaster Preparedness Training',
-      'description': 'Equipping students with skills for disaster prevention and response.',
-      'image': 'assets/images/disaster_training.png',
-    },
-    {
-      'title': 'Coastal Clean-up',
-      'description': 'Collecting and properly disposing waste to protect our shores.',
-      'image': 'assets/images/coastal_cleanup.png',
-    },
-    {
-      'title': 'Tree Planting',
-      'description': 'Planting trees to help conserve the environment.',
-      'image': 'assets/images/tree_planting.png',
-    },
+  final List<_ActivityInfo> _activities = const [
+    _ActivityInfo(
+      title: 'Feeding Program',
+      description: 'Providing meals to undernourished children & families in need.',
+      icon: Icons.restaurant,
+    ),
+    _ActivityInfo(
+      title: 'Disaster Preparedness Training',
+      description: 'Equipping students with skills for disaster prevention and response.',
+      icon: Icons.warning_amber_rounded,
+    ),
+    _ActivityInfo(
+      title: 'Coastal Clean-up',
+      description: 'Collecting and properly disposing waste to protect our shores.',
+      icon: Icons.waves,
+    ),
+    _ActivityInfo(
+      title: 'Tree Planting',
+      description: 'Planting trees to help conserve the environment.',
+      icon: Icons.park,
+    ),
   ];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
-        backgroundColor: Colors.white,
-        elevation: 0,
-        centerTitle: true,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: AppColors.primaryMaroon,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'ACTIVITIES',
-          style: TextStyle(
-            color: AppColors.primaryMaroon,
-            fontSize: 18,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
+        title: const Text('ACTIVITIES'),
       ),
       body: Column(
         children: [
@@ -59,13 +57,7 @@ class CwtsActivitiesScreen extends StatelessWidget {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(20),
               child: Column(
-                children: activities.map((activity) {
-                  return _buildActivityCard(
-                    title: activity['title']!,
-                    description: activity['description']!,
-                    imagePath: activity['image']!,
-                  );
-                }).toList(),
+                children: _activities.map(_buildActivityCard).toList(),
               ),
             ),
           ),
@@ -81,21 +73,7 @@ class CwtsActivitiesScreen extends StatelessWidget {
                     MaterialPageRoute(builder: (_) => const RoleSelectionScreen()),
                   );
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryMaroon,
-                  foregroundColor: Colors.white,
-                  elevation: 0,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                child: const Text(
-                  'Enroll Now',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+                child: const Text('Enroll Now'),
               ),
             ),
           ),
@@ -104,74 +82,46 @@ class CwtsActivitiesScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildActivityCard({
-    required String title,
-    required String description,
-    required String imagePath,
-  }) {
+  Widget _buildActivityCard(_ActivityInfo activity) {
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: const Color(0xFFFFF8F0),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFFFE8D0)),
+        color: AppColors.cwtsCardBg,
+        borderRadius: BorderRadius.circular(AppColors.radius),
+        border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: Image.asset(
-              imagePath,
-              width: 80,
-              height: 80,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 80,
-                height: 80,
-                decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.image, color: Colors.grey),
-              ),
+          Container(
+            width: 56,
+            height: 56,
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(14),
             ),
+            child: Icon(activity.icon, color: AppColors.primaryMaroon, size: 26),
           ),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Row(
-                  children: [
-                    Container(
-                      width: 8,
-                      height: 8,
-                      decoration: const BoxDecoration(
-                        color: AppColors.primaryMaroon,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        title,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.primaryMaroon,
-                        ),
-                      ),
-                    ),
-                  ],
+                Text(
+                  activity.title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.primaryMaroon,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  description,
-                  style: TextStyle(
+                  activity.description,
+                  style: const TextStyle(
                     fontSize: 12,
-                    color: AppColors.grey600,
+                    color: AppColors.textSecondary,
                     height: 1.4,
                   ),
                 ),

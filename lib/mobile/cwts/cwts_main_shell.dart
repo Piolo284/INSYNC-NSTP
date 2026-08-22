@@ -59,10 +59,11 @@ class _CwtsMainShellState extends State<CwtsMainShell> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
+          border: const Border(top: BorderSide(color: AppColors.border)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.08),
+              color: AppColors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, -4),
             ),
@@ -91,65 +92,70 @@ class _CwtsMainShellState extends State<CwtsMainShell> {
     final screenIndex = navIndex > 2 ? navIndex - 1 : navIndex;
     final isSelected = _currentIndex == screenIndex;
 
-    return GestureDetector(
+    return InkWell(
       onTap: () => _onTabTapped(navIndex),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? AppColors.primaryMaroon : Colors.grey.shade500,
-            size: 22,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isSelected ? AppColors.primaryMaroon : Colors.grey.shade500,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
+              size: 22,
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildCenterQrButton() {
-    return GestureDetector(
+    return InkWell(
       onTap: () => _onTabTapped(2),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 50,
-            height: 50,
-            decoration: BoxDecoration(
-              color: Colors.grey.shade700,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 8,
-                  offset: const Offset(0, 4),
-                ),
-              ],
+      borderRadius: BorderRadius.circular(25),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 50,
+              height: 50,
+              decoration: BoxDecoration(
+                color: AppColors.primaryMaroon,
+                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primaryMaroon.withValues(alpha: 0.35),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: const Icon(
+                Icons.qr_code_scanner,
+                color: AppColors.white,
+                size: 24,
+              ),
             ),
-            child: const Icon(
-              Icons.qr_code_scanner,
-              color: Colors.white,
-              size: 24,
+            const SizedBox(height: 2),
+            Text(
+              'Scan QR',
+              style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            'Scan Qr',
-            style: TextStyle(
-              fontSize: 10,
-              color: Colors.grey.shade500,
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

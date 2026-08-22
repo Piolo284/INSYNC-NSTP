@@ -197,19 +197,19 @@ class _CwtsOfficerAddActivityScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           _isEditing ? 'Edit Activity' : 'Add New Activity',
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -249,8 +249,8 @@ class _CwtsOfficerAddActivityScreenState
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
                 child: Row(
                   children: [
@@ -262,13 +262,13 @@ class _CwtsOfficerAddActivityScreenState
                         style: TextStyle(
                           fontSize: 14,
                           color: _selectedDate != null
-                              ? Colors.black87
-                              : Colors.grey.shade400,
+                              ? AppColors.textPrimary
+                              : AppColors.textSecondary,
                         ),
                       ),
                     ),
-                    Icon(Icons.calendar_today_outlined,
-                        size: 18, color: Colors.grey.shade500),
+                    const Icon(Icons.calendar_today_outlined,
+                        size: 18, color: AppColors.textSecondary),
                   ],
                 ),
               ),
@@ -305,10 +305,9 @@ class _CwtsOfficerAddActivityScreenState
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(vertical: 32),
                 decoration: BoxDecoration(
-                  border: Border.all(
-                      color: Colors.grey.shade300, style: BorderStyle.solid),
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.grey.shade50,
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  color: AppColors.grey50,
                 ),
                 child: Column(
                   children: [
@@ -316,16 +315,16 @@ class _CwtsOfficerAddActivityScreenState
                       _photo == null ? Icons.upload : Icons.check_circle,
                       size: 28,
                       color: _photo == null
-                          ? Colors.grey.shade500
-                          : Colors.green.shade600,
+                          ? AppColors.textSecondary
+                          : AppColors.success,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _photo?.name ?? 'Tap to upload photos',
                       textAlign: TextAlign.center,
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         fontWeight: FontWeight.w500,
                       ),
                     ),
@@ -334,9 +333,9 @@ class _CwtsOfficerAddActivityScreenState
                       _photo == null
                           ? 'JPG or PNG, up to 15 MB'
                           : Fmt.fileSize(_photo!.size),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 11,
-                        color: Colors.grey.shade400,
+                        color: AppColors.textSecondary,
                       ),
                     ),
                   ],
@@ -363,37 +362,13 @@ class _CwtsOfficerAddActivityScreenState
                   child: OutlinedButton(
                     onPressed:
                         _isSaving ? null : () => Navigator.pop(context, false),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: Colors.black87,
-                      side: BorderSide(color: Colors.grey.shade300),
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                    child: const Text(
-                      'Cancel',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
+                    child: const Text('Cancel'),
                   ),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _save,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.primaryMaroon,
-                      foregroundColor: Colors.white,
-                      disabledBackgroundColor: Colors.grey.shade300,
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      elevation: 0,
-                    ),
                     child: _isSaving
                         ? const SizedBox(
                             width: 18,
@@ -401,16 +376,10 @@ class _CwtsOfficerAddActivityScreenState
                             child: CircularProgressIndicator(
                               strokeWidth: 2,
                               valueColor:
-                                  AlwaysStoppedAnimation<Color>(Colors.white),
+                                  AlwaysStoppedAnimation<Color>(AppColors.white),
                             ),
                           )
-                        : const Text(
-                            'Save',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                        : const Text('Save'),
                   ),
                 ),
               ],
@@ -428,8 +397,8 @@ class _CwtsOfficerAddActivityScreenState
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey.shade300),
-          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
         ),
         child: Row(
           children: [
@@ -440,11 +409,13 @@ class _CwtsOfficerAddActivityScreenState
                     : Fmt.clock(_formatApiTime(value)),
                 style: TextStyle(
                   fontSize: 14,
-                  color: value == null ? Colors.grey.shade400 : Colors.black87,
+                  color: value == null
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
                 ),
               ),
             ),
-            Icon(Icons.access_time, size: 18, color: Colors.grey.shade500),
+            const Icon(Icons.access_time, size: 18, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -459,7 +430,7 @@ class _CwtsOfficerAddActivityScreenState
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w600,
-            color: Colors.black87,
+            color: AppColors.textPrimary,
           ),
         ),
         if (required) ...[
@@ -469,7 +440,7 @@ class _CwtsOfficerAddActivityScreenState
             style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.red,
+              color: AppColors.error,
             ),
           ),
         ],
@@ -489,29 +460,6 @@ class _CwtsOfficerAddActivityScreenState
       maxLength: maxLength,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(
-          color: Colors.grey.shade400,
-          fontSize: 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
-        ),
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        counterStyle: TextStyle(
-          fontSize: 11,
-          color: Colors.grey.shade400,
-        ),
       ),
     );
   }

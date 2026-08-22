@@ -44,10 +44,11 @@ class _CwtsOfficerMainShellState extends State<CwtsOfficerMainShell> {
       ),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
+          border: const Border(top: BorderSide(color: AppColors.border)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.06),
+              color: AppColors.black.withValues(alpha: 0.06),
               blurRadius: 10,
               offset: const Offset(0, -4),
             ),
@@ -79,26 +80,30 @@ class _CwtsOfficerMainShellState extends State<CwtsOfficerMainShell> {
   }) {
     final isSelected = _currentIndex == index;
 
-    return GestureDetector(
+    return InkWell(
       onTap: () => _onTabTapped(index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? AppColors.primaryMaroon : Colors.grey.shade500,
-            size: 22,
-          ),
-          const SizedBox(height: 2),
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 10,
-              color: isSelected ? AppColors.primaryMaroon : Colors.grey.shade500,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+      borderRadius: BorderRadius.circular(AppColors.radiusSm),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
+              size: 22,
             ),
-          ),
-        ],
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

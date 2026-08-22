@@ -4,7 +4,9 @@ import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerStudentSubmissionScreen extends StatefulWidget {
@@ -69,19 +71,19 @@ class _CwtsOfficerStudentSubmissionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Student Submission',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -114,7 +116,7 @@ class _CwtsOfficerStudentSubmissionScreenState
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w600,
-                            color: Colors.black87,
+                            color: AppColors.textPrimary,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -126,15 +128,16 @@ class _CwtsOfficerStudentSubmissionScreenState
                             ].where((s) => s.isNotEmpty).join(' – '),
                             Fmt.str(_student['studentId']),
                           ].where((s) => s.isNotEmpty).join('\n'),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 12,
-                            color: Colors.grey.shade600,
+                            color: AppColors.textSecondary,
                             height: 1.4,
                           ),
                         ),
                       ],
                     ),
                   ),
+                  StatusBadge(Fmt.str(_submission['status'], 'Submitted')),
                 ],
               ),
               const Divider(height: 32),
@@ -145,91 +148,51 @@ class _CwtsOfficerStudentSubmissionScreenState
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: AppColors.textPrimary,
                 ),
               ),
               const SizedBox(height: 4),
               Text(
                 'Due: ${Fmt.date(_module['deadline'])}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 12,
-                  color: Colors.grey.shade500,
+                  color: AppColors.textSecondary,
                 ),
               ),
               const Divider(height: 32),
 
               // ===== SUBMISSION INFO =====
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Submission',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.primaryMaroon,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Submitted on',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
-                        ),
-                      ),
-                    ],
-                  ),
-                  Text(
-                    Fmt.dateTimeShort(_submission['submittedAt']),
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
-                    ),
-                  ),
-                ],
+              AppCard(
+                child: InfoRow(
+                  icon: Icons.upload_file_outlined,
+                  label: 'Submitted on',
+                  value: Fmt.dateTimeShort(_submission['submittedAt']),
+                ),
               ),
               const SizedBox(height: 20),
 
               // ===== FILE ATTACHMENT =====
-              const Text(
-                'File',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
+              const SectionHeader(title: 'File'),
               const SizedBox(height: 8),
               _buildFileCard(),
               const SizedBox(height: 24),
 
               // ===== STUDENT COMMENT =====
-              const Text(
-                'Student Comment (Optional)',
-                style: TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: Colors.black87,
-                ),
-              ),
+              const SectionHeader(title: 'Student Comment (Optional)'),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade50,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.grey.shade200),
+                  color: AppColors.grey50,
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  border: Border.all(color: AppColors.border),
                 ),
                 child: Text(
                   Fmt.str(_submission['comment'], 'No comment was added.'),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
-                    color: Colors.grey.shade700,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ),
@@ -241,33 +204,33 @@ class _CwtsOfficerStudentSubmissionScreenState
                   width: double.infinity,
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFE8F5E9),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.green.shade200),
+                    color: AppColors.greenLight,
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                    border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Row(
                         children: [
-                          Icon(Icons.check_circle,
-                              color: Colors.green.shade700, size: 20),
+                          const Icon(Icons.check_circle,
+                              color: AppColors.success, size: 20),
                           const SizedBox(width: 8),
-                          Text(
+                          const Text(
                             'Already graded',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: Colors.green.shade800,
+                              color: AppColors.success,
                             ),
                           ),
                           const Spacer(),
                           Text(
                             '${Fmt.toInt(_submission['score'])} / ${Fmt.toInt(_submission['totalPoints'], 100)}',
-                            style: TextStyle(
+                            style: const TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.bold,
-                              color: Colors.green.shade800,
+                              color: AppColors.success,
                             ),
                           ),
                         ],
@@ -276,9 +239,9 @@ class _CwtsOfficerStudentSubmissionScreenState
                         const SizedBox(height: 10),
                         Text(
                           Fmt.str(_submission['feedback']),
-                          style: TextStyle(
+                          style: const TextStyle(
                             fontSize: 13,
-                            color: Colors.grey.shade800,
+                            color: AppColors.textPrimary,
                             height: 1.4,
                           ),
                         ),
@@ -303,22 +266,7 @@ class _CwtsOfficerStudentSubmissionScreenState
                       ),
                     ).then((_) => _load());
                   },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    elevation: 0,
-                  ),
-                  child: Text(
-                    _isGraded ? 'Update Grade' : 'Proceed to Grade',
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
+                  child: Text(_isGraded ? 'Update Grade' : 'Proceed to Grade'),
                 ),
               ),
             ],
@@ -332,24 +280,18 @@ class _CwtsOfficerStudentSubmissionScreenState
     final fileUrl = Fmt.str(_submission['fileUrl']);
     final fileName = Fmt.str(_submission['fileName'], 'No file attached');
 
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade50,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.red.shade50,
+              color: AppColors.errorLight,
               borderRadius: BorderRadius.circular(8),
             ),
-            child:
-                Icon(Icons.picture_as_pdf, color: Colors.red.shade600, size: 20),
+            child: const Icon(Icons.picture_as_pdf, color: AppColors.error, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -358,10 +300,10 @@ class _CwtsOfficerStudentSubmissionScreenState
               children: [
                 Text(
                   fileName,
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: Colors.grey.shade800,
+                    color: AppColors.textPrimary,
                   ),
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -370,9 +312,9 @@ class _CwtsOfficerStudentSubmissionScreenState
                   fileUrl.isEmpty
                       ? 'The trainee submitted a comment only'
                       : Fmt.fileSize(_submission['fileSize']),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -381,7 +323,7 @@ class _CwtsOfficerStudentSubmissionScreenState
           IconButton(
             icon: Icon(
               Icons.download,
-              color: fileUrl.isEmpty ? Colors.grey.shade400 : Colors.grey.shade600,
+              color: fileUrl.isEmpty ? AppColors.textSecondary : AppColors.primaryMaroon,
               size: 20,
             ),
             onPressed: fileUrl.isEmpty

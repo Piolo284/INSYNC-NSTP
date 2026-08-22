@@ -46,7 +46,7 @@ class NstpSelectionScreen extends StatelessWidget {
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.15),
+                        color: AppColors.black.withValues(alpha: 0.15),
                         blurRadius: 8,
                         offset: const Offset(0, 3),
                       ),
@@ -54,7 +54,7 @@ class NstpSelectionScreen extends StatelessWidget {
                   ),
                   child: Image.asset(
                     'assets/images/marsu_logo.png',
-                    errorBuilder: (_, __, ___) => const Icon(
+                    errorBuilder: (_, _, _) => const Icon(
                       Icons.school,
                       color: AppColors.primaryMaroon,
                       size: 40,
@@ -183,9 +183,9 @@ class NstpSelectionScreen extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFF3E0),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFFFE0B2)),
+          color: AppColors.cwtsCardBg,
+          borderRadius: BorderRadius.circular(AppColors.radius),
+          border: Border.all(color: AppColors.gold.withValues(alpha: 0.35)),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -201,7 +201,7 @@ class NstpSelectionScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(6),
                 child: Image.asset(
                   'assets/images/cwts_logo.png',
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.volunteer_activism,
                     color: AppColors.primaryMaroon,
                     size: 24,
@@ -261,7 +261,7 @@ class NstpSelectionScreen extends StatelessWidget {
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: AppColors.primaryMaroon,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(AppColors.radius),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -277,7 +277,7 @@ class NstpSelectionScreen extends StatelessWidget {
                 padding: const EdgeInsets.all(6),
                 child: Image.asset(
                   'assets/images/rotc_logo.png',
-                  errorBuilder: (_, __, ___) => const Icon(
+                  errorBuilder: (_, _, _) => const Icon(
                     Icons.shield,
                     color: AppColors.white,
                     size: 24,

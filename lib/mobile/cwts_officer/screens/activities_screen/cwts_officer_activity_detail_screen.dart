@@ -4,6 +4,8 @@ import 'cwts_officer_add_activity_screen.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/services/services.dart';
 import '../../../../../core/utils/formatters.dart';
+import '../../../../../core/widgets/app_card.dart';
+import '../../../../../core/widgets/app_dialogs.dart';
 import '../../../../../core/widgets/async_view.dart';
 import '../../../../../core/widgets/user_avatar.dart';
 
@@ -71,38 +73,16 @@ class _CwtsOfficerActivityDetailScreenState
   }
 
   Future<void> _delete() async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete activity?',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete activity?',
+      message:
           'This removes "${Fmt.str(_activity['title'], 'this activity')}" permanently. '
           'Attendance records already taken will be kept but unlinked.',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child: Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete',
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     try {
       await ActivityService.instance.delete(widget.activityId);
@@ -126,6 +106,7 @@ class _CwtsOfficerActivityDetailScreenState
         .where((e) => e.isNotEmpty)
         .toList();
     final participants = Fmt.toInt(_activity['participants']);
+    final hasTime = Fmt.str(_activity['startTime']).isNotEmpty;
 
     return PopScope(
       canPop: false,
@@ -133,27 +114,27 @@ class _CwtsOfficerActivityDetailScreenState
         if (!didPop) Navigator.pop(context, _changed);
       },
       child: Scaffold(
-        backgroundColor: Colors.white,
+        backgroundColor: AppColors.white,
         appBar: AppBar(
           backgroundColor: AppColors.primaryMaroon,
           elevation: 0,
           centerTitle: true,
           leading: IconButton(
-            icon:
-                const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+            icon: const Icon(Icons.arrow_back_ios,
+                color: AppColors.white, size: 20),
             onPressed: () => Navigator.pop(context, _changed),
           ),
           title: const Text(
             'Activity Details',
             style: TextStyle(
-              color: Colors.white,
+              color: AppColors.white,
               fontSize: 18,
               fontWeight: FontWeight.w600,
             ),
           ),
           actions: [
             IconButton(
-              icon: const Icon(Icons.delete_outline, color: Colors.white),
+              icon: const Icon(Icons.delete_outline, color: AppColors.white),
               onPressed: _state == LoadState.ready ? _delete : null,
             ),
           ],
@@ -188,124 +169,74 @@ class _CwtsOfficerActivityDetailScreenState
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 16),
 
-                      // Date & Location Row
-                      Wrap(
-                        spacing: 20,
-                        runSpacing: 8,
-                        children: [
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.calendar_today_outlined,
-                                  size: 14, color: Colors.grey.shade600),
-                              const SizedBox(width: 6),
-                              Text(
-                                Fmt.dateWithDay(_activity['date']),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.location_on_outlined,
-                                  size: 14, color: Colors.grey.shade600),
-                              const SizedBox(width: 6),
-                              Text(
-                                Fmt.str(_activity['location'], 'MARSU'),
-                                style: TextStyle(
-                                  fontSize: 13,
-                                  color: Colors.grey.shade600,
-                                ),
-                              ),
-                            ],
-                          ),
-                          if (Fmt.str(_activity['startTime']).isNotEmpty)
-                            Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.access_time,
-                                    size: 14, color: Colors.grey.shade600),
-                                const SizedBox(width: 6),
-                                Text(
-                                  '${Fmt.clock(Fmt.str(_activity['startTime']))} – ${Fmt.clock(Fmt.str(_activity['endTime']))}',
-                                  style: TextStyle(
-                                    fontSize: 13,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                              ],
+                      // Key details
+                      AppCard(
+                        child: Column(
+                          children: [
+                            InfoRow(
+                              icon: Icons.calendar_today_outlined,
+                              label: 'Date',
+                              value: Fmt.dateWithDay(_activity['date']),
                             ),
-                        ],
+                            InfoRow(
+                              icon: Icons.location_on_outlined,
+                              label: 'Location',
+                              value: Fmt.str(_activity['location'], 'MARSU'),
+                            ),
+                            if (hasTime)
+                              InfoRow(
+                                icon: Icons.access_time,
+                                label: 'Time',
+                                value:
+                                    '${Fmt.clock(Fmt.str(_activity['startTime']))} – ${Fmt.clock(Fmt.str(_activity['endTime']))}',
+                              ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 24),
 
                       // About
-                      const Text(
-                        'About the activity',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
+                      const SectionHeader(title: 'About the activity'),
                       const SizedBox(height: 8),
                       Text(
                         Fmt.str(
                           _activity['description'],
                           'No description was provided for this activity.',
                         ),
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 13,
-                          color: Colors.grey.shade600,
+                          color: AppColors.textSecondary,
                           height: 1.5,
                         ),
                       ),
                       const SizedBox(height: 24),
 
                       // Objectives
-                      const Text(
-                        'Objectives',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
+                      const SectionHeader(title: 'Objectives'),
                       const SizedBox(height: 12),
                       if (objectives.isEmpty)
-                        Text(
+                        const Text(
                           'No objectives listed.',
                           style: TextStyle(
-                              fontSize: 13, color: Colors.grey.shade500),
+                              fontSize: 13, color: AppColors.textSecondary),
                         )
                       else
                         ...objectives.map(_buildObjectiveItem),
                       const SizedBox(height: 24),
 
                       // Photos
-                      const Text(
-                        'Photos',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
+                      const SectionHeader(title: 'Photos'),
                       const SizedBox(height: 12),
                       if (photos.isEmpty)
-                        Text(
+                        const Text(
                           'No photos uploaded.',
                           style: TextStyle(
-                              fontSize: 13, color: Colors.grey.shade500),
+                              fontSize: 13, color: AppColors.textSecondary),
                         )
                       else
                         SizedBox(
@@ -313,7 +244,7 @@ class _CwtsOfficerActivityDetailScreenState
                           child: ListView.separated(
                             scrollDirection: Axis.horizontal,
                             itemCount: photos.length,
-                            separatorBuilder: (_, __) =>
+                            separatorBuilder: (_, _) =>
                                 const SizedBox(width: 8),
                             itemBuilder: (context, index) {
                               return ClipRRect(
@@ -330,16 +261,11 @@ class _CwtsOfficerActivityDetailScreenState
                       const SizedBox(height: 24),
 
                       // Participants
-                      const Text(
-                        'Participants',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
-                        ),
-                      ),
+                      const SectionHeader(title: 'Participants'),
                       const SizedBox(height: 12),
-                      GestureDetector(
+                      AppCard(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 4),
                         onTap: () {
                           Navigator.push(
                             context,
@@ -353,25 +279,23 @@ class _CwtsOfficerActivityDetailScreenState
                             ),
                           ).then((_) => _load());
                         },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(vertical: 12),
-                          child: Row(
-                            children: [
-                              Icon(Icons.people_outline,
-                                  size: 20, color: Colors.grey.shade600),
-                              const SizedBox(width: 10),
-                              Text(
+                        child: Row(
+                          children: [
+                            const Icon(Icons.people_outline,
+                                size: 20, color: AppColors.textSecondary),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
                                 '$participants trainee${participants == 1 ? '' : 's'} participated',
-                                style: TextStyle(
+                                style: const TextStyle(
                                   fontSize: 14,
-                                  color: Colors.grey.shade700,
+                                  color: AppColors.textPrimary,
                                 ),
                               ),
-                              const Spacer(),
-                              Icon(Icons.chevron_right,
-                                  color: Colors.grey.shade400),
-                            ],
-                          ),
+                            ),
+                            const Icon(Icons.chevron_right,
+                                color: AppColors.textSecondary),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 24),
@@ -381,22 +305,7 @@ class _CwtsOfficerActivityDetailScreenState
                         width: double.infinity,
                         child: ElevatedButton(
                           onPressed: _edit,
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: AppColors.primaryMaroon,
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            elevation: 0,
-                          ),
-                          child: const Text(
-                            'Edit Activity',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
+                          child: const Text('Edit Activity'),
                         ),
                       ),
                     ],
@@ -424,7 +333,7 @@ class _CwtsOfficerActivityDetailScreenState
             ),
             child: const Icon(
               Icons.check,
-              color: Colors.white,
+              color: AppColors.white,
               size: 14,
             ),
           ),
@@ -432,9 +341,9 @@ class _CwtsOfficerActivityDetailScreenState
           Expanded(
             child: Text(
               text,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade700,
+                color: AppColors.textSecondary,
                 height: 1.4,
               ),
             ),

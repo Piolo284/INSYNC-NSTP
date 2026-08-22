@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 
 class CwtsOfficerAnnouncementScreen extends StatefulWidget {
   const CwtsOfficerAnnouncementScreen({super.key});
@@ -52,9 +55,9 @@ class _CwtsOfficerAnnouncementScreenState
     final saved = await showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      backgroundColor: AppColors.cardBg,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppColors.radius)),
       ),
       builder: (_) => _AnnouncementEditor(existing: existing),
     );
@@ -63,38 +66,15 @@ class _CwtsOfficerAnnouncementScreenState
   }
 
   Future<void> _delete(Map<String, dynamic> announcement) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text(
-          'Delete announcement?',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: Text(
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete announcement?',
+      message:
           'This removes "${Fmt.str(announcement['title'], 'this announcement')}" permanently.',
-          style: TextStyle(fontSize: 13, color: Colors.grey.shade700),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext, false),
-            child:
-                Text('Cancel', style: TextStyle(color: Colors.grey.shade700)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade600,
-              foregroundColor: Colors.white,
-              elevation: 0,
-            ),
-            child: const Text('Delete'),
-          ),
-        ],
-      ),
+      confirmLabel: 'Delete',
     );
 
-    if (confirmed != true || !mounted) return;
+    if (!confirmed || !mounted) return;
 
     try {
       await AnnouncementService.instance.delete(Fmt.str(announcement['_id']));
@@ -122,7 +102,7 @@ class _CwtsOfficerAnnouncementScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -175,123 +155,132 @@ class _CwtsOfficerAnnouncementScreenState
 
   Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
     final isPinned = announcement['isPinned'] == true;
+    final status = Fmt.str(announcement['status'], 'Published');
 
-    return Container(
+    return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Container(
-                  width: 44,
-                  height: 44,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.campaign,
-                    color: Colors.deepOrange,
-                    size: 24,
-                  ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isPinned ? AppColors.goldLight : AppColors.orangeLight,
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        Fmt.str(announcement['title'], 'Announcement'),
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          color: Colors.black87,
-                        ),
+                child: Icon(
+                  Icons.campaign,
+                  color: isPinned ? AppColors.primaryDark : AppColors.orange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      Fmt.str(announcement['title'], 'Announcement'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 4),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      [
+                        Fmt.date(announcement['date']),
+                        Fmt.str(announcement['location']),
+                        Fmt.str(announcement['targetAudience'], 'All'),
+                      ].where((s) => s.isNotEmpty && s != '—').join(' • '),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              StatusBadge(status, dense: true),
+              if (isPinned)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldLight,
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.push_pin, size: 11, color: AppColors.primaryDark),
+                      SizedBox(width: 4),
                       Text(
-                        [
-                          Fmt.date(announcement['date']),
-                          Fmt.str(announcement['location']),
-                          Fmt.str(announcement['targetAudience'], 'All'),
-                        ].where((s) => s.isNotEmpty && s != '—').join(' • '),
+                        'Pinned',
                         style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade500,
+                          fontSize: 10.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
                         ),
                       ),
                     ],
                   ),
                 ),
-                if (isPinned)
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryMaroon.withValues(alpha: 0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Text(
-                      'Pinned',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.primaryMaroon,
-                      ),
-                    ),
-                  ),
-              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            Fmt.str(announcement['content'], 'No details provided.'),
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
             ),
-            const SizedBox(height: 12),
-            Text(
-              Fmt.str(announcement['content']),
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
-                height: 1.4,
+          ),
+          const SizedBox(height: 12),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              _buildActionButton(
+                icon: Icons.send_outlined,
+                label: 'Send',
+                onTap: () => _resend(announcement),
               ),
-            ),
-            const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [
-                _buildActionButton(
-                  icon: Icons.send_outlined,
-                  label: 'Send',
-                  onTap: () => _resend(announcement),
-                ),
-                const SizedBox(width: 8),
-                _buildActionButton(
-                  icon: Icons.edit_outlined,
-                  label: 'Edit',
-                  onTap: () => _openEditor(existing: announcement),
-                ),
-                const SizedBox(width: 8),
-                _buildActionButton(
-                  icon: Icons.delete_outline,
-                  label: 'Delete',
-                  onTap: () => _delete(announcement),
-                  isDestructive: true,
-                ),
-              ],
-            ),
-          ],
-        ),
+              const SizedBox(width: 8),
+              _buildActionButton(
+                icon: Icons.edit_outlined,
+                label: 'Edit',
+                onTap: () => _openEditor(existing: announcement),
+              ),
+              const SizedBox(width: 8),
+              _buildActionButton(
+                icon: Icons.delete_outline,
+                label: 'Delete',
+                onTap: () => _delete(announcement),
+                isDestructive: true,
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
@@ -302,13 +291,14 @@ class _CwtsOfficerAnnouncementScreenState
     required VoidCallback onTap,
     bool isDestructive = false,
   }) {
-    return GestureDetector(
+    return InkWell(
       onTap: onTap,
+      borderRadius: BorderRadius.circular(AppColors.radiusSm),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: isDestructive ? Colors.red.shade50 : Colors.grey.shade100,
-          borderRadius: BorderRadius.circular(8),
+          color: isDestructive ? AppColors.errorLight : AppColors.grey100,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -316,7 +306,7 @@ class _CwtsOfficerAnnouncementScreenState
             Icon(
               icon,
               size: 14,
-              color: isDestructive ? Colors.red.shade600 : Colors.grey.shade700,
+              color: isDestructive ? AppColors.error : AppColors.textSecondary,
             ),
             const SizedBox(width: 4),
             Text(
@@ -324,8 +314,7 @@ class _CwtsOfficerAnnouncementScreenState
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color:
-                    isDestructive ? Colors.red.shade600 : Colors.grey.shade700,
+                color: isDestructive ? AppColors.error : AppColors.textSecondary,
               ),
             ),
           ],
@@ -479,7 +468,7 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
                 width: 40,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: Colors.grey.shade300,
+                  color: AppColors.border,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -490,7 +479,7 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppColors.textPrimary,
               ),
             ),
             const SizedBox(height: 20),
@@ -510,16 +499,16 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade300),
-                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: AppColors.border),
+                borderRadius: BorderRadius.circular(AppColors.radiusSm),
               ),
               child: DropdownButtonHideUnderline(
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _audience,
-                  icon: Icon(Icons.keyboard_arrow_down,
-                      color: Colors.grey.shade600),
-                  style: TextStyle(fontSize: 14, color: Colors.grey.shade800),
+                  icon: const Icon(Icons.keyboard_arrow_down,
+                      color: AppColors.textSecondary),
+                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
                   onChanged: (v) => setState(() => _audience = v!),
                   items: _audiences
                       .map((a) => DropdownMenuItem(value: a, child: Text(a)))
@@ -531,26 +520,27 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
 
             _label('Date'),
             const SizedBox(height: 8),
-            GestureDetector(
+            InkWell(
               onTap: _pickDate,
+              borderRadius: BorderRadius.circular(AppColors.radiusSm),
               child: Container(
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.border),
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
                 child: Row(
                   children: [
                     Expanded(
                       child: Text(
                         Fmt.dateWithDay(_date),
-                        style: TextStyle(
-                            fontSize: 14, color: Colors.grey.shade800),
+                        style: const TextStyle(
+                            fontSize: 14, color: AppColors.textPrimary),
                       ),
                     ),
-                    Icon(Icons.calendar_today_outlined,
-                        size: 18, color: Colors.grey.shade500),
+                    const Icon(Icons.calendar_today_outlined,
+                        size: 18, color: AppColors.textSecondary),
                   ],
                 ),
               ),
@@ -592,7 +582,7 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
               controlAffinity: ListTileControlAffinity.leading,
               title: const Text(
                 'Pin to the top',
-                style: TextStyle(fontSize: 13, color: Colors.black87),
+                style: TextStyle(fontSize: 13, color: AppColors.textPrimary),
               ),
             ),
             const SizedBox(height: 12),
@@ -602,13 +592,7 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
               child: ElevatedButton(
                 onPressed: _isSaving ? null : _save,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppColors.primaryMaroon,
-                  foregroundColor: Colors.white,
-                  disabledBackgroundColor: Colors.grey.shade300,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  elevation: 0,
+                  disabledBackgroundColor: AppColors.grey300,
                 ),
                 child: _isSaving
                     ? const SizedBox(
@@ -639,7 +623,7 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
         style: const TextStyle(
           fontSize: 13,
           fontWeight: FontWeight.w600,
-          color: Colors.black87,
+          color: AppColors.textPrimary,
         ),
       );
 
@@ -653,20 +637,6 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
       maxLines: maxLines,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.grey.shade400, fontSize: 13),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: BorderSide(color: Colors.grey.shade300),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide:
-              const BorderSide(color: AppColors.primaryMaroon, width: 1.5),
-        ),
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
       ),

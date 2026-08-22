@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
 
 class CwtsAnnouncementScreen extends StatefulWidget {
@@ -54,10 +55,19 @@ class _CwtsAnnouncementScreenState extends State<CwtsAnnouncementScreen> {
     return DateTime.now().difference(date).inDays <= 7;
   }
 
+  void _openDetail(Map<String, dynamic> announcement) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AnnouncementDetailScreen(announcement: announcement),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
@@ -104,162 +114,235 @@ class _CwtsAnnouncementScreenState extends State<CwtsAnnouncementScreen> {
   }
 
   Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.grey.shade200),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
+    final isPinned = announcement['isPinned'] == true;
+    final isNew = _isNew(announcement['createdAt']);
+
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      onTap: () => _openDetail(announcement),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF3E0),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Icon(
-                    Icons.campaign,
-                    color: Colors.orange,
-                    size: 24,
-                  ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: isPinned ? AppColors.goldLight : AppColors.orangeLight,
+                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
                 ),
-                const SizedBox(width: 14),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              Fmt.str(announcement['title'], 'Announcement'),
-                              style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
-                              ),
-                            ),
-                          ),
-                          if (announcement['isPinned'] == true) ...[
-                            const Icon(
-                              Icons.push_pin,
-                              size: 14,
-                              color: AppColors.primaryMaroon,
-                            ),
-                            const SizedBox(width: 6),
-                          ],
-                          if (_isNew(announcement['createdAt']))
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                                vertical: 3,
-                              ),
-                              decoration: BoxDecoration(
-                                color: Colors.red.shade50,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Text(
-                                'New',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w600,
-                                  color: Colors.red.shade600,
-                                ),
-                              ),
-                            ),
-                        ],
+                child: Icon(
+                  Icons.campaign,
+                  color: isPinned ? AppColors.primaryDark : AppColors.orange,
+                  size: 22,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      Fmt.str(announcement['title'], 'Announcement'),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          Icon(
-                            Icons.calendar_today_outlined,
-                            size: 12,
-                            color: Colors.grey.shade500,
-                          ),
-                          const SizedBox(width: 4),
-                          Text(
-                            Fmt.date(announcement['date']),
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey.shade500,
-                            ),
-                          ),
-                          if (Fmt.str(announcement['time']).isNotEmpty) ...[
-                            const SizedBox(width: 12),
-                            Icon(
-                              Icons.access_time,
-                              size: 12,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              Fmt.str(announcement['time']),
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey.shade500,
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (Fmt.str(announcement['location']).isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.location_on_outlined,
-                              size: 12,
-                              color: Colors.grey.shade500,
-                            ),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                Fmt.str(announcement['location']),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey.shade500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
+                    ),
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if (isPinned) _pill('Pinned', Icons.push_pin, AppColors.gold, AppColors.primaryDark),
+                        if (isNew) _pill('New', null, AppColors.errorLight, AppColors.error),
                       ],
-                    ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            Fmt.str(announcement['content'], 'No details provided.'),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 13,
+              color: AppColors.textSecondary,
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 12, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                Fmt.date(announcement['date']),
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+              if (Fmt.str(announcement['time']).isNotEmpty) ...[
+                const SizedBox(width: 12),
+                const Icon(Icons.access_time, size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Text(
+                  Fmt.str(announcement['time']),
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+              if (Fmt.str(announcement['location']).isNotEmpty) ...[
+                const SizedBox(width: 12),
+                const Icon(Icons.location_on_outlined, size: 12, color: AppColors.textSecondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    Fmt.str(announcement['location']),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
                 ),
               ],
-            ),
+            ],
           ),
-          Divider(height: 1, color: Colors.grey.shade100),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              Fmt.str(announcement['content'], 'No details provided.'),
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
-                height: 1.5,
-              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(String label, IconData? icon, Color background, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 11, color: color),
+            const SizedBox(width: 4),
+          ],
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w700,
+              color: color,
+              letterSpacing: 0.2,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Clean, single-announcement detail view — reached by tapping a list card.
+class _AnnouncementDetailScreen extends StatelessWidget {
+  final Map<String, dynamic> announcement;
+
+  const _AnnouncementDetailScreen({required this.announcement});
+
+  @override
+  Widget build(BuildContext context) {
+    final isPinned = announcement['isPinned'] == true;
+
+    return Scaffold(
+      backgroundColor: AppColors.scaffoldBg,
+      appBar: AppBar(
+        backgroundColor: AppColors.primaryMaroon,
+        elevation: 0,
+        centerTitle: true,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          'Announcement',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: AppCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (isPinned) ...[
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppColors.goldLight,
+                    borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: const [
+                      Icon(Icons.push_pin, size: 13, color: AppColors.primaryDark),
+                      SizedBox(width: 5),
+                      Text(
+                        'Pinned Announcement',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.primaryDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Text(
+                Fmt.str(announcement['title'], 'Announcement'),
+                style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 14),
+              InfoRow(
+                icon: Icons.calendar_today_outlined,
+                label: 'Date',
+                value: Fmt.dateWithDay(announcement['date']),
+              ),
+              if (Fmt.str(announcement['time']).isNotEmpty)
+                InfoRow(
+                  icon: Icons.access_time,
+                  label: 'Time',
+                  value: Fmt.str(announcement['time']),
+                ),
+              if (Fmt.str(announcement['location']).isNotEmpty)
+                InfoRow(
+                  icon: Icons.location_on_outlined,
+                  label: 'Location',
+                  value: Fmt.str(announcement['location']),
+                ),
+              const SizedBox(height: 10),
+              const Divider(),
+              const SizedBox(height: 10),
+              Text(
+                Fmt.str(announcement['content'], 'No details provided.'),
+                style: const TextStyle(
+                  fontSize: 14,
+                  color: AppColors.textPrimary,
+                  height: 1.6,
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -1,29 +1,31 @@
 import 'package:flutter/material.dart';
-import '/../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/async_view.dart';
 
 class CwtsHelpSupportScreen extends StatelessWidget {
   const CwtsHelpSupportScreen({super.key});
 
+  void _notYetAvailable(BuildContext context, String feature) {
+    AppSnack.info(context, '$feature is not available yet.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.white,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Help & Support',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -38,37 +40,39 @@ class CwtsHelpSupportScreen extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: const Color(0xFFF5E6D3),
-                borderRadius: BorderRadius.circular(12),
+                color: AppColors.goldLight,
+                borderRadius: BorderRadius.circular(AppColors.radiusSm),
               ),
               child: Row(
                 children: [
-                  Icon(
+                  const Icon(
                     Icons.headset_mic_outlined,
                     color: AppColors.primaryMaroon,
                     size: 40,
                   ),
                   const SizedBox(width: 16),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Need help?',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Need help?',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textPrimary,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 2),
-                      Text(
-                        "We're here to assist you.",
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: Colors.black54,
+                        SizedBox(height: 2),
+                        Text(
+                          "We're here to assist you.",
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ],
               ),
@@ -76,42 +80,38 @@ class CwtsHelpSupportScreen extends StatelessWidget {
             const SizedBox(height: 24),
             // FAQ
             _buildMenuItem(
+              context: context,
               icon: Icons.language_outlined,
               title: 'Frequently Asked Questions',
               subtitle: 'Browse common questions and answers',
-              onTap: () {
-                // TODO: Navigate to FAQ
-              },
+              feature: 'The FAQ page',
             ),
             const SizedBox(height: 12),
             // User Guide
             _buildMenuItem(
+              context: context,
               icon: Icons.description_outlined,
               title: 'User Guide',
               subtitle: 'Learn how to use the NSTP System',
-              onTap: () {
-                // TODO: Navigate to User Guide
-              },
+              feature: 'The user guide',
             ),
             const SizedBox(height: 12),
             // Contact Support
             _buildMenuItem(
+              context: context,
               icon: Icons.phone_outlined,
               title: 'Contact Support',
               subtitle: 'Send us a message',
-              onTap: () {
-                // TODO: Navigate to Contact Support
-              },
+              feature: 'Direct messaging to support',
             ),
             const SizedBox(height: 12),
             // System Status
             _buildMenuItem(
+              context: context,
               icon: Icons.settings_outlined,
               title: 'System Status',
               subtitle: 'Check system uptime and alerts',
-              onTap: () {
-                // TODO: Navigate to System Status
-              },
+              feature: 'The system status page',
             ),
           ],
         ),
@@ -120,59 +120,51 @@ class CwtsHelpSupportScreen extends StatelessWidget {
   }
 
   Widget _buildMenuItem({
+    required BuildContext context,
     required IconData icon,
     required String title,
     required String subtitle,
-    required VoidCallback onTap,
+    required String feature,
   }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade200),
-        ),
-        child: Row(
-          children: [
-            Icon(
-              icon,
-              color: Colors.black87,
-              size: 24,
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.black87,
-                    ),
+    return AppCard(
+      onTap: () => _notYetAvailable(context, feature),
+      child: Row(
+        children: [
+          Icon(
+            icon,
+            color: AppColors.textPrimary,
+            size: 24,
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade500,
-                    ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            Icon(
-              Icons.arrow_forward_ios,
-              color: Colors.grey.shade400,
-              size: 14,
-            ),
-          ],
-        ),
+          ),
+          const Icon(
+            Icons.arrow_forward_ios,
+            color: AppColors.textSecondary,
+            size: 14,
+          ),
+        ],
       ),
     );
   }

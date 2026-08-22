@@ -1,10 +1,14 @@
 import 'package:flutter/material.dart';
 import 'rotc_activities_modules_screen.dart';
+import 'rotc_announcement_screen.dart';
+import 'rotc_scan_qr_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
-import '../../../core/widgets/user_avatar.dart';
+import '../../../core/widgets/profile_header.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class RotcDashboardScreen extends StatefulWidget {
   final VoidCallback onOpenDrawer;
@@ -24,6 +28,7 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
   Map<String, dynamic> _overview = const {};
   List<Map<String, dynamic>> announcements = const [];
   List<Map<String, dynamic>> _toDo = const [];
+  List<Map<String, dynamic>> _upcomingActivities = const [];
 
   @override
   void initState() {
@@ -45,6 +50,8 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
         announcements =
             (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>();
         _toDo = (data['toDo'] as List? ?? []).cast<Map<String, dynamic>>();
+        _upcomingActivities = (data['upcomingActivities'] as List? ?? [])
+            .cast<Map<String, dynamic>>();
         _currentAnnouncementPage = 0;
         _state = LoadState.ready;
       });
@@ -62,26 +69,26 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
     final brigade = Session.instance.brigade;
 
     return Scaffold(
-      backgroundColor: Colors.grey.shade50,
+      backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.white),
+          icon: const Icon(Icons.menu, color: AppColors.white),
           onPressed: widget.onOpenDrawer,
         ),
         title: Text(
           brigade.isEmpty ? 'Brigade Katihan' : brigade,
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.refresh, color: Colors.white, size: 20),
+            icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
         ],
@@ -95,18 +102,30 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
           onRetry: _load,
           child: SingleChildScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildProfileCard(),
-                const SizedBox(height: 20),
-                _buildOverviewSection(),
-                const SizedBox(height: 20),
-                _buildAnnouncementsSection(),
-                const SizedBox(height: 20),
-                _buildToDoSection(),
-                const SizedBox(height: 80),
+                _buildProfileHeader(),
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _buildOverviewSection(),
+                      const SizedBox(height: 20),
+                      _buildToDoSection(),
+                      const SizedBox(height: 20),
+                      _buildAnnouncementsSection(),
+                      if (_upcomingActivities.isNotEmpty) ...[
+                        const SizedBox(height: 20),
+                        _buildUpcomingActivitiesSection(),
+                      ],
+                      const SizedBox(height: 20),
+                      _buildQuickActionsSection(),
+                      const SizedBox(height: 8),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -115,120 +134,64 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
     );
   }
 
-  Widget _buildProfileCard() {
+  Widget _buildProfileHeader() {
     final session = Session.instance;
+    final yearCourse = [session.yearLevel, session.course]
+        .where((s) => s.isNotEmpty)
+        .join(' - ');
+    final subtitleParts = [session.program, yearCourse]
+        .where((s) => s.isNotEmpty)
+        .join(' · ');
 
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      '${Fmt.greeting()}! ',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        color: Colors.black87,
-                      ),
-                    ),
-                    const Text('👋', style: TextStyle(fontSize: 14)),
-                  ],
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  session.name.isEmpty ? 'Cadet' : '${session.name}!',
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  Fmt.dateLong(DateTime.now()),
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          UserAvatar(
-            imagePath: session.profileImage,
-            radius: 30,
-            iconColor: Colors.grey,
-          ),
-        ],
-      ),
+    return ProfileHeader(
+      greeting: '${Fmt.greeting()} 👋',
+      name: session.name.isEmpty ? 'Cadet' : session.name,
+      subtitle: subtitleParts.isEmpty ? 'NSTP Cadet' : subtitleParts,
+      imagePath: session.profileImage,
     );
   }
 
   Widget _buildOverviewSection() {
+    final present = Fmt.toInt(_overview['present']);
+    final absent = Fmt.toInt(_overview['absents']);
+    final late = Fmt.toInt(_overview['late']);
+    final excused = Fmt.toInt(_overview['excused']);
+    final tasks = Fmt.toInt(_overview['tasks']);
+    final totalSessions = present + absent + late + excused;
+    final rate = totalSessions == 0
+        ? 0
+        : (((present + late + excused) / totalSessions) * 100).round();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Overview',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+        const SectionHeader(title: 'Overview'),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            _buildHighlightCard(
+              icon: Icons.verified_outlined,
+              color: AppColors.success,
+              label: 'Attendance rate',
+              value: '$rate%',
+            ),
+            const SizedBox(width: 12),
+            _buildHighlightCard(
+              icon: Icons.assignment_late_outlined,
+              color: AppColors.warning,
+              label: 'Pending drills',
+              value: '$tasks',
+            ),
+          ],
         ),
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
+        AppCard(
           child: Row(
             children: [
-              _buildStatColumn(
-                label: 'Drills',
-                value: '${Fmt.toInt(_overview['tasks'])}',
-                sublabel: 'To do',
-                valueColor: Colors.black87,
-              ),
-              Container(
-                width: 1,
-                height: 50,
-                color: Colors.grey.shade300,
-              ),
-              _buildStatColumn(
-                label: 'Absents',
-                value: '${Fmt.toInt(_overview['absents'])}',
-                sublabel: 'Total',
-                valueColor: Colors.red,
-              ),
-              Container(
-                width: 1,
-                height: 50,
-                color: Colors.grey.shade300,
-              ),
-              _buildStatColumn(
-                label: 'Late',
-                value: '${Fmt.toInt(_overview['late'])}',
-                sublabel: 'Total',
-                valueColor: Colors.orange.shade700,
-              ),
+              _buildAttendanceStat('Present', present, AppColors.success),
+              _buildAttendanceStat('Late', late, AppColors.warning),
+              _buildAttendanceStat('Absent', absent, AppColors.error),
+              _buildAttendanceStat('Excused', excused, AppColors.blue),
             ],
           ),
         ),
@@ -236,38 +199,74 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
     );
   }
 
-  Widget _buildStatColumn({
+  Widget _buildHighlightCard({
+    required IconData icon,
+    required Color color,
     required String label,
     required String value,
-    required String sublabel,
-    required Color valueColor,
   }) {
+    return Expanded(
+      child: AppCard(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+        child: Row(
+          children: [
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    value,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAttendanceStat(String label, int value, Color color) {
     return Expanded(
       child: Column(
         children: [
           Text(
+            '$value',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
             label,
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: valueColor,
-            ),
-          ),
-          const SizedBox(height: 2),
-          Text(
-            sublabel,
-            style: TextStyle(
-              fontSize: 11,
-              color: Colors.grey.shade500,
-            ),
+            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
           ),
         ],
       ),
@@ -278,24 +277,22 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
-          'Announcements',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            color: Colors.black87,
-          ),
+        SectionHeader(
+          title: 'Announcements',
+          actionLabel: 'View all',
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const RotcAnnouncementScreen(),
+              ),
+            ).then((_) => _load());
+          },
         ),
         const SizedBox(height: 12),
         if (announcements.isEmpty)
-          Container(
-            height: 130,
-            decoration: BoxDecoration(
-              color: const Color(0xFFFFF8F0),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0xFFFFE8D0)),
-            ),
-            child: const AsyncView(
+          const AppCard(
+            child: AsyncView(
               state: LoadState.empty,
               compact: true,
               emptyText: 'No announcements yet.',
@@ -305,7 +302,7 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
           )
         else ...[
           SizedBox(
-            height: 130,
+            height: 132,
             child: PageView.builder(
               itemCount: announcements.length,
               onPageChanged: (index) {
@@ -313,22 +310,24 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
               },
               itemBuilder: (context, index) {
                 final announcement = announcements[index];
-                return Container(
-                  margin: const EdgeInsets.only(right: 12),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFFFF8F0),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFFFFE8D0)),
-                  ),
+                return AppCard(
+                  margin: const EdgeInsets.only(right: 10),
                   child: Row(
                     children: [
-                      const Icon(
-                        Icons.campaign,
-                        color: AppColors.primaryMaroon,
-                        size: 40,
+                      Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: AppColors.goldLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: const Icon(
+                          Icons.campaign,
+                          color: AppColors.primaryMaroon,
+                          size: 24,
+                        ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,41 +338,23 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
                               maxLines: 2,
                               overflow: TextOverflow.ellipsis,
                               style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textPrimary,
                               ),
                             ),
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Text(
-                                  Fmt.date(announcement['date']),
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 8),
-                                  child: Container(
-                                    width: 1,
-                                    height: 12,
-                                    color: Colors.grey.shade400,
-                                  ),
-                                ),
-                                Expanded(
-                                  child: Text(
-                                    Fmt.str(announcement['location'], 'MARSU'),
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: Colors.grey.shade600,
-                                    ),
-                                  ),
-                                ),
-                              ],
+                            const SizedBox(height: 6),
+                            Text(
+                              [
+                                Fmt.date(announcement['date']),
+                                Fmt.str(announcement['location'], 'MARSU'),
+                              ].where((s) => s.isNotEmpty).join(' • '),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: const TextStyle(
+                                fontSize: 12,
+                                color: AppColors.textSecondary,
+                              ),
                             ),
                           ],
                         ),
@@ -397,7 +378,7 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
                   shape: BoxShape.circle,
                   color: index == _currentAnnouncementPage
                       ? AppColors.primaryMaroon
-                      : Colors.grey.shade400,
+                      : AppColors.border,
                 ),
               ),
             ),
@@ -408,48 +389,29 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
   }
 
   Widget _buildToDoSection() {
+    final items = _toDo.take(3).toList();
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Text(
-              'To Do Activities',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
+        SectionHeader(
+          title: 'Pending Activities',
+          actionLabel: 'View all',
+          onAction: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const RotcActivitiesModulesScreen(),
               ),
-            ),
-            GestureDetector(
-              onTap: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const RotcActivitiesModulesScreen(),
-                  ),
-                ).then((_) => _load());
-              },
-              child: const Text(
-                'View All',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.primaryMaroon,
-                ),
-              ),
-            ),
-          ],
+            ).then((_) => _load());
+          },
         ),
         const SizedBox(height: 12),
-        Container(
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.grey.shade200),
-          ),
-          child: _toDo.isEmpty
+        AppCard(
+          padding: items.isEmpty
+              ? const EdgeInsets.symmetric(vertical: 8)
+              : EdgeInsets.zero,
+          child: items.isEmpty
               ? const AsyncView(
                   state: LoadState.empty,
                   compact: true,
@@ -459,15 +421,10 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
                 )
               : Column(
                   children: [
-                    for (var i = 0; i < _toDo.take(3).length; i++) ...[
-                      _buildToDoItem(_toDo[i]),
-                      if (i < _toDo.take(3).length - 1)
-                        Divider(
-                          height: 1,
-                          color: Colors.grey.shade100,
-                          indent: 16,
-                          endIndent: 16,
-                        ),
+                    for (var i = 0; i < items.length; i++) ...[
+                      _buildToDoItem(items[i]),
+                      if (i < items.length - 1)
+                        const Divider(height: 1, indent: 16, endIndent: 16),
                     ],
                   ],
                 ),
@@ -477,6 +434,8 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
   }
 
   Widget _buildToDoItem(Map<String, dynamic> task) {
+    final status = Fmt.str(task['status'], 'To Do');
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
       child: Row(
@@ -485,12 +444,12 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFE3F2FD),
+              color: AppColors.blueLight,
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Icon(
               Icons.menu_book,
-              color: Colors.blue,
+              color: AppColors.blue,
               size: 22,
             ),
           ),
@@ -506,20 +465,31 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
                   style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
-                const SizedBox(height: 2),
-                Text(
-                  'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade500,
-                  ),
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    StatusBadge(status, dense: true),
+                  ],
                 ),
               ],
             ),
           ),
+          const SizedBox(width: 10),
           ElevatedButton(
             onPressed: () {
               Navigator.push(
@@ -530,26 +500,118 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
               ).then((_) => _load());
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryMaroon,
-              foregroundColor: Colors.white,
-              elevation: 0,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
               minimumSize: Size.zero,
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(20),
-              ),
+              textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
             ),
-            child: const Text(
-              'Proceed',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-              ),
+            child: const Text('Proceed'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUpcomingActivitiesSection() {
+    final items = _upcomingActivities.take(3).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Upcoming Activities'),
+        const SizedBox(height: 12),
+        AppCard(
+          padding: EdgeInsets.zero,
+          child: Column(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                _buildActivityRow(items[i]),
+                if (i < items.length - 1)
+                  const Divider(height: 1, indent: 16, endIndent: 16),
+              ],
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildActivityRow(Map<String, dynamic> activity) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.orangeLight,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: const Icon(
+              Icons.event_outlined,
+              color: AppColors.orange,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(activity['title'], 'Activity'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  [
+                    Fmt.date(activity['date']),
+                    Fmt.str(activity['location']),
+                  ].where((s) => s.isNotEmpty && s != '—').join(' • '),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildQuickActionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionHeader(title: 'Quick Actions'),
+        const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const RotcScanQrScreen(),
+                ),
+              ).then((_) => _load());
+            },
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan Attendance QR'),
+          ),
+        ),
+      ],
     );
   }
 }

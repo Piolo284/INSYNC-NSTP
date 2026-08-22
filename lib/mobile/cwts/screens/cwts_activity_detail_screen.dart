@@ -4,7 +4,9 @@ import '../../../core/config/app_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/status_badge.dart';
 
 /// Module/assignment detail with the trainee's own submission.
 ///
@@ -15,7 +17,6 @@ class CwtsActivityDetailScreen extends StatefulWidget {
   final String title;
   final String dueDate;
   final String status;
-  final Color statusColor;
 
   const CwtsActivityDetailScreen({
     super.key,
@@ -23,7 +24,6 @@ class CwtsActivityDetailScreen extends StatefulWidget {
     required this.title,
     required this.dueDate,
     required this.status,
-    required this.statusColor,
   });
 
   @override
@@ -138,18 +138,18 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
           'Activity Details',
           style: TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
@@ -168,25 +168,19 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Activity Header Card
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
-                      ),
+                    AppCard(
                       child: Row(
                         children: [
                           Container(
                             width: 48,
                             height: 48,
                             decoration: BoxDecoration(
-                              color: const Color(0xFFE3F2FD),
+                              color: AppColors.blueLight,
                               borderRadius: BorderRadius.circular(10),
                             ),
                             child: const Icon(
                               Icons.menu_book,
-                              color: Colors.blue,
+                              color: AppColors.blue,
                               size: 24,
                             ),
                           ),
@@ -200,7 +194,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                                   style: const TextStyle(
                                     fontSize: 15,
                                     fontWeight: FontWeight.bold,
-                                    color: Colors.black87,
+                                    color: AppColors.textPrimary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -208,22 +202,16 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                                   _module['deadline'] != null
                                       ? Fmt.dateTime(_module['deadline'])
                                       : widget.dueDate,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 12,
-                                    color: Colors.grey.shade500,
+                                    color: AppColors.textSecondary,
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          Text(
-                            _status,
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: _statusColor(_status),
-                            ),
-                          ),
+                          const SizedBox(width: 8),
+                          StatusBadge(_status),
                         ],
                       ),
                     ),
@@ -236,37 +224,23 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     ],
 
                     // Description
-                    const Text(
-                      'Description',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    const SectionHeader(title: 'Description'),
                     const SizedBox(height: 8),
                     Text(
                       Fmt.str(
                         _module['description'],
                         'No description was provided for this activity.',
                       ),
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 13,
-                        color: Colors.grey.shade600,
+                        color: AppColors.textSecondary,
                         height: 1.5,
                       ),
                     ),
                     const SizedBox(height: 20),
 
                     // Instructions
-                    const Text(
-                      'Instructions',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    const SectionHeader(title: 'Instructions'),
                     const SizedBox(height: 10),
                     ..._instructions().map(
                       (line) => Padding(
@@ -277,27 +251,13 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     const SizedBox(height: 12),
 
                     // Attachment
-                    const Text(
-                      'Attachment',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    const SectionHeader(title: 'Attachment'),
                     const SizedBox(height: 10),
                     _buildAttachmentCard(),
                     const SizedBox(height: 20),
 
                     // My Submission
-                    const Text(
-                      'My Submission',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black87,
-                      ),
-                    ),
+                    const SectionHeader(title: 'My Submission'),
                     const SizedBox(height: 10),
                     _buildSubmissionBox(),
                     const SizedBox(height: 16),
@@ -307,26 +267,8 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                       controller: _commentController,
                       enabled: !_isGraded,
                       maxLines: 3,
-                      decoration: InputDecoration(
+                      decoration: const InputDecoration(
                         hintText: 'Add a comment (optional)',
-                        hintStyle: TextStyle(
-                          fontSize: 13,
-                          color: Colors.grey.shade400,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(color: Colors.grey.shade300),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: const BorderSide(
-                              color: AppColors.primaryMaroon, width: 1.5),
-                        ),
-                        contentPadding: const EdgeInsets.all(14),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -342,15 +284,6 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                 height: 50,
                 child: ElevatedButton(
                   onPressed: (_isSubmitting || _isGraded) ? null : _turnIn,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: Colors.white,
-                    disabledBackgroundColor: Colors.grey.shade300,
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
                   child: _isSubmitting
                       ? const SizedBox(
                           width: 20,
@@ -358,7 +291,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                           child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(Colors.white),
+                                AlwaysStoppedAnimation<Color>(AppColors.white),
                           ),
                         )
                       : Text(
@@ -367,10 +300,6 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                               : _status == 'Submitted'
                                   ? 'Re-submit'
                                   : 'Turn In',
-                          style: const TextStyle(
-                            fontSize: 15,
-                            fontWeight: FontWeight.w600,
-                          ),
                         ),
                 ),
               ),
@@ -392,19 +321,6 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     ];
   }
 
-  Color _statusColor(String status) {
-    switch (status) {
-      case 'Graded':
-        return Colors.green;
-      case 'Submitted':
-        return Colors.amber.shade700;
-      case 'Missing':
-        return Colors.red;
-      default:
-        return widget.statusColor;
-    }
-  }
-
   Widget _buildGradeCard() {
     final score = Fmt.toDouble(_submission?['score']);
     final total = Fmt.toDouble(_submission?['totalPoints'], 100);
@@ -414,53 +330,52 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.green.shade200),
+        color: AppColors.greenLight,
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.check_circle,
-                  color: Colors.green.shade700, size: 20),
+              const Icon(Icons.check_circle, color: AppColors.success, size: 20),
               const SizedBox(width: 8),
-              Text(
+              const Text(
                 'Score',
                 style: TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w600,
-                  color: Colors.green.shade800,
+                  color: AppColors.success,
                 ),
               ),
               const Spacer(),
               Text(
                 '${score.toStringAsFixed(0)} / ${total.toStringAsFixed(0)}',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.green.shade800,
+                  color: AppColors.success,
                 ),
               ),
             ],
           ),
           if (feedback.isNotEmpty) ...[
             const SizedBox(height: 10),
-            Text(
+            const Text(
               'Feedback',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
-                color: Colors.green.shade800,
+                color: AppColors.success,
               ),
             ),
             const SizedBox(height: 4),
             Text(
               feedback,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
-                color: Colors.grey.shade800,
+                color: AppColors.textPrimary,
                 height: 1.4,
               ),
             ),
@@ -474,25 +389,20 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     final fileUrl = Fmt.str(_module['fileUrl']);
     final fileName = Fmt.str(_module['fileName'], 'No attachment');
 
-    return Container(
+    return AppCard(
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey.shade200),
-      ),
       child: Row(
         children: [
           Container(
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFFFFF3E0),
+              color: AppColors.orangeLight,
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Icon(
               Icons.description_outlined,
-              color: Colors.orange,
+              color: AppColors.orange,
               size: 22,
             ),
           ),
@@ -508,7 +418,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                   style: const TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black87,
+                    color: AppColors.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 2),
@@ -516,9 +426,9 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                   fileUrl.isEmpty
                       ? 'Nothing attached for this activity'
                       : Fmt.fileSize(_module['fileSize']),
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 11,
-                    color: Colors.grey.shade500,
+                    color: AppColors.textSecondary,
                   ),
                 ),
               ],
@@ -528,7 +438,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
             icon: Icon(
               Icons.download_outlined,
               color: fileUrl.isEmpty
-                  ? Colors.grey.shade400
+                  ? AppColors.textSecondary
                   : AppColors.primaryMaroon,
               size: 22,
             ),
@@ -557,23 +467,23 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 30),
           decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: Colors.grey.shade300),
+            color: AppColors.white,
+            borderRadius: BorderRadius.circular(AppColors.radiusSm),
+            border: Border.all(color: AppColors.border),
           ),
           child: Column(
             children: [
-              Icon(
+              const Icon(
                 Icons.cloud_upload_outlined,
-                color: Colors.grey.shade500,
+                color: AppColors.textSecondary,
                 size: 32,
               ),
               const SizedBox(height: 8),
-              Text(
+              const Text(
                 'Tap to upload or browse',
                 style: TextStyle(
                   fontSize: 13,
-                  color: Colors.grey.shade500,
+                  color: AppColors.textSecondary,
                 ),
               ),
             ],
@@ -592,9 +502,9 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: Colors.grey.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.grey.shade300),
+          color: AppColors.grey50,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+          border: Border.all(color: AppColors.border),
         ),
         child: Row(
           children: [
@@ -602,12 +512,12 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.red.shade50,
+                color: AppColors.errorLight,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Icon(
+              child: const Icon(
                 Icons.picture_as_pdf,
-                color: Colors.red.shade600,
+                color: AppColors.error,
                 size: 20,
               ),
             ),
@@ -623,7 +533,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     style: const TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w600,
-                      color: Colors.black87,
+                      color: AppColors.textPrimary,
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -631,17 +541,17 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     picked != null
                         ? '${Fmt.fileSize(size)} • ready to submit'
                         : '${Fmt.fileSize(size)} • submitted ${Fmt.dateTimeShort(submittedAt, fallback: '')}',
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 11,
-                      color: Colors.grey.shade500,
+                      color: AppColors.textSecondary,
                     ),
                   ),
                 ],
               ),
             ),
             if (!_isGraded)
-              Icon(Icons.edit_outlined,
-                  size: 18, color: Colors.grey.shade600),
+              const Icon(Icons.edit_outlined,
+                  size: 18, color: AppColors.textSecondary),
           ],
         ),
       ),
@@ -656,8 +566,8 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
           margin: const EdgeInsets.only(top: 6),
           width: 5,
           height: 5,
-          decoration: BoxDecoration(
-            color: Colors.grey.shade600,
+          decoration: const BoxDecoration(
+            color: AppColors.textSecondary,
             shape: BoxShape.circle,
           ),
         ),
@@ -665,9 +575,9 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
         Expanded(
           child: Text(
             text,
-            style: TextStyle(
+            style: const TextStyle(
               fontSize: 13,
-              color: Colors.grey.shade600,
+              color: AppColors.textSecondary,
               height: 1.4,
             ),
           ),

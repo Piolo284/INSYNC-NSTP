@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import '/../../../core/constants/app_colors.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/async_view.dart';
 
 class CwtsAboutScreen extends StatelessWidget {
   /// Which NSTP component this "About" screen describes. Shared between the
@@ -8,174 +10,157 @@ class CwtsAboutScreen extends StatelessWidget {
 
   const CwtsAboutScreen({super.key, this.program = 'CWTS'});
 
+  void _notYetAvailable(BuildContext context, String feature) {
+    AppSnack.info(context, '$feature is not available yet.');
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
         elevation: 0,
         centerTitle: true,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios,
-            color: Colors.white,
-            size: 20,
-          ),
+          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
           'About $program Portal',
           style: const TextStyle(
-            color: Colors.white,
+            color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),
         ),
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.symmetric(horizontal: 24),
+        padding: const EdgeInsets.fromLTRB(20, 24, 20, 30),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const SizedBox(height: 30),
-            // Logo
-            Image.asset(
-              'assets/images/marsu_logo.png',
-              width: 120,
-              height: 120,
-              fit: BoxFit.cover,
-              errorBuilder: (_, __, ___) => Container(
-                width: 120,
-                height: 120,
-                decoration: BoxDecoration(
-                  color: AppColors.primaryMaroon.withValues(alpha: 0.1),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(
-                  Icons.school,
-                  color: AppColors.primaryMaroon,
-                  size: 60,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            // Title
-            Text(
-              '$program Student Portal',
-              style: const TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(height: 4),
-            // Version
-            Text(
-              'Version 1.0.0',
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade500,
-              ),
-            ),
-            const SizedBox(height: 20),
-            // Description
-            Text(
-              program == 'ROTC'
-                  ? 'The ROTC Portal is a platform designed to help cadets, officers and admins to manage Reserve Officers\' Training Corps activities efficiently.'
-                  : 'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 13,
-                color: Colors.grey.shade600,
-                height: 1.5,
-              ),
-            ),
-            const SizedBox(height: 30),
-            // Developer Info
-            Align(
-              alignment: Alignment.centerLeft,
+            Center(
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Developer',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.grey.shade800,
+                  Image.asset(
+                    'assets/images/marsu_logo.png',
+                    width: 100,
+                    height: 100,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => Container(
+                      width: 100,
+                      height: 100,
+                      decoration: BoxDecoration(
+                        color: AppColors.goldLight,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.school,
+                        color: AppColors.primaryMaroon,
+                        size: 50,
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 14),
                   Text(
-                    'Marinduque State University',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: Colors.grey.shade600,
+                    '$program Student Portal',
+                    style: const TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
                     ),
                   ),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Version 1.0.0',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                  const SizedBox(height: 14),
                   Text(
-                    'Information Computing Sciences Unit',
-                    style: TextStyle(
+                    program == 'ROTC'
+                        ? 'The ROTC Portal is a platform designed to help cadets, officers and admins to manage Reserve Officers\' Training Corps activities efficiently.'
+                        : 'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
                       fontSize: 13,
-                      color: Colors.grey.shade600,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            Divider(color: Colors.grey.shade200),
-            // Privacy Policy
-            _buildLinkItem(
-              label: 'Privacy Policy',
-              onTap: () {
-                // TODO: Open Privacy Policy
-              },
+            const SizedBox(height: 28),
+            const SectionHeader(title: 'Developer'),
+            const SizedBox(height: 10),
+            const AppCard(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Marinduque State University',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  SizedBox(height: 4),
+                  Text(
+                    'Information Computing Sciences Unit',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
             ),
-            Divider(color: Colors.grey.shade200),
-            // Terms and Conditions
-            _buildLinkItem(
-              label: 'Terms and Conditions',
-              onTap: () {
-                // TODO: Open Terms and Conditions
-              },
+            const SizedBox(height: 24),
+            const SectionHeader(title: 'Legal'),
+            const SizedBox(height: 10),
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _linkTile(
+                    label: 'Privacy Policy',
+                    onTap: () => _notYetAvailable(context, 'The privacy policy'),
+                  ),
+                  _divider(),
+                  _linkTile(
+                    label: 'Terms and Conditions',
+                    onTap: () => _notYetAvailable(context, 'Terms and conditions'),
+                  ),
+                  _divider(),
+                  _linkTile(
+                    label: 'Licenses',
+                    onTap: () => _notYetAvailable(context, 'The licenses page'),
+                  ),
+                ],
+              ),
             ),
-            Divider(color: Colors.grey.shade200),
-            // Licenses
-            _buildLinkItem(
-              label: 'Licenses',
-              onTap: () {
-                // TODO: Open Licenses
-              },
-            ),
-            Divider(color: Colors.grey.shade200),
-            const SizedBox(height: 30),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildLinkItem({
-    required String label,
-    required VoidCallback onTap,
-  }) {
+  Widget _linkTile({required String label, required VoidCallback onTap}) {
     return ListTile(
       onTap: onTap,
-      contentPadding: EdgeInsets.zero,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
       title: Text(
         label,
         style: const TextStyle(
           fontSize: 14,
           fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          color: AppColors.textPrimary,
         ),
       ),
-      trailing: Icon(
-        Icons.arrow_forward_ios,
-        color: Colors.grey.shade400,
-        size: 14,
-      ),
+      trailing: const Icon(Icons.arrow_forward_ios, color: AppColors.textSecondary, size: 14),
     );
+  }
+
+  Widget _divider() {
+    return const Divider(height: 1, color: AppColors.border, indent: 16, endIndent: 16);
   }
 }
