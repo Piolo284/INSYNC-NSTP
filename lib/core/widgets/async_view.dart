@@ -25,6 +25,13 @@ class AsyncData<T> {
 String describeError(Object error) {
   if (error is ApiException) {
     if (error.isNetworkError) return 'Unable to connect to server.';
+    // The backend already crafts a specific, correct message per situation —
+    // "Incorrect ID/email or password." on a failed login, "This account is
+    // registered as a cadet..." on a role mismatch, "Your session has
+    // expired..." from the token-verification middleware itself, etc. Prefer
+    // that over a blanket per-status-code string, which used to show
+    // "session expired" even for a plain wrong-password login attempt.
+    if (error.message.trim().isNotEmpty) return error.message;
     if (error.statusCode == 401) {
       return 'Your session has expired. Please log in again.';
     }
@@ -35,7 +42,7 @@ String describeError(Object error) {
     if (error.statusCode != null && error.statusCode! >= 500) {
       return 'Something went wrong. Please try again.';
     }
-    return error.message;
+    return 'Something went wrong. Please try again.';
   }
   return 'Something went wrong. Please try again.';
 }
