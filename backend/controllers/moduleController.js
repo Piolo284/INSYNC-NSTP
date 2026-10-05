@@ -1,11 +1,13 @@
 const ModuleModel = require('../models/Module');
 const Submission = require('../models/Submission');
+const PrivateComment = require('../models/PrivateComment');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { PROGRAMS, TRAINEE_ROLES } = require('../config/constants');
 const { notifyUsers } = require('../utils/notify');
+const { parseDeadline, isPastDeadline } = require('../utils/deadline');
 const {
   assertProgramAccess,
   scopeFilterToProgram,
@@ -102,6 +104,7 @@ exports.list = asyncHandler(async (req, res) => {
           : 0,
         mySubmission: own || null,
         myStatus,
+        isClosed: isPastDeadline(m, now),
       };
     }),
   });
@@ -116,9 +119,16 @@ exports.get = asyncHandler(async (req, res) => {
   const mine = await Submission.findOne({ moduleId: module._id, studentId: req.user._id });
   const submittedCount = await Submission.countDocuments({ moduleId: module._id });
 
+  // Same status rule as the list. `isClosed` tells the trainee app to lock
+  // Turn In once the due date has passed (enforced in submissionController).
+  const isClosed = isPastDeadline(module);
+  let myStatus = 'To Do';
+  if (mine) myStatus = mine.status;
+  else if (isClosed) myStatus = 'Missing';
+
   res.json({
     success: true,
-    data: { ...module.toObject(), mySubmission: mine, submittedCount },
+    data: { ...module.toObject(), mySubmission: mine, myStatus, isClosed, submittedCount },
   });
 });
 
@@ -140,7 +150,7 @@ exports.create = asyncHandler(async (req, res) => {
     fileName: file ? file.originalname : req.body.fileName || '',
     fileSize: file ? file.size : Number(req.body.fileSize) || 0,
     instructions: parseList(req.body.instructions) || [],
-    deadline: req.body.deadline ? new Date(req.body.deadline) : null,
+    deadline: parseDeadline(req.body.deadline),
     totalPoints: Number(req.body.totalPoints) || 100,
     rubrics: parseJsonish(req.body.rubrics, []),
     status: req.body.status || 'Open',
@@ -182,7 +192,7 @@ exports.update = asyncHandler(async (req, res) => {
   });
 
   if (req.body.deadline !== undefined) {
-    module.deadline = req.body.deadline ? new Date(req.body.deadline) : null;
+    module.deadline = parseDeadline(req.body.deadline);
   }
   if (req.body.totalPoints !== undefined) {
     module.totalPoints = Number(req.body.totalPoints) || module.totalPoints;
@@ -217,6 +227,7 @@ exports.remove = asyncHandler(async (req, res) => {
   assertProgramAccess(req.user, module.program);
 
   await Submission.deleteMany({ moduleId: module._id });
+  await PrivateComment.deleteMany({ moduleId: module._id });
   await module.deleteOne();
 
   res.json({ success: true, message: 'Module and its submissions deleted.' });

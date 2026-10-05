@@ -7,6 +7,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/attachment_preview_screen.dart';
+import '../../../core/widgets/private_comments.dart';
 import '../../../core/widgets/status_badge.dart';
 
 /// Module/assignment detail with the trainee's own submission.
@@ -81,12 +82,28 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     }
   }
 
-  String get _status => Fmt.str(_submission?['status'], widget.status);
+  String get _status => Fmt.str(
+        _submission?['status'],
+        Fmt.str(_module['myStatus'], widget.status),
+      );
   bool get _isGraded => _status == 'Graded';
 
+  /// Due date has passed — the server refuses any turn-in/re-submit now.
+  bool get _isClosed => _module['isClosed'] == true;
+  bool get _isLocked => _isGraded || _isClosed;
+
+  void _explainLocked() {
+    AppSnack.info(
+      context,
+      _isGraded
+          ? 'This activity is already graded.'
+          : 'The due date has passed. Use the private comments to reach your officer.',
+    );
+  }
+
   Future<void> _pickFile() async {
-    if (_isGraded) {
-      AppSnack.info(context, 'This activity is already graded.');
+    if (_isLocked) {
+      _explainLocked();
       return;
     }
     try {
@@ -107,8 +124,8 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
   }
 
   Future<void> _turnIn() async {
-    if (_isGraded) {
-      AppSnack.info(context, 'This activity is already graded.');
+    if (_isLocked) {
+      _explainLocked();
       return;
     }
     if (_pickedFile == null &&
@@ -224,6 +241,11 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     ),
                     const SizedBox(height: 24),
 
+                    if (_isClosed && !_isGraded) ...[
+                      _buildClosedBanner(),
+                      const SizedBox(height: 24),
+                    ],
+
                     // Score + feedback appear once the officer has graded it.
                     if (_isGraded) ...[
                       _buildGradeCard(),
@@ -269,15 +291,21 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     _buildSubmissionBox(),
                     const SizedBox(height: 16),
 
-                    // Optional comment
+                    // Optional note sent along with the submission
                     TextField(
                       controller: _commentController,
-                      enabled: !_isGraded,
+                      enabled: !_isLocked,
                       maxLines: 3,
                       decoration: const InputDecoration(
-                        hintText: 'Add a comment (optional)',
+                        hintText: 'Add a note with your submission (optional)',
                       ),
                     ),
+                    const SizedBox(height: 24),
+                    const Divider(color: AppColors.border),
+                    const SizedBox(height: 16),
+
+                    // Private comments stay open even after the due date.
+                    PrivateCommentsSection(moduleId: widget.moduleId),
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -290,7 +318,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                 width: double.infinity,
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: (_isSubmitting || _isGraded) ? null : _turnIn,
+                  onPressed: (_isSubmitting || _isLocked) ? null : _turnIn,
                   child: _isSubmitting
                       ? const SizedBox(
                           width: 20,
@@ -304,9 +332,11 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                       : Text(
                           _isGraded
                               ? 'Graded'
-                              : _status == 'Submitted'
-                                  ? 'Re-submit'
-                                  : 'Turn In',
+                              : _isClosed
+                                  ? (_submission == null ? 'Missing' : 'Turned In')
+                                  : _status == 'Submitted'
+                                      ? 'Re-submit'
+                                      : 'Turn In',
                         ),
                 ),
               ),
@@ -326,6 +356,49 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       'Use your own words',
       'Submit before the deadline',
     ];
+  }
+
+  Widget _buildClosedBanner() {
+    final missing = _submission == null;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: missing ? AppColors.errorLight : AppColors.grey50,
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        border: Border.all(
+          color: missing
+              ? AppColors.error.withValues(alpha: 0.3)
+              : AppColors.border,
+        ),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            missing ? Icons.error_outline : Icons.lock_clock_outlined,
+            color: missing ? AppColors.error : AppColors.textSecondary,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              missing
+                  ? 'The due date has passed and nothing was turned in, so this is '
+                      'marked Missing. It can no longer be turned in — use the '
+                      'private comments below to reach your officer.'
+                  : 'The due date has passed. Your submission is locked in and can '
+                      'no longer be changed.',
+              style: TextStyle(
+                fontSize: 12.5,
+                height: 1.4,
+                color: missing ? AppColors.error : AppColors.textSecondary,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildGradeCard() {
@@ -497,7 +570,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     final submittedAt = _submission?['submittedAt'];
 
     return GestureDetector(
-      onTap: _isGraded ? null : _pickFile,
+      onTap: _isLocked ? null : _pickFile,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
@@ -549,7 +622,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                 ],
               ),
             ),
-            if (!_isGraded)
+            if (!_isLocked)
               const Icon(Icons.edit_outlined,
                   size: 18, color: AppColors.textSecondary),
           ],

@@ -7,6 +7,7 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/private_comments.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
@@ -34,13 +35,16 @@ class _CwtsOfficerAssignmentDetailScreenState
   Map<String, dynamic> _module = const {};
   List<Map<String, dynamic>> _submissions = const [];
 
+  /// Students with a private comment thread on this assignment.
+  List<Map<String, dynamic>> _threads = const [];
+
   /// Set when the module is edited or deleted, so the list refreshes on pop.
   bool _changed = false;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _load();
   }
 
@@ -60,12 +64,14 @@ class _CwtsOfficerAssignmentDetailScreenState
       final results = await Future.wait([
         ModuleService.instance.get(widget.moduleId),
         ModuleService.instance.submissions(widget.moduleId),
+        ModuleService.instance.privateCommentThreads(widget.moduleId),
       ]);
 
       if (!mounted) return;
       setState(() {
         _module = results[0] as Map<String, dynamic>;
         _submissions = results[1] as List<Map<String, dynamic>>;
+        _threads = results[2] as List<Map<String, dynamic>>;
         _state = LoadState.ready;
       });
     } catch (error) {
@@ -309,6 +315,7 @@ class _CwtsOfficerAssignmentDetailScreenState
               tabs: [
                 Tab(text: 'Graded (${_graded.length})'),
                 Tab(text: 'To Grade (${_toGrade.length})'),
+                Tab(text: 'Comments (${_threads.length})'),
               ],
             ),
             const Divider(height: 1),
@@ -321,12 +328,116 @@ class _CwtsOfficerAssignmentDetailScreenState
                   _buildStudentList(_graded, 'No graded submissions yet.'),
                   _buildStudentList(
                       _toGrade, 'Everything submitted has been graded.'),
+                  _buildThreadList(),
                 ],
               ),
             ),
           ],
         ),
       ),
+      ),
+    );
+  }
+
+  /// Students who wrote private comments on this assignment; tap to reply.
+  Widget _buildThreadList() {
+    if (_threads.isEmpty) {
+      return AsyncView(
+        state: LoadState.empty,
+        emptyText: 'No private comments from students yet.',
+        emptyIcon: Icons.forum_outlined,
+        child: const SizedBox.shrink(),
+      );
+    }
+
+    return RefreshIndicator(
+      color: AppColors.primaryMaroon,
+      onRefresh: _load,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
+        itemCount: _threads.length,
+        separatorBuilder: (_, _) => const Divider(color: AppColors.border),
+        itemBuilder: (context, index) {
+          final t = _threads[index];
+          final student = (t['student'] is Map)
+              ? (t['student'] as Map).cast<String, dynamic>()
+              : const <String, dynamic>{};
+          final awaitingReply = t['awaitingReply'] == true;
+
+          return GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => PrivateCommentsScreen(
+                    moduleId: widget.moduleId,
+                    studentId: Fmt.str(student['_id']),
+                    studentName: Fmt.str(student['name'], 'Trainee'),
+                    moduleTitle: Fmt.str(_module['title'], 'Assignment'),
+                  ),
+                ),
+              ).then((_) => _load());
+            },
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              child: Row(
+                children: [
+                  UserAvatar(
+                    imagePath: Fmt.str(student['profileImage']),
+                    radius: 20,
+                    iconSize: 18,
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          Fmt.str(student['name'], 'Trainee'),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          Fmt.str(t['lastMessage']),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        Fmt.dateTimeShort(t['lastAt'], fallback: ''),
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      if (awaitingReply) ...[
+                        const SizedBox(height: 4),
+                        const StatusBadge('Needs Reply', dense: true),
+                      ],
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

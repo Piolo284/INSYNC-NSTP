@@ -33,6 +33,11 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
 
   int _unreadNotifications = 0;
 
+  /// The cadet's company — empty until an officer adds them to their handled
+  /// cadets. Refreshed from the dashboard response so an assignment shows up
+  /// on pull-to-refresh without logging out again.
+  String _company = Session.instance.brigade;
+
   @override
   void initState() {
     super.initState();
@@ -48,7 +53,9 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
     try {
       final data = await DashboardService.instance.cadet();
       if (!mounted) return;
+      final cadet = (data['cadet'] as Map?)?.cast<String, dynamic>();
       setState(() {
+        if (cadet != null) _company = Fmt.str(cadet['company']);
         _overview = (data['overview'] as Map?)?.cast<String, dynamic>() ?? {};
         announcements =
             (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>();
@@ -87,7 +94,7 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brigade = Session.instance.brigade;
+    final unassigned = _company.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
@@ -99,10 +106,11 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
           icon: const Icon(Icons.menu, color: AppColors.white),
           onPressed: widget.onOpenDrawer,
         ),
+        // No company until an officer adds the cadet — shown dimmed (70%).
         title: Text(
-          brigade.isEmpty ? 'Brigade Katihan' : brigade,
-          style: const TextStyle(
-            color: AppColors.white,
+          unassigned ? 'Not assigned yet' : _company,
+          style: TextStyle(
+            color: AppColors.white.withValues(alpha: unassigned ? 0.7 : 1),
             fontSize: 18,
             fontWeight: FontWeight.w600,
           ),

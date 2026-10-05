@@ -7,7 +7,21 @@
         {
             "name": "marsu_nstp_portal2",
             "request": "launch",
-            "type": "dart"
+            "type": "dart",
+            // Reuse one Edge profile instead of a brand-new temp one per run.
+            // A fresh profile takes Edge so long to start on this PC that
+            // Flutter gives up ("Failed to launch browser after 3 tries").
+            // Ignored when running on a non-web device.
+            "args": ["--web-browser-flag=--user-data-dir=${env:LOCALAPPDATA}\\flutter_edge_profile"]
+        },
+        {
+            // Fallback when Flutter can't auto-launch Edge ("Failed to launch
+            // browser"): serves the app, then open http://localhost:8080 yourself.
+            "name": "marsu_nstp_portal2 (web-server :8080)",
+            "request": "launch",
+            "type": "dart",
+            "deviceId": "web-server",
+            "args": ["--web-port", "8080"]
         },
         {
             "name": "marsu_nstp_portal2 (profile mode)",

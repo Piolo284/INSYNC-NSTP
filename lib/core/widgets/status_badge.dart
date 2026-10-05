@@ -31,6 +31,7 @@ class StatusStyle {
       case 'warning':
       case 'pending':
       case 'pending review':
+      case 'needs reply':
       case 'under review':
       case 'in progress':
       case 'awaiting approval':

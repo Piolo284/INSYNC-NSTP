@@ -108,4 +108,34 @@ class ModuleService {
     });
     return ApiService.listOf(response);
   }
+
+  // ---- Private comments (trainee <-> officer, per module) ----
+
+  /// One trainee's private thread, oldest first. Trainees omit [studentId]
+  /// (they only ever get their own); staff must pass the trainee's user id.
+  Future<List<Map<String, dynamic>>> privateComments(String moduleId,
+      {String? studentId}) async {
+    final response = await _api.get('/modules/$moduleId/comments', query: {
+      'studentId': studentId,
+    });
+    return ApiService.listOf(response);
+  }
+
+  Future<Map<String, dynamic>> addPrivateComment(
+    String moduleId,
+    String message, {
+    String? studentId,
+  }) async {
+    final response = await _api.post('/modules/$moduleId/comments', body: {
+      'message': message,
+      'studentId': ?studentId,
+    });
+    return ApiService.mapOf(response);
+  }
+
+  /// Staff: every trainee with a private thread on this module.
+  Future<List<Map<String, dynamic>>> privateCommentThreads(String moduleId) async {
+    final response = await _api.get('/modules/$moduleId/comment-threads');
+    return ApiService.listOf(response);
+  }
 }

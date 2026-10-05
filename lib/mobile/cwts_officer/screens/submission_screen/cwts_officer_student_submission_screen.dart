@@ -7,6 +7,7 @@ import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/private_comments.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
@@ -195,7 +196,7 @@ class _CwtsOfficerStudentSubmissionScreenState
               const SizedBox(height: 24),
 
               // ===== STUDENT COMMENT =====
-              const SectionHeader(title: 'Student Comment (Optional)'),
+              const SectionHeader(title: 'Note with Submission'),
               const SizedBox(height: 8),
               Container(
                 width: double.infinity,
@@ -286,6 +287,16 @@ class _CwtsOfficerStudentSubmissionScreenState
                   child: Text(_isGraded ? 'Update Grade' : 'Proceed to Grade'),
                 ),
               ),
+
+              // ===== PRIVATE COMMENTS =====
+              if (Fmt.str(_module['_id']).isNotEmpty &&
+                  Fmt.str(_student['_id']).isNotEmpty) ...[
+                const Divider(height: 40),
+                PrivateCommentsSection(
+                  moduleId: Fmt.str(_module['_id']),
+                  studentId: Fmt.str(_student['_id']),
+                ),
+              ],
             ],
           ),
         ),

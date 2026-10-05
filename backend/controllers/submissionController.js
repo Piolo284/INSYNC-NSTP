@@ -7,6 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { requireOneOf } = require('../utils/validate');
 const { notifyUser } = require('../utils/notify');
 const { recalculateGrade } = require('../utils/gradeCalculator');
+const { assertBeforeDeadline } = require('../utils/deadline');
 const { STAFF_ROLES } = require('../config/constants');
 const { assertProgramAccess } = require('../utils/programScope');
 const { assertBrigadeAccess, isBrigadeRestricted } = require('../utils/brigadeScope');
@@ -147,6 +148,7 @@ exports.create = asyncHandler(async (req, res) => {
     const module = await ModuleModel.findById(moduleId);
     if (!module) throw ApiError.notFound('Module not found.');
     assertProgramAccess(req.user, module.program);
+    assertBeforeDeadline(module);
     totalPoints = module.totalPoints || 100;
   }
   if (activityId) {
@@ -218,6 +220,9 @@ exports.update = asyncHandler(async (req, res) => {
   if (isOwner && !isStaff) {
     if (submission.status === 'Graded') {
       throw ApiError.conflict('This submission has already been graded.');
+    }
+    if (submission.moduleId) {
+      assertBeforeDeadline(await ModuleModel.findById(submission.moduleId).select('deadline'));
     }
     if (req.body.comment !== undefined) submission.comment = req.body.comment;
     if (req.file) {
@@ -322,6 +327,11 @@ exports.remove = asyncHandler(async (req, res) => {
   }
   if (isOwner && !isStaff && submission.status === 'Graded') {
     throw ApiError.conflict('A graded submission cannot be withdrawn.');
+  }
+  // Withdrawing after the due date would just turn it into a Missing the
+  // trainee can no longer fix.
+  if (isOwner && !isStaff && submission.moduleId) {
+    assertBeforeDeadline(await ModuleModel.findById(submission.moduleId).select('deadline'));
   }
 
   const { studentId } = submission;
