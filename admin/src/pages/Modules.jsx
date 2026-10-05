@@ -5,7 +5,7 @@ import AsyncSection from '../components/AsyncSection';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useApi, errorMessage } from '../hooks/useApi';
 import { modulesApi } from '../api/modules';
-import { BASE_URL } from '../api/client';
+import { resolveFileUrl } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 
 const STATUS_COLORS = {
@@ -14,8 +14,6 @@ const STATUS_COLORS = {
   Completed: { bg: '#F3F4F6', color: '#374151' },
   Archived: { bg: '#FEF2F2', color: '#DC2626' },
 };
-
-const FILE_HOST = BASE_URL.replace(/\/api\/?$/, '');
 
 export default function Modules() {
   const { effectiveProgram, isSuperAdmin } = useAuth();
@@ -95,7 +93,7 @@ export default function Modules() {
                         {m.submittedCount || 0}/{m.totalTrainees || 0} submitted ({m.percentage || 0}%) · {m.gradedCount || 0} graded
                       </p>
                       {m.fileUrl && (
-                        <a href={`${FILE_HOST}${m.fileUrl}`} target="_blank" rel="noreferrer" style={{ marginTop: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--maroon)', fontWeight: 600, textDecoration: 'none' }}>
+                        <a href={resolveFileUrl(m.fileUrl)} target="_blank" rel="noreferrer" style={{ marginTop: '6px', display: 'inline-flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: 'var(--maroon)', fontWeight: 600, textDecoration: 'none' }}>
                           <FileDown size={13} /> {m.fileName || 'Attached file'}
                         </a>
                       )}

@@ -1,19 +1,28 @@
 import 'package:flutter/material.dart';
 import 'attendance_screen/cwts_officer_attendance_list_screen.dart';
+import 'attendance_screen/cwts_officer_create_qr_screen.dart';
 import 'cwts_officer_announcement_screen.dart';
+import 'cwts_officer_notifications_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/profile_header.dart';
+import '../../../core/widgets/status_badge.dart';
 
 class CwtsOfficerDashboardScreen extends StatefulWidget {
   final VoidCallback? onOpenDrawer;
 
+  /// Lets the dashboard jump to another tab in the shell's bottom nav
+  /// (e.g. "Manage Attendance" → the Attendance tab) instead of pushing a
+  /// new route, since the tabs live in one `IndexedStack`.
+  final ValueChanged<int>? onNavigateToTab;
+
   const CwtsOfficerDashboardScreen({
     super.key,
     this.onOpenDrawer,
+    this.onNavigateToTab,
   });
 
   @override
@@ -29,6 +38,9 @@ class _CwtsOfficerDashboardScreenState
   Map<String, dynamic> _overview = const {};
   List<Map<String, dynamic>> _announcements = const [];
   List<Map<String, dynamic>> _trendData = const [];
+  List<Map<String, dynamic>> _recentActivities = const [];
+  Map<String, dynamic>? _activeSession;
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
@@ -43,14 +55,47 @@ class _CwtsOfficerDashboardScreenState
     });
 
     try {
-      final data = await DashboardService.instance.officer();
+      final program = Session.instance.program;
+      final isSpecial = Session.instance.isSpecialClassOfficer;
+      final results = await Future.wait([
+        DashboardService.instance.officer(),
+        ActivityService.instance.list(program: program, specialClass: isSpecial),
+        AttendanceService.instance.sessions(
+          program: program,
+          status: 'Active',
+          specialClass: isSpecial,
+        ),
+        NotificationService.instance.mine(unreadOnly: true),
+      ]);
       if (!mounted) return;
+
+      final data = results[0] as Map<String, dynamic>;
+      final activities = (results[1] as List).cast<Map<String, dynamic>>();
+      // The backend only flips a session's status to 'Closed' when the
+      // officer explicitly taps "Close Session" — a session whose time
+      // window has already lapsed but was never closed would otherwise
+      // keep showing here as "Active" forever. Drop those too.
+      final now = DateTime.now();
+      final activeSessions = (results[2] as List)
+          .cast<Map<String, dynamic>>()
+          .where((s) {
+            final endsAt = Fmt.parse(s['endsAt']);
+            return endsAt == null || !endsAt.isBefore(now);
+          })
+          .toList();
+      final unread = results[3] as Map<String, dynamic>;
+
+      activities.sort((a, b) => Fmt.str(b['date']).compareTo(Fmt.str(a['date'])));
+
       setState(() {
         _overview = (data['overview'] as Map?)?.cast<String, dynamic>() ?? {};
         _announcements =
             (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>();
         _trendData =
             (data['trend'] as List? ?? []).cast<Map<String, dynamic>>();
+        _recentActivities = activities.take(4).toList();
+        _activeSession = activeSessions.isNotEmpty ? activeSessions.first : null;
+        _unreadNotifications = (unread['unreadCount'] as int?) ?? 0;
         _state = LoadState.ready;
       });
     } catch (error) {
@@ -71,12 +116,35 @@ class _CwtsOfficerDashboardScreenState
     ).then((_) => _load());
   }
 
+  void _openNotifications() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const CwtsOfficerNotificationsScreen()),
+    ).then((_) => _load());
+  }
+
+  void _manageAttendance() {
+    final session = _activeSession;
+    if (session == null) {
+      widget.onNavigateToTab?.call(2);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CwtsOfficerCreateQrScreen(existingSession: session),
+      ),
+    ).then((_) => _load());
+  }
+
   @override
   Widget build(BuildContext context) {
     final session = Session.instance;
-    final subtitle = session.brigade.isNotEmpty
-        ? session.brigade
-        : '${session.program} Officer';
+    final subtitle = session.isSpecialClassOfficer
+        ? '${session.program} Inclusive Learning Section Officer'
+        : session.brigade.isNotEmpty
+            ? session.brigade
+            : '${session.program} Officer';
 
     return Scaffold(
       backgroundColor: AppColors.primaryMaroon,
@@ -94,10 +162,46 @@ class _CwtsOfficerDashboardScreenState
                     icon: const Icon(Icons.menu, color: AppColors.white, size: 24),
                     onPressed: widget.onOpenDrawer,
                   ),
-                  IconButton(
-                    icon: const Icon(Icons.refresh,
-                        color: AppColors.white, size: 24),
-                    onPressed: _load,
+                  Row(
+                    children: [
+                      Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.notifications_outlined,
+                                color: AppColors.white, size: 24),
+                            onPressed: _openNotifications,
+                          ),
+                          if (_unreadNotifications > 0)
+                            Positioned(
+                              top: 6,
+                              right: 6,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                constraints: const BoxConstraints(minWidth: 16),
+                                decoration: BoxDecoration(
+                                  color: AppColors.gold,
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Text(
+                                  _unreadNotifications > 9 ? '9+' : '$_unreadNotifications',
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(
+                                    fontSize: 9.5,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryDark,
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.refresh,
+                            color: AppColors.white, size: 24),
+                        onPressed: _load,
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -140,6 +244,11 @@ class _CwtsOfficerDashboardScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            const SectionHeader(title: "Today's Attendance"),
+                            const SizedBox(height: 14),
+                            _buildTodaysAttendance(),
+                            const SizedBox(height: 28),
+
                             const SectionHeader(title: 'Overview'),
                             const SizedBox(height: 14),
 
@@ -213,7 +322,9 @@ class _CwtsOfficerDashboardScreenState
                                   child: _buildStatCard(
                                     icon: Icons.people_rounded,
                                     iconBgColor: AppColors.primaryMaroon,
-                                    label: 'Total Students',
+                                    label: Session.instance.program == 'ROTC'
+                                        ? 'Total Cadets'
+                                        : 'Total Students',
                                     value:
                                         Fmt.count(_overview['totalStudents']),
                                   ),
@@ -224,6 +335,10 @@ class _CwtsOfficerDashboardScreenState
 
                             // ===== ATTENDANCE TREND =====
                             _buildAttendanceTrend(),
+                            const SizedBox(height: 28),
+
+                            // ===== RECENT ACTIVITIES =====
+                            _buildRecentActivities(),
                             const SizedBox(height: 28),
 
                             // ===== RECENT ANNOUNCEMENTS =====
@@ -239,6 +354,158 @@ class _CwtsOfficerDashboardScreenState
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  // ===== TODAY'S ATTENDANCE =====
+  Widget _buildTodaysAttendance() {
+    final session = _activeSession;
+    if (session == null) {
+      return AppCard(
+        onTap: _manageAttendance,
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.primaryMaroon.withValues(alpha: 0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.qr_code_2_outlined, color: AppColors.primaryMaroon, size: 22),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'No attendance session running',
+                    style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Start one to take today\'s attendance.',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+          ],
+        ),
+      );
+    }
+
+    return AppCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  Fmt.str(session['title'], 'Attendance Session'),
+                  style: const TextStyle(fontSize: 14.5, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                ),
+              ),
+              const StatusBadge('Active', dense: true),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              const Icon(Icons.calendar_today_outlined, size: 13, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(Fmt.date(session['date']), style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+              const SizedBox(width: 12),
+              const Icon(Icons.schedule_outlined, size: 13, color: AppColors.textSecondary),
+              const SizedBox(width: 4),
+              Text(
+                '${Fmt.str(session['startTime'])} - ${Fmt.str(session['endTime'])}',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _manageAttendance,
+              icon: const Icon(Icons.qr_code_2_outlined, size: 18),
+              label: const Text('Manage Attendance'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ===== RECENT ACTIVITIES =====
+  Widget _buildRecentActivities() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SectionHeader(
+          title: 'Recent Activities',
+          actionLabel: 'View all',
+          onAction: () => widget.onNavigateToTab?.call(3),
+        ),
+        const SizedBox(height: 14),
+        if (_recentActivities.isEmpty)
+          const AppCard(
+            child: AsyncView(
+              state: LoadState.empty,
+              compact: true,
+              emptyText: 'No activities yet.',
+              emptyIcon: Icons.event_note_outlined,
+              child: SizedBox.shrink(),
+            ),
+          )
+        else
+          ..._recentActivities.map(_buildActivityTile),
+      ],
+    );
+  }
+
+  Widget _buildActivityTile(Map<String, dynamic> activity) {
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 10),
+      onTap: () => widget.onNavigateToTab?.call(3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: AppColors.cwtsCardBg,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.event_note_outlined, color: AppColors.primaryMaroon, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(activity['title'], 'Activity'),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${Fmt.date(activity['date'])} • ${Fmt.toInt(activity['participants'])} participant(s)',
+                  style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          StatusBadge(Fmt.str(activity['status'], 'Upcoming'), dense: true),
+        ],
       ),
     );
   }
@@ -316,7 +583,7 @@ class _CwtsOfficerDashboardScreenState
       children: [
         const SectionHeader(
           title: 'Attendance Trend',
-          subtitle: 'This month',
+          subtitle: 'Today',
         ),
         const SizedBox(height: 14),
         AppCard(
@@ -381,16 +648,16 @@ class _CwtsOfficerDashboardScreenState
     );
   }
 
-  /// Shows at most five evenly spaced date labels so a busy month stays legible.
+  /// Shows at most five evenly spaced hour labels so a busy day stays legible.
   List<String> _trendLabels() {
     if (_trendData.isEmpty) return const [];
     if (_trendData.length <= 5) {
-      return _trendData.map((d) => Fmt.date(d['date'], fallback: '')).toList();
+      return _trendData.map((d) => Fmt.time(d['date'], fallback: '')).toList();
     }
     final step = (_trendData.length - 1) / 4;
     return List.generate(5, (i) {
       final index = (i * step).round().clamp(0, _trendData.length - 1);
-      return Fmt.date(_trendData[index]['date'], fallback: '');
+      return Fmt.time(_trendData[index]['date'], fallback: '');
     });
   }
 

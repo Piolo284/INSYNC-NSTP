@@ -97,9 +97,9 @@ class _CwtsOfficerStudentDetailScreenState
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Student Details',
-          style: TextStyle(
+        title: Text(
+          Session.instance.program == 'ROTC' ? 'Cadet Details' : 'Student Details',
+          style: const TextStyle(
             color: Colors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -191,6 +191,7 @@ class _CwtsOfficerStudentDetailScreenState
                     Fmt.str(p['course']),
                     Fmt.str(p['yearLevel']),
                     Fmt.str(p['section']),
+                    Fmt.str(p['campus']),
                   ].where((s) => s.isNotEmpty).join(' • '),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -391,12 +392,17 @@ class _CwtsOfficerStudentDetailScreenState
               ),
               const SizedBox(height: 8),
               Text(
-                Fmt.toDouble(_grade['finalGrade']).toStringAsFixed(2),
+                Fmt.toDouble(_grade['gradePoint']).toStringAsFixed(2),
                 style: const TextStyle(
                   fontSize: 36,
                   fontWeight: FontWeight.bold,
                   color: AppColors.primaryMaroon,
                 ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                '${Fmt.toDouble(_grade['finalGrade']).toStringAsFixed(2)}%',
+                style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
               const SizedBox(height: 8),
               StatusBadge(remarks),

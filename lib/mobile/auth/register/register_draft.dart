@@ -14,6 +14,7 @@ class RegisterDraft {
   String password = '';
   String course = '';
   String yearLevel = '';
+  String campus = '';
 
   // Step 2 — additional information.
   String specialCategory = kCategoryNone;
@@ -25,6 +26,20 @@ class RegisterDraft {
   /// [registerDocumentRequirements]).
   bool get needsDocumentStep => specialCategory != kCategoryNone;
 }
+
+/// The MARSU campuses a trainee can register under.
+const List<String> kCampuses = [
+  'MARSU - Boac (Main)',
+  'MARSU - Torrijos',
+  'MARSU - Sta. Cruz',
+  'MARSU - Gasan',
+];
+
+/// Campuses that do not offer ROTC — only CWTS is available there.
+const List<String> kRotcRestrictedCampuses = [
+  'MARSU - Torrijos',
+  'MARSU - Gasan',
+];
 
 const String kCategoryNone = 'None';
 const String kCategoryPwd = 'PWD';

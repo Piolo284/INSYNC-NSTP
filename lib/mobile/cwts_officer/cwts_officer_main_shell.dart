@@ -6,6 +6,7 @@ import '../cwts_officer/screens/activities_screen/cwts_officer_activities_screen
 import '../cwts_officer/screens/submission_screen/cwts_officer_submissions_screen.dart';
 import 'cwts_officer_drawer.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/services/session.dart';
 
 class CwtsOfficerMainShell extends StatefulWidget {
   const CwtsOfficerMainShell({super.key});
@@ -26,12 +27,31 @@ class _CwtsOfficerMainShellState extends State<CwtsOfficerMainShell> {
 
   @override
   Widget build(BuildContext context) {
+    // An Attendance Officer was only ever given attendance duties — they get
+    // just that one screen and no bottom nav, instead of the full officer
+    // tab set below (see Session.isAttendanceOnlyOfficer).
+    if (Session.instance.isAttendanceOnlyOfficer) {
+      return Scaffold(
+        key: _scaffoldKey,
+        drawer: const CwtsOfficerDrawer(),
+        body: CwtsOfficerAttendanceScreen(onOpenDrawer: _openDrawer),
+      );
+    }
+
+    // The assigned Special Class officer has no separate tab of their own —
+    // these same screens auto-scope to their Special Class roster server-side
+    // (see cadetController/studentController/activityController/
+    // attendanceController's isSpecialClassManager checks), since that IS
+    // the entirety of what they manage.
     final screens = <Widget>[
-      CwtsOfficerDashboardScreen(onOpenDrawer: _openDrawer), // 0 - Home
-      const CwtsOfficerStudentsScreen(),                     // 1 - Students
+      CwtsOfficerDashboardScreen(
+        onOpenDrawer: _openDrawer,
+        onNavigateToTab: _onTabTapped,
+      ), // 0 - Home
+      CwtsOfficerStudentsScreen(onNavigateToTab: _onTabTapped), // 1 - Students
       const CwtsOfficerAttendanceScreen(),                   // 2 - Attendance
-      const CwtsOfficerActivitiesScreen(),                   // 3 - Activities
-      const CwtsOfficerSubmissionsScreen(),                  // 4 - Submissions
+      CwtsOfficerActivitiesScreen(onNavigateToTab: _onTabTapped), // 3 - Activities
+      CwtsOfficerSubmissionsScreen(onNavigateToTab: _onTabTapped), // 4 - Submissions
     ];
 
     return Scaffold(
@@ -64,7 +84,7 @@ class _CwtsOfficerMainShellState extends State<CwtsOfficerMainShell> {
                 _buildNavItem(icon: Icons.person_outline, label: 'Students', index: 1),
                 _buildNavItem(icon: Icons.calendar_today_outlined, label: 'Attendance', index: 2),
                 _buildNavItem(icon: Icons.bar_chart_outlined, label: 'Activities', index: 3),
-                _buildNavItem(icon: Icons.article_outlined, label: 'Submissions', index: 4),
+                _buildNavItem(icon: Icons.article_outlined, label: 'Modules', index: 4),
               ],
             ),
           ),

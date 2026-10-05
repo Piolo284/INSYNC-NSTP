@@ -43,18 +43,28 @@ class AppColors {
   static const Color grey900 = Color(0xFF8B7E72);
 
   // --orange-text / --orange-banner / --orange-border (the admin panel's
-  // "warning"/at-risk styling).
+  // "warning"/at-risk styling — distinct from the Late attendance-status
+  // color below, which the web admin renders in a different amber).
   static const Color warning = Color(0xFF9A3412);
   static const Color cardBg = Color(0xFFFFFFFF);
-  // --red-status.
-  static const Color error = Color(0xFF991B1B);
-  static const Color errorLight = Color(0xFFFEE2E2);
+  // Matches the web admin's Absent/Failed/Rejected status color exactly
+  // (admin/src/pages/Attendance.jsx STATUS_COLORS.Absent).
+  static const Color error = Color(0xFFDC2626);
+  static const Color errorLight = Color(0xFFFEF2F2);
 
-  static const Color success = Color(0xFF4CAF50);
-  static const Color greenLight = Color(0xFFE8F5E9);
+  // Matches the web admin's Present/Graded/Completed status color exactly.
+  static const Color success = Color(0xFF059669);
+  static const Color greenLight = Color(0xFFECFDF5);
 
-  static const Color blue = Color(0xFF1565C0);
-  static const Color blueLight = Color(0xFFE3F2FD);
+  // Matches the web admin's Excused/Submitted status color exactly.
+  static const Color blue = Color(0xFF2563EB);
+  static const Color blueLight = Color(0xFFEFF6FF);
+
+  // Matches the web admin's Late attendance-status color exactly
+  // (admin/src/pages/Attendance.jsx STATUS_COLORS.Late) — kept separate
+  // from `warning` above since the web uses two different oranges for
+  // "Late" vs. the at-risk warning banner text.
+  static const Color lateStatus = Color(0xFFD97706);
 
   static const Color orange = Color(0xFFF57C00);
   static const Color orangeLight = Color(0xFFFFF7ED);

@@ -37,8 +37,8 @@ class GradeService {
     String? remarks,
   }) async {
     final response = await _api.put('/grades/$id', body: {
-      if (finalGrade != null) 'finalGrade': finalGrade,
-      if (remarks != null) 'remarks': remarks,
+      'finalGrade': ?finalGrade,
+      'remarks': ?remarks,
     });
     return ApiService.mapOf(response);
   }
@@ -46,8 +46,8 @@ class GradeService {
   /// Forces a recalculation for one trainee or a whole program.
   Future<int> recalculate({String? studentId, String? program}) async {
     final response = await _api.post('/grades', body: {
-      if (studentId != null) 'studentId': studentId,
-      if (program != null) 'program': program,
+      'studentId': ?studentId,
+      'program': ?program,
     });
     return (response['count'] as num?)?.toInt() ?? 0;
   }

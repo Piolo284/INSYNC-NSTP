@@ -17,7 +17,15 @@ const activitySchema = new mongoose.Schema(
     image: { type: String, default: '' },
     photos: { type: [String], default: [] },
     objectives: { type: [String], default: [] },
+    // Auto-set to the creating officer's brigade (admins may leave unset for
+    // a program-wide activity). See utils/brigadeScope.js.
+    brigadeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Brigade', default: null, index: true },
     brigade: { type: String, default: '' },
+    // ROTC's alternative-to-field-training track for PWD/Medical-Condition
+    // cadets — always program-wide (brigadeId stays null) since it's run by
+    // the single ROTC-wide Special Class officer, not a brigade officer.
+    // See utils/specialClass.js and activityController.list/create.
+    isSpecialClass: { type: Boolean, default: false, index: true },
     status: {
       type: String,
       enum: ['Upcoming', 'Ongoing', 'Completed', 'Cancelled'],

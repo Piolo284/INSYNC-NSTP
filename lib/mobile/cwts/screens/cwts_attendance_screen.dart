@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/contest_absence_sheet.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
@@ -29,6 +30,7 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
   LoadState _state = LoadState.loading;
   String _error = '';
   List<Map<String, dynamic>> attendanceRecords = const [];
+  List<Map<String, dynamic>> _contests = const [];
 
   @override
   void initState() {
@@ -43,11 +45,15 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
     });
 
     try {
-      final records = await AttendanceService.instance.myRecords();
+      final results = await Future.wait([
+        AttendanceService.instance.myRecords(),
+        AttendanceService.instance.myContests(),
+      ]);
       if (!mounted) return;
       setState(() {
-        attendanceRecords = records;
-        _state = records.isEmpty ? LoadState.empty : LoadState.ready;
+        attendanceRecords = results[0];
+        _contests = results[1];
+        _state = attendanceRecords.isEmpty ? LoadState.empty : LoadState.ready;
       });
     } catch (error) {
       if (!mounted) return;
@@ -56,6 +62,25 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
         _error = describeError(error);
       });
     }
+  }
+
+  /// The trainee's own filed contest for one record, if any — overlays
+  /// Pending/Approved/Rejected on top of the plain Absent badge.
+  Map<String, dynamic>? _contestFor(String attendanceId) {
+    for (final contest in _contests) {
+      if (Fmt.str(contest['attendanceId']) == attendanceId) return contest;
+    }
+    return null;
+  }
+
+  Future<void> _contestAbsence(Map<String, dynamic> record) async {
+    final filed = await showContestAbsenceSheet(
+      context,
+      attendanceId: Fmt.str(record['_id']),
+      activityTitle: _titleOf(record),
+      date: Fmt.date(record['date']),
+    );
+    if (filed == true) await _load();
   }
 
   List<Map<String, dynamic>> get filteredRecords {
@@ -258,6 +283,8 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
   Widget _buildAttendanceCard(Map<String, dynamic> record) {
     final status = Fmt.str(record['status'], 'Present');
     final time = Fmt.str(record['time'], '---');
+    final contest = status == 'Absent' ? _contestFor(Fmt.str(record['_id'])) : null;
+    final displayStatus = contest != null ? Fmt.str(contest['status'], status) : status;
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
@@ -294,6 +321,21 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
                     ),
                   ),
                 ],
+                if (status == 'Absent' && contest == null) ...[
+                  const SizedBox(height: 8),
+                  GestureDetector(
+                    onTap: () => _contestAbsence(record),
+                    child: const Text(
+                      'Contest this absence',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryMaroon,
+                        decoration: TextDecoration.underline,
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -301,7 +343,7 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              StatusBadge(status),
+              StatusBadge(displayStatus == 'Pending' ? 'Pending Review' : displayStatus),
               const SizedBox(height: 6),
               Text(
                 time.isEmpty ? '---' : time,

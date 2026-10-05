@@ -35,16 +35,20 @@ class SubmissionService {
     String? moduleId,
     String? activityId,
     String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
     String comment = '',
   }) async {
     final response = await _api.upload(
       '/submissions',
       fields: {
-        if (moduleId != null) 'moduleId': moduleId,
-        if (activityId != null) 'activityId': activityId,
+        'moduleId': ?moduleId,
+        'activityId': ?activityId,
         'comment': comment,
       },
       filePath: filePath,
+      fileBytes: fileBytes,
+      fileName: fileName,
     );
     return ApiService.mapOf(response);
   }
@@ -60,8 +64,8 @@ class SubmissionService {
   }) async {
     final response = await _api.post('/submissions/$id/grade', body: {
       if (rubricScores != null) 'rubricScores': jsonEncode(rubricScores),
-      if (score != null) 'score': score,
-      if (totalPoints != null) 'totalPoints': totalPoints,
+      'score': ?score,
+      'totalPoints': ?totalPoints,
       'feedback': feedback,
     });
     return ApiService.mapOf(response);

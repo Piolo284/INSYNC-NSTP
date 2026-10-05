@@ -7,6 +7,7 @@ import 'side_menu/about/cwts_about_screen.dart';
 import 'side_menu/help_support/cwts_help_support_screen.dart';
 import 'screens/cwts_officer_students_screen.dart';
 import '../auth/cwts_officer_login_screen.dart';
+import '../auth/rotc_officer_login_screen.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/widgets/app_dialogs.dart';
@@ -18,6 +19,10 @@ class CwtsOfficerDrawer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final session = Session.instance;
+    final isRotc = session.program == 'ROTC';
+    // An Attendance Officer has no management duties over other trainees or
+    // their documents, so those menu items are hidden for them here.
+    final isAttendanceOnly = session.isAttendanceOnlyOfficer;
 
     return Drawer(
       backgroundColor: AppColors.white,
@@ -49,27 +54,20 @@ class CwtsOfficerDrawer extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   const _SectionLabel('MANAGEMENT'),
-                  _MenuItem(
-                    icon: Icons.people_outline,
-                    label: 'Manage Students',
-                    onTap: () =>
-                        _navigateTo(context, const CwtsOfficerStudentsScreen()),
-                  ),
-                  _MenuItem(
-                    icon: Icons.grade_outlined,
-                    label: 'Grades & Records',
-                    // Grades live on the per-student detail screen (its
-                    // "Grades" tab), reached by picking a student here first —
-                    // there is no standalone all-students grade list.
-                    onTap: () =>
-                        _navigateTo(context, const CwtsOfficerStudentsScreen()),
-                  ),
-                  _MenuItem(
-                    icon: Icons.description_outlined,
-                    label: 'Document Review',
-                    onTap: () =>
-                        _navigateTo(context, const CwtsDocumentsScreen()),
-                  ),
+                  if (!isAttendanceOnly) ...[
+                    _MenuItem(
+                      icon: Icons.people_outline,
+                      label: isRotc ? 'Manage Cadets' : 'Manage Students',
+                      onTap: () => _navigateTo(
+                          context, const CwtsOfficerStudentsScreen()),
+                    ),
+                    _MenuItem(
+                      icon: Icons.description_outlined,
+                      label: 'Document Review',
+                      onTap: () =>
+                          _navigateTo(context, const CwtsDocumentsScreen()),
+                    ),
+                  ],
                   _MenuItem(
                     icon: Icons.mail_outline,
                     label: 'Notification Setting',
@@ -123,11 +121,16 @@ class CwtsOfficerDrawer extends StatelessWidget {
     );
     if (!confirmed) return;
 
+    final isRotc = Session.instance.program == 'ROTC';
     await AuthService.instance.logout();
     if (!context.mounted) return;
     Navigator.pushAndRemoveUntil(
       context,
-      MaterialPageRoute(builder: (_) => const CwtsOfficerLoginScreen()),
+      MaterialPageRoute(
+        builder: (_) => isRotc
+            ? const RotcOfficerLoginScreen()
+            : const CwtsOfficerLoginScreen(),
+      ),
       (route) => false,
     );
   }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../auth/rotc_login_screen.dart';
 import '../cwts/side_menu/about/cwts_about_screen.dart';
 import '../cwts/side_menu/account_security/cwts_account_security_screen.dart';
+import '../cwts/side_menu/certificate/cwts_certificate_screen.dart';
 import '../cwts/side_menu/documents/cwts_documents_screen.dart';
 import '../cwts/side_menu/help_support/cwts_help_support_screen.dart';
 import '../cwts/side_menu/notifications/cwts_notification_settings_screen.dart';
@@ -54,6 +55,12 @@ class RotcDrawer extends StatelessWidget {
                     label: 'Documents',
                     onTap: () =>
                         _navigateTo(context, const CwtsDocumentsScreen()),
+                  ),
+                  _MenuItem(
+                    icon: Icons.workspace_premium_outlined,
+                    label: 'Certificate Request',
+                    onTap: () =>
+                        _navigateTo(context, const CwtsCertificateScreen()),
                   ),
                   _MenuItem(
                     icon: Icons.lock_outline,

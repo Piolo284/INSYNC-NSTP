@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'cwts_activities_modules_screen.dart';
 import 'cwts_activity_detail_screen.dart';
 import 'cwts_announcement_screen.dart';
-import 'cwts_scan_qr_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/notifications_sheet.dart';
 import '../../../core/widgets/profile_header.dart';
 import '../../../core/widgets/status_badge.dart';
 
@@ -165,8 +165,6 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
                         const SizedBox(height: 20),
                         _buildUpcomingActivitiesSection(),
                       ],
-                      const SizedBox(height: 20),
-                      _buildQuickActionsSection(),
                       const SizedBox(height: 8),
                     ],
                   ),
@@ -180,15 +178,8 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
   }
 
   Future<void> _showNotifications() async {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AppColors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (_) => const _NotificationsSheet(),
-    ).then((_) => _loadNotificationBadge());
+    await showNotificationsSheet(context);
+    await _loadNotificationBadge();
   }
 
   Widget _buildProfileHeader() {
@@ -526,49 +517,49 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    StatusBadge(status, dense: true),
-                  ],
+                Text(
+                  'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => CwtsActivityDetailScreen(
-                    moduleId: Fmt.str(task['_id']),
-                    title: Fmt.str(task['title'], 'Task'),
-                    dueDate: Fmt.dateTime(task['deadline'],
-                        fallback: 'No deadline'),
-                    status: status,
-                  ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StatusBadge(status, dense: true),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => CwtsActivityDetailScreen(
+                        moduleId: Fmt.str(task['_id']),
+                        title: Fmt.str(task['title'], 'Task'),
+                        dueDate: Fmt.dateTime(task['deadline'],
+                            fallback: 'No deadline'),
+                        status: status,
+                      ),
+                    ),
+                  ).then((_) => _load());
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                 ),
-              ).then((_) => _load());
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-            child: const Text('Proceed'),
+                child: const Text('Proceed'),
+              ),
+            ],
           ),
         ],
       ),
@@ -653,197 +644,5 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
     );
   }
 
-  Widget _buildQuickActionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SectionHeader(title: 'Quick Actions'),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const CwtsScanQrScreen(),
-                ),
-              ).then((_) => _load());
-            },
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan Attendance QR'),
-          ),
-        ),
-      ],
-    );
-  }
 }
 
-/// Notification list shown from the bell icon.
-class _NotificationsSheet extends StatefulWidget {
-  const _NotificationsSheet();
-
-  @override
-  State<_NotificationsSheet> createState() => _NotificationsSheetState();
-}
-
-class _NotificationsSheetState extends State<_NotificationsSheet> {
-  LoadState _state = LoadState.loading;
-  String _error = '';
-  List<Map<String, dynamic>> _items = const [];
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    setState(() {
-      _state = LoadState.loading;
-      _error = '';
-    });
-    try {
-      final result = await NotificationService.instance.mine(limit: 50);
-      final items = (result['data'] as List).cast<Map<String, dynamic>>();
-      if (!mounted) return;
-      setState(() {
-        _items = items;
-        _state = items.isEmpty ? LoadState.empty : LoadState.ready;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _state = LoadState.error;
-        _error = describeError(error);
-      });
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return DraggableScrollableSheet(
-      initialChildSize: 0.7,
-      maxChildSize: 0.9,
-      minChildSize: 0.4,
-      expand: false,
-      builder: (context, controller) {
-        return Column(
-          children: [
-            const SizedBox(height: 12),
-            Container(
-              width: 40,
-              height: 4,
-              decoration: BoxDecoration(
-                color: AppColors.border,
-                borderRadius: BorderRadius.circular(2),
-              ),
-            ),
-            Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 12, 8),
-              child: Row(
-                children: [
-                  const Text(
-                    'Notifications',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const Spacer(),
-                  TextButton(
-                    onPressed: () async {
-                      try {
-                        await NotificationService.instance.markAllRead();
-                        await _load();
-                      } catch (error) {
-                        if (context.mounted) {
-                          AppSnack.error(context, describeError(error));
-                        }
-                      }
-                    },
-                    child: const Text(
-                      'Mark all read',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const Divider(height: 1),
-            Expanded(
-              child: AsyncView(
-                state: _state,
-                message: _error,
-                onRetry: _load,
-                emptyText: 'No notifications yet.',
-                emptyIcon: Icons.notifications_none,
-                child: ListView.separated(
-                  controller: controller,
-                  padding: const EdgeInsets.symmetric(vertical: 8),
-                  itemCount: _items.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final item = _items[index];
-                    final isRead = item['isRead'] == true;
-                    return ListTile(
-                      onTap: () async {
-                        if (isRead) return;
-                        try {
-                          await NotificationService.instance
-                              .markRead(Fmt.str(item['_id']));
-                          await _load();
-                        } catch (_) {
-                          /* ignore */
-                        }
-                      },
-                      leading: Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: isRead ? AppColors.grey100 : AppColors.orangeLight,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(
-                          Icons.campaign_outlined,
-                          size: 20,
-                          color: isRead ? AppColors.textSecondary : AppColors.warning,
-                        ),
-                      ),
-                      title: Text(
-                        Fmt.str(item['title'], 'Notification'),
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight:
-                              isRead ? FontWeight.w500 : FontWeight.w700,
-                          color: AppColors.textPrimary,
-                        ),
-                      ),
-                      subtitle: Text(
-                        Fmt.str(item['message']),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                      trailing: Text(
-                        Fmt.date(item['createdAt'], fallback: ''),
-                        style: const TextStyle(
-                          fontSize: 10,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
-            ),
-          ],
-        );
-      },
-    );
-  }
-}

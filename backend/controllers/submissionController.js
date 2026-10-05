@@ -5,11 +5,20 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireOneOf } = require('../utils/validate');
-const { publicUrl } = require('../middleware/upload');
 const { notifyUser } = require('../utils/notify');
 const { recalculateGrade } = require('../utils/gradeCalculator');
 const { STAFF_ROLES } = require('../config/constants');
 const { assertProgramAccess } = require('../utils/programScope');
+const { assertBrigadeAccess, isBrigadeRestricted } = require('../utils/brigadeScope');
+
+/** Loads just the brigadeId for whichever student owns this submission. */
+async function loadBrigadeId(submission) {
+  if (submission.studentId && typeof submission.studentId === 'object' && 'brigadeId' in submission.studentId) {
+    return submission.studentId.brigadeId;
+  }
+  const student = await User.findById(submission.studentId).select('brigadeId');
+  return student ? student.brigadeId : null;
+}
 
 function parseJsonish(value, fallback) {
   if (value === undefined || value === null || value === '') return fallback;
@@ -68,7 +77,7 @@ exports.list = asyncHandler(async (req, res) => {
   }
 
   let submissions = await Submission.find(filter)
-    .populate('studentId', 'name studentId program section yearLevel profileImage')
+    .populate('studentId', 'name studentId program brigadeId section yearLevel profileImage')
     .populate('moduleId', 'title deadline totalPoints moduleCode rubrics program')
     .populate('activityId', 'title date program')
     .sort({ submittedAt: -1 });
@@ -76,6 +85,12 @@ exports.list = asyncHandler(async (req, res) => {
   // Program-scoped staff never see the other program's submissions.
   if (req.user.role !== 'super_admin' && STAFF_ROLES.includes(req.user.role)) {
     submissions = submissions.filter((s) => deriveProgram(s) === req.user.program);
+  }
+  // An officer only sees their own brigade's students' submissions.
+  if (isBrigadeRestricted(req.user)) {
+    submissions = submissions.filter(
+      (s) => String(s.studentId?.brigadeId || '') === String(req.user.brigadeId || '')
+    );
   }
 
   if (req.query.search) {
@@ -97,7 +112,7 @@ exports.list = asyncHandler(async (req, res) => {
 /** GET /api/submissions/:id */
 exports.get = asyncHandler(async (req, res) => {
   const submission = await Submission.findById(req.params.id)
-    .populate('studentId', 'name studentId program section yearLevel profileImage email')
+    .populate('studentId', 'name studentId program brigadeId section yearLevel profileImage email')
     .populate('moduleId', 'title deadline totalPoints moduleCode rubrics description program')
     .populate('activityId', 'title date program')
     .populate('gradedBy', 'name role');
@@ -111,6 +126,7 @@ exports.get = asyncHandler(async (req, res) => {
   }
   if (isStaff && !isOwner) {
     assertProgramAccess(req.user, deriveProgram(submission));
+    assertBrigadeAccess(req.user, await loadBrigadeId(submission));
   }
 
   res.json({ success: true, data: submission });
@@ -147,7 +163,7 @@ exports.create = asyncHandler(async (req, res) => {
     moduleId: moduleId || null,
     activityId: activityId || null,
     studentId: req.user._id,
-    fileUrl: req.file ? publicUrl('submissions', req.file.filename) : req.body.fileUrl || '',
+    fileUrl: req.file ? req.file.path : req.body.fileUrl || '',
     fileName: req.file ? req.file.originalname : req.body.fileName || '',
     fileSize: req.file ? req.file.size : Number(req.body.fileSize) || 0,
     comment: req.body.comment || '',
@@ -196,6 +212,7 @@ exports.update = asyncHandler(async (req, res) => {
   }
   if (isStaff && !isOwner) {
     assertProgramAccess(req.user, await loadProgram(submission));
+    assertBrigadeAccess(req.user, await loadBrigadeId(submission));
   }
 
   if (isOwner && !isStaff) {
@@ -204,7 +221,7 @@ exports.update = asyncHandler(async (req, res) => {
     }
     if (req.body.comment !== undefined) submission.comment = req.body.comment;
     if (req.file) {
-      submission.fileUrl = publicUrl('submissions', req.file.filename);
+      submission.fileUrl = req.file.path;
       submission.fileName = req.file.originalname;
       submission.fileSize = req.file.size;
     }
@@ -235,6 +252,7 @@ exports.grade = asyncHandler(async (req, res) => {
   const submission = await Submission.findById(req.params.id);
   if (!submission) throw ApiError.notFound('Submission not found.');
   assertProgramAccess(req.user, await loadProgram(submission));
+  assertBrigadeAccess(req.user, await loadBrigadeId(submission));
 
   const rubricScores = parseJsonish(req.body.rubricScores, null);
   let score;
@@ -300,6 +318,7 @@ exports.remove = asyncHandler(async (req, res) => {
   }
   if (isStaff && !isOwner) {
     assertProgramAccess(req.user, await loadProgram(submission));
+    assertBrigadeAccess(req.user, await loadBrigadeId(submission));
   }
   if (isOwner && !isStaff && submission.status === 'Graded') {
     throw ApiError.conflict('A graded submission cannot be withdrawn.');

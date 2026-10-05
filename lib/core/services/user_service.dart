@@ -48,6 +48,21 @@ class UserService {
     };
   }
 
+  /// Registered ROTC cadets no officer has handled yet (no company).
+  Future<List<Map<String, dynamic>>> unassignedCadets({String? search}) async {
+    final response = await _api.get('/cadets/unassigned', query: {
+      'search': search,
+    });
+    return ApiService.listOf(response);
+  }
+
+  /// Adds a cadet to the signed-in officer's handled cadets; the server sets
+  /// the cadet's company to the officer's. Returns the server's message.
+  Future<String> assignCadetToMe(String cadetId) async {
+    final response = await _api.post('/cadets/$cadetId/assign');
+    return (response['message'] ?? 'Cadet added.').toString();
+  }
+
   Future<Map<String, dynamic>> cadet([String? id]) async {
     final response = await _api.get('/cadets/${id ?? Session.instance.userId}');
     return ApiService.mapOf(response);

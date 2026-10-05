@@ -1,8 +1,10 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/widgets/async_view.dart';
 import 'register_draft.dart';
+import 'register_program_banner.dart';
 import 'register_submit.dart';
 
 /// Step 3 of 3 — only shown when [RegisterDraft.needsDocumentStep] is true.
@@ -23,9 +25,9 @@ class RegisterDocumentsScreen extends StatefulWidget {
 class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
   bool _isSubmitting = false;
 
-  /// Document title -> locally picked file path, populated as the trainee
-  /// taps "Upload" on each row.
-  final Map<String, String> _picked = {};
+  /// Document title -> locally picked file, populated as the trainee taps
+  /// "Upload" on each row.
+  final Map<String, PlatformFile> _picked = {};
 
   List<RequiredDocument> get _requirements =>
       registerDocumentRequirements[widget.draft.specialCategory] ?? const [];
@@ -35,10 +37,14 @@ class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['jpg', 'jpeg', 'png', 'pdf'],
+        // Web never returns a real filesystem path — only bytes — so the
+        // upload has to travel as bytes for the document to actually reach
+        // the server.
+        withData: true,
       );
-      final path = result?.files.first.path;
-      if (path == null || !mounted) return;
-      setState(() => _picked[doc.title] = path);
+      final file = result?.files.first;
+      if (file == null || !mounted) return;
+      setState(() => _picked[doc.title] = file);
     } catch (error) {
       if (!mounted) return;
       AppSnack.error(context, describeError(error));
@@ -46,7 +52,12 @@ class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
   }
 
   List<PendingUpload> get _uploads => _picked.entries
-      .map((e) => PendingUpload(title: e.key, filePath: e.value))
+      .map((e) => PendingUpload(
+            title: e.key,
+            filePath: kIsWeb ? null : e.value.path,
+            fileBytes: e.value.bytes,
+            fileName: e.value.name,
+          ))
       .toList();
 
   Future<void> _submit({required bool skipDocuments}) async {
@@ -70,10 +81,6 @@ class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text(
-          'Back',
-          style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.w500),
         ),
       ),
       body: SafeArea(
@@ -107,7 +114,8 @@ class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               ),
-              const SizedBox(height: 28),
+              RegisterProgramBanner(nstpProgram: widget.draft.nstpProgram),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(
@@ -121,7 +129,7 @@ class _RegisterDocumentsScreenState extends State<RegisterDocumentsScreen> {
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _DocumentRow(
                     doc: doc,
-                    fileName: _picked[doc.title],
+                    fileName: _picked[doc.title]?.name,
                     onUpload: () => _pickFor(doc),
                   ),
                 ),

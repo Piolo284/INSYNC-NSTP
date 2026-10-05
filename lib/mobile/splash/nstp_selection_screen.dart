@@ -36,13 +36,12 @@ class NstpSelectionScreen extends StatelessWidget {
               ),
               // ===== LOGO =====
               Positioned(
-                top: 65,
+                top: 50,
                 child: Container(
-                  width: 110,
-                  height: 110,
+                  width: 150,
+                  height: 150,
                   padding: const EdgeInsets.all(6),
                   decoration: BoxDecoration(
-                    color: AppColors.white,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
@@ -57,7 +56,7 @@ class NstpSelectionScreen extends StatelessWidget {
                     errorBuilder: (_, _, _) => const Icon(
                       Icons.school,
                       color: AppColors.primaryMaroon,
-                      size: 40,
+                      size: 70,
                     ),
                   ),
                 ),

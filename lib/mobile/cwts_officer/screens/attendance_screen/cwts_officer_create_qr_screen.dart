@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -6,16 +8,27 @@ import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/status_badge.dart';
 
 /// Officer QR attendance session builder.
 ///
-/// The three-step Setup → Preview → Active flow is unchanged. What is new:
-/// step 2 creates a real AttendanceSession in MongoDB and renders a QR code
-/// for the session code that trainees scan, and step 3 activates/closes it.
-/// The QR image is generated locally with `qr_flutter` — no external service
-/// call, so it also works offline.
+/// Two steps: **Setup** creates a real `AttendanceSession` in MongoDB, then
+/// **Monitor** shows the QR for its `sessionCode` (trainees scan this — no
+/// external service call, works offline) alongside a live check-in list that
+/// polls `GET /attendance?sessionId=` every 5 seconds while the session is
+/// open, mirroring the web admin's `MonitorModal`. There is no separate
+/// "Activate" step — the backend has no such state, a session is scannable
+/// the moment it's created — and no Pause/Regenerate, since the
+/// `AttendanceSession` model has no Paused status and no endpoint to reissue
+/// a session's code.
+///
+/// Pass [existingSession] to resume monitoring a session an officer already
+/// started (e.g. from the dashboard's "Manage Attendance" card) instead of
+/// building a new one.
 class CwtsOfficerCreateQrScreen extends StatefulWidget {
-  const CwtsOfficerCreateQrScreen({super.key});
+  const CwtsOfficerCreateQrScreen({super.key, this.existingSession});
+
+  final Map<String, dynamic>? existingSession;
 
   @override
   State<CwtsOfficerCreateQrScreen> createState() =>
@@ -27,38 +40,78 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
   DateTime _selectedDate = DateTime.now();
   TimeOfDay _startTime = const TimeOfDay(hour: 8, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 8, minute: 30);
-  String _selectedBrigade = 'Brigade Makakalikasan';
   final TextEditingController _notesController = TextEditingController();
 
   bool _isSaving = false;
 
-  /// The session created in step 2; drives the QR image and step 3.
+  /// 'IN' (default) generates a regular check-in QR. 'OUT' generates a
+  /// check-out QR paired to one of today's check-in sessions — closing it
+  /// marks Absent anyone who checked in there but never checked out.
+  String _checkType = 'IN';
+  Map<String, dynamic>? _pairedSession;
+  List<Map<String, dynamic>> _availableInSessions = const [];
+  bool _loadingInSessions = false;
+
+  /// The active session; drives the QR image and the Monitor step.
   Map<String, dynamic>? _session;
 
-  final List<String> _steps = ['Setup', 'Preview', 'Active'];
+  Timer? _pollTimer;
+  List<Map<String, dynamic>> _liveRecords = const [];
+  bool _isPolling = false;
 
-  final List<String> _brigades = const [
-    'Brigade Makakalikasan',
-    'Brigade Kalikasan',
-    'Brigade Masipag',
-  ];
+  final List<String> _steps = ['Setup', 'Monitor'];
 
   @override
   void initState() {
     super.initState();
-    final sessionBrigade = Session.instance.brigade;
-    if (sessionBrigade.isNotEmpty && _brigades.contains(sessionBrigade)) {
-      _selectedBrigade = sessionBrigade;
+
+    final existing = widget.existingSession;
+    if (existing != null) {
+      _session = existing;
+      _currentStep = 1;
+      _startPolling();
     }
+  }
+
+  Future<void> _loadInSessions() async {
+    setState(() => _loadingInSessions = true);
+    try {
+      final sessions = await AttendanceService.instance.sessions(
+        program: Session.instance.program,
+        date: _selectedDate,
+        specialClass: Session.instance.isSpecialClassOfficer,
+      );
+      if (!mounted) return;
+      final inSessions =
+          sessions.where((s) => Fmt.str(s['checkType'], 'IN') == 'IN').toList();
+      setState(() {
+        _availableInSessions = inSessions;
+        if (_pairedSession != null &&
+            !inSessions.any((s) => s['_id'] == _pairedSession!['_id'])) {
+          _pairedSession = null;
+        }
+      });
+    } catch (_) {
+      // Silent — the picker just shows "No check-in sessions" instead.
+    } finally {
+      if (mounted) setState(() => _loadingInSessions = false);
+    }
+  }
+
+  void _onCheckTypeChanged(String value) {
+    setState(() => _checkType = value);
+    if (value == 'OUT') _loadInSessions();
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _notesController.dispose();
     super.dispose();
   }
 
   String get _sessionCode => Fmt.str(_session?['sessionCode']);
+  String get _sessionId => Fmt.str(_session?['_id']);
 
   Future<void> _pickDate() async {
     final picked = await showDatePicker(
@@ -74,7 +127,10 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
         child: child!,
       ),
     );
-    if (picked != null) setState(() => _selectedDate = picked);
+    if (picked != null) {
+      setState(() => _selectedDate = picked);
+      if (_checkType == 'OUT') _loadInSessions();
+    }
   }
 
   Future<void> _pickTime(bool isStart) async {
@@ -100,10 +156,6 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     }
   }
 
-  void _prevStep() {
-    if (_currentStep > 0) setState(() => _currentStep--);
-  }
-
   String _apiTime(TimeOfDay t) =>
       '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
 
@@ -111,26 +163,49 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
 
   int _minutesOf(TimeOfDay t) => t.hour * 60 + t.minute;
 
-  /// Step 1 → 2: persists the session so the QR code maps to a real record.
+  /// Step 1 → 2: persists the session so the QR code maps to a real record,
+  /// then starts monitoring it immediately — it's already scannable.
   Future<void> _generateSession() async {
+    // The Special Class officer's sessions are always program-wide, not
+    // tied to any personal brigade — only a regular brigade officer needs
+    // one assigned before they can start a session.
+    if (Session.instance.brigade.isEmpty && !Session.instance.isSpecialClassOfficer) {
+      AppSnack.error(
+        context,
+        'Your officer account has no brigade assigned yet. Contact your administrator.',
+      );
+      return;
+    }
     if (_minutesOf(_endTime) <= _minutesOf(_startTime)) {
       AppSnack.error(context, 'End time must be after the start time.');
+      return;
+    }
+    if (_checkType == 'OUT' && _pairedSession == null) {
+      AppSnack.error(context, 'Select which check-in session this check-out QR code closes out.');
       return;
     }
 
     setState(() => _isSaving = true);
 
     try {
+      final defaultTitle = _checkType == 'OUT'
+          ? (Session.instance.isSpecialClassOfficer
+              ? '${Session.instance.program} Inclusive Learning Section Check-Out'
+              : '${Session.instance.brigade} Check-Out')
+          : (Session.instance.isSpecialClassOfficer
+              ? '${Session.instance.program} Inclusive Learning Section Attendance'
+              : '${Session.instance.brigade} Attendance');
       final session = await AttendanceService.instance.createSession(
         date: _selectedDate,
         startTime: _apiTime(_startTime),
         endTime: _apiTime(_endTime),
         program: Session.instance.program,
-        brigade: _selectedBrigade,
         notes: _notesController.text.trim(),
         title: _notesController.text.trim().isEmpty
-            ? '$_selectedBrigade Attendance'
+            ? defaultTitle
             : _notesController.text.trim(),
+        checkType: _checkType,
+        pairedSessionId: _checkType == 'OUT' ? Fmt.str(_pairedSession?['_id']) : null,
       );
 
       if (!mounted) return;
@@ -138,6 +213,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
         _session = session;
         _currentStep = 1;
       });
+      _startPolling();
     } catch (error) {
       if (!mounted) return;
       AppSnack.error(context, describeError(error));
@@ -146,13 +222,39 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     }
   }
 
-  void _activate() {
-    setState(() => _currentStep = 2);
-    AppSnack.success(context, 'QR code is now active. Trainees can scan it.');
+  void _startPolling() {
+    _pollTimer?.cancel();
+    _refreshRecords();
+    _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) => _refreshRecords());
+  }
+
+  Future<void> _refreshRecords() async {
+    final id = _sessionId;
+    if (id.isEmpty || !mounted) return;
+    setState(() => _isPolling = true);
+    try {
+      final records = await AttendanceService.instance.list(sessionId: id, limit: 500);
+      if (!mounted) return;
+      setState(() => _liveRecords = records);
+    } catch (_) {
+      // Silent — a transient failure just leaves the last known list on
+      // screen; the next 5s tick will retry automatically.
+    } finally {
+      if (mounted) setState(() => _isPolling = false);
+    }
+  }
+
+  Map<String, int> get _liveCounts {
+    final counts = {'Present': 0, 'Late': 0, 'Absent': 0, 'Excused': 0};
+    for (final record in _liveRecords) {
+      final status = Fmt.str(record['status']);
+      if (counts.containsKey(status)) counts[status] = counts[status]! + 1;
+    }
+    return counts;
   }
 
   Future<void> _closeSession() async {
-    final id = Fmt.str(_session?['_id']);
+    final id = _sessionId;
     if (id.isEmpty) return;
 
     final confirmed = await showConfirmDialog(
@@ -165,14 +267,60 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     if (!confirmed) return;
 
     try {
+      _pollTimer?.cancel();
       await AttendanceService.instance.closeSession(id);
       if (!mounted) return;
-      AppSnack.success(context, 'Attendance session closed.');
+      await _showSessionSummary();
+      if (!mounted) return;
       Navigator.pop(context);
     } catch (error) {
       if (!mounted) return;
       AppSnack.error(context, describeError(error));
+      _startPolling();
     }
+  }
+
+  Future<void> _showSessionSummary() {
+    final counts = _liveCounts;
+    return showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Session Closed'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('${_liveRecords.length} student(s) checked in.'),
+            const SizedBox(height: 12),
+            _summaryRow('Present', counts['Present']!, AppColors.success),
+            _summaryRow('Late', counts['Late']!, AppColors.lateStatus),
+            _summaryRow('Absent', counts['Absent']!, AppColors.error),
+            _summaryRow('Excused', counts['Excused']!, AppColors.blue),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Done'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _summaryRow(String label, int count, Color color) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        children: [
+          Container(width: 8, height: 8, decoration: BoxDecoration(color: color, shape: BoxShape.circle)),
+          const SizedBox(width: 8),
+          Expanded(child: Text(label, style: const TextStyle(fontSize: 13, color: AppColors.textSecondary))),
+          Text('$count', style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        ],
+      ),
+    );
   }
 
   Widget _buildStepper() {
@@ -268,17 +416,11 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
-          onPressed: () {
-            if (_currentStep == 0) {
-              Navigator.pop(context);
-            } else {
-              _prevStep();
-            }
-          },
+          onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Create QR Code',
-          style: TextStyle(
+        title: Text(
+          _currentStep == 0 ? 'Create QR Code' : 'Live Attendance',
+          style: const TextStyle(
             color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -292,11 +434,7 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
             child: _buildStepper(),
           ),
           Expanded(
-            child: _currentStep == 0
-                ? _buildSetupStep()
-                : _currentStep == 1
-                    ? _buildPreviewStep()
-                    : _buildActiveStep(),
+            child: _currentStep == 0 ? _buildSetupStep() : _buildMonitorStep(),
           ),
         ],
       ),
@@ -405,29 +543,58 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
                 ),
                 const SizedBox(height: 20),
 
-                _buildLabel('Select Brigade'),
+                _buildLabel(Session.instance.isSpecialClassOfficer ? 'Roster' : 'Brigade'),
                 const SizedBox(height: 8),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                   decoration: BoxDecoration(
+                    color: AppColors.scaffoldBg,
                     border: Border.all(color: AppColors.border),
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: DropdownButtonHideUnderline(
-                    child: DropdownButton<String>(
-                      isExpanded: true,
-                      value: _selectedBrigade,
-                      icon: const Icon(Icons.keyboard_arrow_down,
-                          color: AppColors.textSecondary),
-                      style: const TextStyle(
-                          fontSize: 14, color: AppColors.textPrimary),
-                      onChanged: (v) => setState(() => _selectedBrigade = v!),
-                      items: _brigades
-                          .map((b) => DropdownMenuItem(value: b, child: Text(b)))
-                          .toList(),
-                    ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.groups_outlined, size: 18, color: AppColors.textSecondary),
+                      const SizedBox(width: 10),
+                      Text(
+                        Session.instance.isSpecialClassOfficer
+                            ? '${Session.instance.program} Inclusive Learning Section (program-wide)'
+                            : Session.instance.brigade.isEmpty
+                                ? 'No brigade assigned — contact your administrator.'
+                                : Session.instance.brigade,
+                        style: const TextStyle(fontSize: 14, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                      ),
+                    ],
                   ),
                 ),
+                const SizedBox(height: 20),
+
+                _buildLabel('This QR Code Is For'),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildCheckTypeChip(label: 'Check In', value: 'IN'),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: _buildCheckTypeChip(label: 'Check Out', value: 'OUT'),
+                    ),
+                  ],
+                ),
+                if (_checkType == 'OUT') ...[
+                  const SizedBox(height: 12),
+                  _buildLabel('Pair With Check-In Session'),
+                  const SizedBox(height: 8),
+                  _buildPairedSessionPicker(),
+                  const SizedBox(height: 4),
+                  const Text(
+                    'Trainees who check in here but never scan this check-out '
+                    'QR are marked Absent once you close it.',
+                    style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                  ),
+                ],
                 const SizedBox(height: 20),
 
                 _buildLabel('Notes (Optional)'),
@@ -498,208 +665,198 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
     );
   }
 
-  // ===== STEP 2: PREVIEW =====
-  Widget _buildPreviewStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'QR Code Preview',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 4),
-          const Text(
-            'Show this QR code to students to scan',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 20),
+  // ===== STEP 2: SHOW QR + LIVE MONITOR =====
+  Widget _buildMonitorStep() {
+    final counts = _liveCounts;
+    final status = Fmt.str(_session?['status'], 'Active');
 
-          _buildQrCard(),
-          const SizedBox(height: 20),
-
-          AppCard(
-            child: Column(
+    return RefreshIndicator(
+      color: AppColors.primaryMaroon,
+      onRefresh: _refreshRecords,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                InfoRow(
-                  icon: Icons.calendar_today_outlined,
-                  label: 'Date',
-                  value: Fmt.dateWithDay(_session?['date']),
+                Expanded(
+                  child: Text(
+                    Fmt.str(_session?['title'], 'Attendance Session'),
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
                 ),
-                InfoRow(
-                  icon: Icons.access_time,
-                  label: 'Time',
-                  value: '${_displayTime(_startTime)} – ${_displayTime(_endTime)}',
-                ),
-                InfoRow(
-                  icon: Icons.groups_outlined,
-                  label: 'Brigade',
-                  value: _selectedBrigade,
-                ),
-                InfoRow(
-                  icon: Icons.notes_outlined,
-                  label: 'Notes',
-                  value: _notesController.text.trim().isEmpty
-                      ? '—'
-                      : _notesController.text.trim(),
-                ),
+                StatusBadge(status),
               ],
             ),
-          ),
-          const SizedBox(height: 20),
+            const SizedBox(height: 4),
+            const Text(
+              'Show this QR code to students to scan',
+              style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 20),
 
-          _buildWarningBanner(),
-          const SizedBox(height: 24),
+            SizedBox(width: double.infinity, child: _buildQrCard()),
+            const SizedBox(height: 20),
 
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: _prevStep,
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: AppColors.textPrimary,
-                    side: const BorderSide(color: AppColors.border),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
+            AppCard(
+              child: Column(
+                children: [
+                  InfoRow(
+                    icon: Icons.calendar_today_outlined,
+                    label: 'Date',
+                    value: Fmt.dateWithDay(_session?['date']),
                   ),
-                  child: const Text('Back',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  InfoRow(
+                    icon: Icons.access_time,
+                    label: 'Time',
+                    value:
+                        '${Fmt.clock(Fmt.str(_session?['startTime']))} – ${Fmt.clock(Fmt.str(_session?['endTime']))}',
+                  ),
+                  InfoRow(
+                    icon: Icons.groups_outlined,
+                    label: Session.instance.isSpecialClassOfficer ? 'Roster' : 'Brigade',
+                    value: Session.instance.isSpecialClassOfficer
+                        ? '${Session.instance.program} Inclusive Learning Section'
+                        : Fmt.str(_session?['brigade'], '—'),
+                  ),
+                  InfoRow(
+                    icon: Icons.notes_outlined,
+                    label: 'Notes',
+                    value: Fmt.str(_session?['notes'], '—'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
+
+            _buildWarningBanner(),
+            const SizedBox(height: 24),
+
+            Row(
+              children: [
+                const Text(
+                  'Attendance Progress',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: AppColors.textPrimary),
+                ),
+                const Spacer(),
+                if (_isPolling)
+                  const SizedBox(
+                    width: 14,
+                    height: 14,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryMaroon),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildCountChip('Present', counts['Present']!, AppColors.success),
+                const SizedBox(width: 8),
+                _buildCountChip('Late', counts['Late']!, AppColors.lateStatus),
+                const SizedBox(width: 8),
+                _buildCountChip('Absent', counts['Absent']!, AppColors.error),
+                const SizedBox(width: 8),
+                _buildCountChip('Excused', counts['Excused']!, AppColors.blue),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            if (_liveRecords.isEmpty)
+              const AppCard(
+                child: AsyncView(
+                  state: LoadState.empty,
+                  compact: true,
+                  emptyText: 'No check-ins yet.',
+                  emptyIcon: Icons.qr_code_scanner,
+                  child: SizedBox.shrink(),
+                ),
+              )
+            else
+              AppCard(
+                padding: EdgeInsets.zero,
+                child: Column(
+                  children: _liveRecords
+                      .map((record) => _buildLiveRecordTile(record))
+                      .toList(),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _activate,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryMaroon,
-                    foregroundColor: AppColors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12)),
-                    elevation: 0,
-                  ),
-                  child: const Text(
-                    'Activate QR Code',
-                    style: TextStyle(fontWeight: FontWeight.w600),
-                  ),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton(
+                onPressed: _closeSession,
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12)),
+                ),
+                child: const Text(
+                  'Close Session',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                 ),
               ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 
-  // ===== STEP 3: ACTIVE =====
-  Widget _buildActiveStep() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildCountChip(String label, int count, Color color) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.1),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          children: [
+            Text('$count', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+            const SizedBox(height: 2),
+            Text(label, style: TextStyle(fontSize: 10, color: color, fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLiveRecordTile(Map<String, dynamic> record) {
+    final student = record['studentId'];
+    final user = student is Map ? student : const {};
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppColors.border, width: 0.5)),
+      ),
+      child: Row(
         children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppColors.greenLight,
-                  borderRadius: BorderRadius.circular(20),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(user['name'], 'Trainee'),
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
                 ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.circle, size: 8, color: AppColors.success),
-                    SizedBox(width: 6),
-                    Text(
-                      'Active',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w700,
-                        color: AppColors.success,
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 2),
+                Text(
+                  '${Fmt.str(user['studentId'], '—')}  •  ${Fmt.str(record['time'], '---')}',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'QR Code Preview',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textPrimary,
+              ],
             ),
           ),
-          const SizedBox(height: 4),
-          const Text(
-            'Show this QR code to students to scan',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-          ),
-          const SizedBox(height: 20),
-
-          _buildQrCard(),
-          const SizedBox(height: 16),
-
-          Center(
-            child: Text(
-              _selectedBrigade,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: AppColors.textPrimary,
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
-
-          _buildWarningBanner(),
-          const SizedBox(height: 24),
-
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton(
-              onPressed: _closeSession,
-              style: OutlinedButton.styleFrom(
-                foregroundColor: AppColors.error,
-                side: const BorderSide(color: AppColors.error),
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-              ),
-              child: const Text(
-                'Close Session',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: () => Navigator.pop(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primaryMaroon,
-                foregroundColor: AppColors.white,
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12)),
-                elevation: 0,
-              ),
-              child: const Text(
-                'Done',
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-              ),
-            ),
-          ),
+          StatusBadge(Fmt.str(record['status'], 'Present'), dense: true),
         ],
       ),
     );
@@ -774,6 +931,115 @@ class _CwtsOfficerCreateQrScreenState extends State<CwtsOfficerCreateQrScreen> {
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+      ),
+    );
+  }
+
+  Widget _buildCheckTypeChip({required String label, required String value}) {
+    final isSelected = _checkType == value;
+    return GestureDetector(
+      onTap: () => _onCheckTypeChanged(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primaryMaroon : AppColors.grey100,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? AppColors.white : AppColors.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPairedSessionPicker() {
+    if (_loadingInSessions) {
+      return Container(
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.primaryMaroon),
+        ),
+      );
+    }
+
+    if (_availableInSessions.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: AppColors.scaffoldBg,
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: const Text(
+          'No check-in sessions for this date yet. Create the check-in QR '
+          'code first.',
+          style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () async {
+        final picked = await showAppBottomSheet<Map<String, dynamic>>(
+          context,
+          title: 'Select a check-in session',
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: _availableInSessions.map((s) {
+              final selected = s['_id'] == _pairedSession?['_id'];
+              return ListTile(
+                title: Text(Fmt.str(s['title'], 'Attendance Session')),
+                subtitle: Text(
+                  '${Fmt.clock(Fmt.str(s['startTime']))} – ${Fmt.clock(Fmt.str(s['endTime']))}',
+                ),
+                trailing: selected
+                    ? const Icon(Icons.check, color: AppColors.primaryMaroon)
+                    : null,
+                onTap: () => Navigator.pop(context, s),
+              );
+            }).toList(),
+          ),
+        );
+        if (picked != null) setState(() => _pairedSession = picked);
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.border),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                _pairedSession == null
+                    ? 'Select a check-in session'
+                    : Fmt.str(_pairedSession?['title'], 'Attendance Session'),
+                style: TextStyle(
+                  fontSize: 14,
+                  color: _pairedSession == null
+                      ? AppColors.textSecondary
+                      : AppColors.textPrimary,
+                ),
+              ),
+            ),
+            const Icon(Icons.keyboard_arrow_down, size: 18, color: AppColors.textSecondary),
+          ],
+        ),
       ),
     );
   }

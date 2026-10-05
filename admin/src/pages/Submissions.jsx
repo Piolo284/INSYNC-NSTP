@@ -4,9 +4,7 @@ import TopBar from '../components/TopBar';
 import AsyncSection from '../components/AsyncSection';
 import { useApi, errorMessage } from '../hooks/useApi';
 import { submissionsApi } from '../api/submissions';
-import { BASE_URL } from '../api/client';
-
-const FILE_HOST = BASE_URL.replace(/\/api\/?$/, '');
+import { resolveFileUrl } from '../api/client';
 
 const STATUS_COLORS = {
   Submitted: { bg: '#EFF6FF', color: '#2563EB' },
@@ -77,7 +75,7 @@ export default function Submissions() {
                         <td style={cell}>{s.submittedAt ? new Date(s.submittedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}</td>
                         <td style={cell}>
                           {s.fileUrl ? (
-                            <a href={`${FILE_HOST}${s.fileUrl}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--maroon)', fontWeight: 600, textDecoration: 'none' }}>
+                            <a href={resolveFileUrl(s.fileUrl)} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--maroon)', fontWeight: 600, textDecoration: 'none' }}>
                               <FileDown size={13} /> File
                             </a>
                           ) : '—'}
@@ -147,7 +145,7 @@ function GradeModal({ submission, onClose, onSaved }) {
           <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>{submission.moduleId?.title || submission.activityId?.title}</p>
           {submission.comment && <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--text-primary)', fontStyle: 'italic' }}>"{submission.comment}"</p>}
           {submission.fileUrl && (
-            <a href={`${FILE_HOST}${submission.fileUrl}`} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '8px', fontSize: '12px', color: 'var(--maroon)', fontWeight: 700, textDecoration: 'none' }}>
+            <a href={resolveFileUrl(submission.fileUrl)} target="_blank" rel="noreferrer" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', marginTop: '8px', fontSize: '12px', color: 'var(--maroon)', fontWeight: 700, textDecoration: 'none' }}>
               <FileDown size={13} /> View submitted file
             </a>
           )}

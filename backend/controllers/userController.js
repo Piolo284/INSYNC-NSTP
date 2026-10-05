@@ -4,9 +4,10 @@ const Cadet = require('../models/Cadet');
 const Officer = require('../models/Officer');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
+const { destroy } = require('../middleware/upload');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { profileFor } = require('./authController');
-const { requireFields, isValidEmail } = require('../utils/validate');
+const { requireFields, isMarsuEmail } = require('../utils/validate');
 const { ADMIN_ROLES, PROGRAM_ADMIN_ROLES } = require('../config/constants');
 const { assertProgramAccess } = require('../utils/programScope');
 
@@ -120,6 +121,25 @@ exports.update = asyncHandler(async (req, res) => {
   res.json({ success: true, data: { user: user.toPublic(), profile } });
 });
 
+/**
+ * PUT /api/users/me/avatar — the logged-in admin/user replaces their own
+ * profile picture. File already streamed into GridFS by the `uploader()`
+ * middleware; this just points the User doc at it and cleans up the old one.
+ */
+exports.uploadAvatar = asyncHandler(async (req, res) => {
+  if (!req.file) throw ApiError.badRequest('No image file was uploaded.');
+
+  const user = await User.findById(req.user._id);
+  const previousImage = user.profileImage;
+  user.profileImage = req.file.path;
+  await user.save();
+
+  const previousFileId = previousImage && previousImage.match(/\/files\/([a-f0-9]{24})$/i);
+  if (previousFileId) await destroy(previousFileId[1]);
+
+  res.json({ success: true, data: user.toPublic() });
+});
+
 /** DELETE /api/users/:id — removes the user and its role profile. */
 exports.remove = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id);
@@ -173,8 +193,8 @@ exports.create = asyncHandler(async (req, res) => {
   if (!ADMIN_ROLES.includes(role)) {
     throw ApiError.badRequest(`role must be one of: ${ADMIN_ROLES.join(', ')}.`);
   }
-  if (!isValidEmail(email)) {
-    throw ApiError.badRequest('Please enter a valid email address.');
+  if (!isMarsuEmail(email)) {
+    throw ApiError.badRequest('Please use an official MARSU email address (e.g. juandelacruz@marsu.edu.ph).');
   }
   if (String(password).length < 8) {
     throw ApiError.badRequest('Password must be at least 8 characters long.');

@@ -45,8 +45,8 @@ class AttendanceService {
   }) async {
     final response = await _api.post('/attendance/verify', body: {
       'verificationCode': verificationCode,
-      if (attendanceId != null) 'attendanceId': attendanceId,
-      if (sessionId != null) 'sessionId': sessionId,
+      'attendanceId': ?attendanceId,
+      'sessionId': ?sessionId,
     });
     return {
       ...ApiService.mapOf(response),
@@ -90,39 +90,53 @@ class AttendanceService {
     return ApiService.mapOf(response);
   }
 
-  /// Creates the QR attendance session an officer shows to the class.
+  /// Creates the QR attendance session an officer shows to the class. The
+  /// session's brigade is never sent — the backend auto-assigns it from the
+  /// officer's own brigade (see backend/utils/brigadeScope.js).
   Future<Map<String, dynamic>> createSession({
     required DateTime date,
     required String startTime,
     required String endTime,
     String? program,
-    String brigade = '',
     String notes = '',
     String? activityId,
     String? title,
+    bool isSpecialClass = false,
+    /// 'IN' (default) or 'OUT'. An 'OUT' session must also pass
+    /// [pairedSessionId] — the IN session it closes out.
+    String checkType = 'IN',
+    String? pairedSessionId,
   }) async {
     final response = await _api.post('/attendance/sessions', body: {
       'date': Fmt.apiDate(date),
       'startTime': startTime,
       'endTime': endTime,
-      if (program != null) 'program': program,
-      'brigade': brigade,
+      'program': ?program,
       'notes': notes,
-      if (activityId != null) 'activityId': activityId,
-      if (title != null) 'title': title,
+      'activityId': ?activityId,
+      'title': ?title,
+      if (isSpecialClass) 'isSpecialClass': true,
+      'checkType': checkType,
+      'pairedSessionId': ?pairedSessionId,
     });
     return ApiService.mapOf(response);
   }
 
+  /// The ROTC officer attendance/activities screens pass [specialClass]:
+  /// true only when the caller IS the assigned Special Class officer,
+  /// requesting their own alternative-track sessions instead of their
+  /// regular brigade ones (the backend rejects it otherwise).
   Future<List<Map<String, dynamic>>> sessions({
     String? program,
     String? status,
     DateTime? date,
+    bool specialClass = false,
   }) async {
     final response = await _api.get('/attendance/sessions', query: {
       'program': program,
       'status': status,
       if (date != null) 'date': Fmt.apiDate(date),
+      if (specialClass) 'specialClass': 'true',
     });
     return ApiService.listOf(response);
   }
@@ -132,30 +146,58 @@ class AttendanceService {
     return ApiService.mapOf(response);
   }
 
-  /// Manual attendance — one call marks the whole selected list.
-  Future<int> markManual({
+  /// Manual attendance — one call marks the whole selected list. The
+  /// backend rejects any student outside the officer's own brigade, so no
+  /// brigade needs to be sent here either.
+  ///
+  /// [checkType] 'IN' (default) marks [status] as usual. 'OUT' instead stamps
+  /// a check-out time onto each student's existing check-in row — [status]
+  /// is ignored — and any student with no check-in row yet is reported back
+  /// in the returned `failed` count instead of being marked.
+  Future<Map<String, int>> markManual({
     required List<String> studentIds,
     required DateTime date,
     String status = 'Present',
     String? program,
-    String brigade = '',
     String remarks = '',
     String? sessionId,
     String? activityId,
     String? title,
+    bool isSpecialClass = false,
+    String checkType = 'IN',
   }) async {
     final response = await _api.post('/attendance', body: {
       'studentIds': studentIds,
       'date': Fmt.apiDate(date),
       'status': status,
-      if (program != null) 'program': program,
-      'brigade': brigade,
+      'program': ?program,
       'remarks': remarks,
-      if (sessionId != null) 'sessionId': sessionId,
-      if (activityId != null) 'activityId': activityId,
-      if (title != null) 'title': title,
+      'sessionId': ?sessionId,
+      'activityId': ?activityId,
+      'title': ?title,
+      if (isSpecialClass) 'isSpecialClass': true,
+      'checkType': checkType,
     });
-    return (response['count'] as num?)?.toInt() ?? 0;
+    return {
+      'count': (response['count'] as num?)?.toInt() ?? 0,
+      'failed': (response['failed'] as num?)?.toInt() ?? 0,
+    };
+  }
+
+  /// "Finalize the day" for manual/ad hoc attendance with no QR session to
+  /// close — marks Absent anyone in scope who checked in but never checked
+  /// out. Mirrors what closing an OUT session does for the QR flow.
+  Future<int> finalizeDay({
+    required DateTime date,
+    String? title,
+    String? program,
+  }) async {
+    final response = await _api.post('/attendance/finalize', body: {
+      'date': Fmt.apiDate(date),
+      'title': ?title,
+      'program': ?program,
+    });
+    return (response['markedAbsentCount'] as num?)?.toInt() ?? 0;
   }
 
   Future<Map<String, dynamic>> update(
@@ -164,8 +206,8 @@ class AttendanceService {
     String? remarks,
   }) async {
     final response = await _api.put('/attendance/$id', body: {
-      if (status != null) 'status': status,
-      if (remarks != null) 'remarks': remarks,
+      'status': ?status,
+      'remarks': ?remarks,
     });
     return ApiService.mapOf(response);
   }
@@ -179,5 +221,65 @@ class AttendanceService {
       'threshold': threshold,
     });
     return ApiService.listOf(response);
+  }
+
+  // ---------------------------------------------------------------
+  // Attendance contests (absence disputes)
+  // ---------------------------------------------------------------
+
+  /// Trainee disputes one of their own Absent records. [filePath] is
+  /// optional (e.g. a photographed medical certificate).
+  Future<Map<String, dynamic>> fileContest({
+    required String attendanceId,
+    required String reason,
+    String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
+  }) async {
+    final response = await _api.upload(
+      '/attendance-contests',
+      fields: {
+        'attendanceId': attendanceId,
+        'reason': reason,
+      },
+      filePath: filePath,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
+    return ApiService.mapOf(response);
+  }
+
+  /// The trainee's own filed contests, for overlaying status onto their
+  /// attendance history (Pending / Approved / Rejected instead of Absent).
+  Future<List<Map<String, dynamic>>> myContests() async {
+    final response = await _api.get('/attendance-contests/mine');
+    return ApiService.listOf(response);
+  }
+
+  /// Officer review queue — program/brigade-scoped server-side, same as
+  /// every other officer list.
+  Future<List<Map<String, dynamic>>> listContests({String? status}) async {
+    final response = await _api.get('/attendance-contests', query: {
+      'status': ?status,
+    });
+    return ApiService.listOf(response);
+  }
+
+  Future<Map<String, dynamic>> getContest(String id) async {
+    final response = await _api.get('/attendance-contests/$id');
+    return ApiService.mapOf(response);
+  }
+
+  /// Officer approves or rejects a pending contest.
+  Future<Map<String, dynamic>> reviewContest(
+    String id, {
+    required String status,
+    String reviewNote = '',
+  }) async {
+    final response = await _api.put('/attendance-contests/$id', body: {
+      'status': status,
+      'reviewNote': reviewNote,
+    });
+    return ApiService.mapOf(response);
   }
 }

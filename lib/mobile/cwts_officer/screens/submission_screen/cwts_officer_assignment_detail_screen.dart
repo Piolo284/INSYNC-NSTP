@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'cwts_officer_add_module_screen.dart';
 import 'cwts_officer_student_submission_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
@@ -32,6 +33,9 @@ class _CwtsOfficerAssignmentDetailScreenState
 
   Map<String, dynamic> _module = const {};
   List<Map<String, dynamic>> _submissions = const [];
+
+  /// Set when the module is edited or deleted, so the list refreshes on pop.
+  bool _changed = false;
 
   @override
   void initState() {
@@ -70,6 +74,42 @@ class _CwtsOfficerAssignmentDetailScreenState
         _state = LoadState.error;
         _error = describeError(error);
       });
+    }
+  }
+
+  Future<void> _edit() async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CwtsOfficerAddModuleScreen(existing: _module, forAssignment: true),
+      ),
+    );
+    if (saved == true) {
+      _changed = true;
+      await _load();
+    }
+  }
+
+  Future<void> _delete() async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete module?',
+      message:
+          'This removes "${Fmt.str(_module['title'], 'this module')}" and all of '
+          'its student submissions permanently. This cannot be undone.',
+      confirmLabel: 'Delete',
+    );
+
+    if (!confirmed || !mounted) return;
+
+    try {
+      await ModuleService.instance.delete(widget.moduleId);
+      if (!mounted) return;
+      AppSnack.success(context, 'Module deleted.');
+      Navigator.pop(context, true);
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
     }
   }
 
@@ -143,7 +183,12 @@ class _CwtsOfficerAssignmentDetailScreenState
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) Navigator.pop(context, _changed);
+      },
+      child: Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
         backgroundColor: AppColors.primaryMaroon,
@@ -151,7 +196,7 @@ class _CwtsOfficerAssignmentDetailScreenState
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
+          onPressed: () => Navigator.pop(context, _changed),
         ),
         title: const Text(
           'Assignment Details',
@@ -162,6 +207,14 @@ class _CwtsOfficerAssignmentDetailScreenState
           ),
         ),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined, color: AppColors.white, size: 20),
+            onPressed: _state == LoadState.ready ? _edit : null,
+          ),
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.white, size: 20),
+            onPressed: _state == LoadState.ready ? _delete : null,
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
@@ -273,6 +326,7 @@ class _CwtsOfficerAssignmentDetailScreenState
             ),
           ],
         ),
+      ),
       ),
     );
   }

@@ -5,7 +5,6 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { PROGRAMS, TRAINEE_ROLES } = require('../config/constants');
-const { publicUrl } = require('../middleware/upload');
 const { notifyUsers } = require('../utils/notify');
 const {
   assertProgramAccess,
@@ -137,7 +136,7 @@ exports.create = asyncHandler(async (req, res) => {
     program,
     moduleCode: req.body.moduleCode || '',
     section: req.body.section || '',
-    fileUrl: file ? publicUrl('modules', file.filename) : req.body.fileUrl || '',
+    fileUrl: file ? file.path : req.body.fileUrl || '',
     fileName: file ? file.originalname : req.body.fileName || '',
     fileSize: file ? file.size : Number(req.body.fileSize) || 0,
     instructions: parseList(req.body.instructions) || [],
@@ -195,9 +194,16 @@ exports.update = asyncHandler(async (req, res) => {
   if (instructions) module.instructions = instructions;
 
   if (req.file) {
-    module.fileUrl = publicUrl('modules', req.file.filename);
+    module.fileUrl = req.file.path;
     module.fileName = req.file.originalname;
     module.fileSize = req.file.size;
+  } else if (req.body.fileUrl !== undefined) {
+    // No new upload this save — the officer either updated the external
+    // video link or left it as-is (the form resends the current value
+    // either way), never both a file and a link at once.
+    module.fileUrl = req.body.fileUrl;
+    module.fileName = req.body.fileName || '';
+    module.fileSize = 0;
   }
 
   await module.save();

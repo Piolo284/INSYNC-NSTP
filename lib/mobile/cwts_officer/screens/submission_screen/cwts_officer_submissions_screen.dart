@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'cwts_officer_add_module_screen.dart';
 import 'cwts_officer_assignment_detail_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
@@ -9,7 +10,12 @@ import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 
 class CwtsOfficerSubmissionsScreen extends StatefulWidget {
-  const CwtsOfficerSubmissionsScreen({super.key});
+  /// Lets the back arrow jump to the shell's Home tab instead of trying to
+  /// pop a route — this screen is a bottom-nav tab, not a pushed page, so
+  /// there's normally nothing on the Navigator stack for it to pop.
+  final ValueChanged<int>? onNavigateToTab;
+
+  const CwtsOfficerSubmissionsScreen({super.key, this.onNavigateToTab});
 
   @override
   State<CwtsOfficerSubmissionsScreen> createState() =>
@@ -18,7 +24,6 @@ class CwtsOfficerSubmissionsScreen extends StatefulWidget {
 
 class _CwtsOfficerSubmissionsScreenState
     extends State<CwtsOfficerSubmissionsScreen> {
-  String _selectedModule = 'All Modules';
   String _selectedFilter = 'All';
   String _selectedSort = 'Newest';
 
@@ -58,7 +63,6 @@ class _CwtsOfficerSubmissionsScreenState
         program: Session.instance.program,
         withDeadlineOnly: true,
         search: _searchController.text.trim(),
-        moduleCode: _selectedModule == 'All Modules' ? null : _selectedModule,
       );
 
       if (!mounted) return;
@@ -80,15 +84,27 @@ class _CwtsOfficerSubmissionsScreenState
     _debounce = Timer(const Duration(milliseconds: 400), _load);
   }
 
-  /// Module codes present in the data, so the dropdown reflects real classes.
-  List<String> get _moduleOptions {
-    final codes = _assignments
-        .map((a) => Fmt.str(a['moduleCode']))
-        .where((c) => c.isNotEmpty)
-        .toSet()
-        .toList()
-      ..sort();
-    return ['All Modules', ...codes];
+  /// Top-bar + button: posts a plain resource (PDF/PPT/video) — a module
+  /// with no deadline, so it never shows up in this Submissions list.
+  Future<void> _openAddModule() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const CwtsOfficerAddModuleScreen()),
+    );
+    if (created == true) await _load();
+  }
+
+  /// Big floating + button: posts a graded assignment (requires a deadline)
+  /// that students/cadets submit work against — this is what populates the
+  /// list below.
+  Future<void> _openAddAssignment() async {
+    final created = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const CwtsOfficerAddModuleScreen(forAssignment: true),
+      ),
+    );
+    if (created == true) await _load();
   }
 
   // Everything below filters/sorts the assignment list that was already
@@ -139,10 +155,6 @@ class _CwtsOfficerSubmissionsScreenState
 
   @override
   Widget build(BuildContext context) {
-    final moduleOptions = _moduleOptions;
-    final moduleValue =
-        moduleOptions.contains(_selectedModule) ? _selectedModule : 'All Modules';
-
     return Scaffold(
       backgroundColor: AppColors.scaffoldBg,
       appBar: AppBar(
@@ -155,10 +167,16 @@ class _CwtsOfficerSubmissionsScreenState
             color: AppColors.white,
             size: 20,
           ),
-          onPressed: () => Navigator.maybePop(context),
+          onPressed: () {
+            if (widget.onNavigateToTab != null) {
+              widget.onNavigateToTab!(0);
+            } else {
+              Navigator.maybePop(context);
+            }
+          },
         ),
         title: const Text(
-          'Submissions',
+          'Modules',
           style: TextStyle(
             color: AppColors.white,
             fontSize: 18,
@@ -167,6 +185,11 @@ class _CwtsOfficerSubmissionsScreenState
         ),
         actions: [
           IconButton(
+            icon: const Icon(Icons.add, color: AppColors.white, size: 22),
+            tooltip: 'Add Module',
+            onPressed: _openAddModule,
+          ),
+          IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
           ),
@@ -174,37 +197,7 @@ class _CwtsOfficerSubmissionsScreenState
       ),
       body: Column(
         children: [
-          // ===== MODULE DROPDOWN =====
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              decoration: BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.circular(AppColors.radiusSm),
-                border: Border.all(color: AppColors.border),
-              ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton<String>(
-                  isExpanded: true,
-                  value: moduleValue,
-                  icon: const Icon(
-                    Icons.keyboard_arrow_down,
-                    color: AppColors.textSecondary,
-                  ),
-                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 14),
-                  onChanged: (v) {
-                    setState(() => _selectedModule = v!);
-                    _load();
-                  },
-                  items: moduleOptions
-                      .map((m) => DropdownMenuItem(value: m, child: Text(m)))
-                      .toList(),
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
 
           // ===== FILTER TABS =====
           Padding(
@@ -328,7 +321,7 @@ class _CwtsOfficerSubmissionsScreenState
               state: _state,
               message: _error,
               onRetry: _load,
-              emptyText: 'No assignments posted yet.',
+              emptyText: 'No assignments posted yet. Tap + to post one.',
               emptyIcon: Icons.assignment_outlined,
               child: _visibleAssignments.isEmpty
                   ? AsyncView(
@@ -354,6 +347,12 @@ class _CwtsOfficerSubmissionsScreenState
             ),
           ),
         ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _openAddAssignment,
+        tooltip: 'Add Assignment',
+        backgroundColor: AppColors.primaryMaroon,
+        child: const Icon(Icons.add, color: AppColors.white),
       ),
     );
   }

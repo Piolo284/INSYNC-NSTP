@@ -5,7 +5,9 @@ import 'core/services/services.dart';
 import 'mobile/splash/splash_screen.dart';
 import 'mobile/splash/welcome_screen.dart';
 import 'mobile/cwts/cwts_main_shell.dart';
+import 'mobile/cwts_special/cwts_special_main_shell.dart';
 import 'mobile/rotc/rotc_main_shell.dart';
+import 'mobile/rotc_special/rotc_special_main_shell.dart';
 import 'mobile/cwts_officer/cwts_officer_main_shell.dart';
 
 /// Lets the splash router pop a message onto the very first screen the user
@@ -100,9 +102,13 @@ class _SplashRouterState extends State<SplashRouter> {
   Widget? _shellForRole(String role) {
     switch (role) {
       case 'student':
-        return const CwtsMainShell();
+        return Session.instance.isSpecialClassTrainee
+            ? const CwtsSpecialMainShell()
+            : const CwtsMainShell();
       case 'cadet':
-        return const RotcMainShell();
+        return Session.instance.isSpecialClassTrainee
+            ? const RotcSpecialMainShell()
+            : const RotcMainShell();
       case 'officer':
         return const CwtsOfficerMainShell();
       default:

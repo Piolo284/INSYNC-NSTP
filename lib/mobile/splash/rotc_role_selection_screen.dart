@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:marsu_nstp_portal/mobile/auth/cwts_officer_login_screen.dart';
+import 'package:marsu_nstp_portal/mobile/auth/rotc_officer_login_screen.dart';
 import 'package:marsu_nstp_portal/mobile/auth/rotc_login_screen.dart';
 import '../../core/constants/app_colors.dart';
 
@@ -48,7 +48,7 @@ class RoleSelectionScreen extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => const CwtsOfficerLoginScreen()),
+                  MaterialPageRoute(builder: (_) => const RotcOfficerLoginScreen()),
                 );
               },
             ),

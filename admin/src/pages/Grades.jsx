@@ -1,8 +1,9 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { ChevronDown, FileText, Download } from 'lucide-react';
 import TopBar from '../components/TopBar';
 import AsyncSection from '../components/AsyncSection';
-import { useApi, errorMessage } from '../hooks/useApi';
+import ExportConfirmModal from '../components/ExportConfirmModal';
+import { useApi } from '../hooks/useApi';
 import { gradesApi } from '../api/grades';
 import { useAuth } from '../context/AuthContext';
 
@@ -24,17 +25,15 @@ function SelectField({ label, value, onChange, options }) {
 
 const REMARKS_COLORS = {
   Passed: '#3C9B50',
-  Warning: '#D97706',
   Failed: '#DC2626',
   Incomplete: '#6B7280',
 };
 
 export default function Grades() {
-  const { isSuperAdmin, effectiveProgram } = useAuth();
+  const { isSuperAdmin } = useAuth();
   const [program, setProgram] = useState('All');
   const [remarks, setRemarks] = useState('All');
-  const [exporting, setExporting] = useState(false);
-  const [exportError, setExportError] = useState('');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
 
   const fetcher = useCallback(async () => {
     const params = {};
@@ -47,20 +46,31 @@ export default function Grades() {
   }, [isSuperAdmin, program, remarks]);
 
   const { data, loading, error, refetch } = useApi(fetcher, [fetcher]);
-  const grades = data || [];
+  const grades = useMemo(() => data || [], [data]);
 
-  const handleExport = async () => {
-    setExportError('');
-    setExporting(true);
-    try {
-      const exportProgram = isSuperAdmin ? (program !== 'All' ? program : effectiveProgram || 'CWTS') : undefined;
-      await gradesApi.exportReport(exportProgram ? { program: exportProgram } : undefined, 'grade-report.csv');
-    } catch (err) {
-      setExportError(errorMessage(err, 'Export failed.'));
-    } finally {
-      setExporting(false);
-    }
-  };
+  const exportColumns = [
+    { header: 'Student ID', key: 'id' },
+    { header: 'Name', key: 'name' },
+    { header: 'Program', key: 'program' },
+    { header: 'Section', key: 'section' },
+    { header: 'Year Level', key: 'yearLevel' },
+    { header: 'Final Grade', key: 'gradePoint' },
+    { header: 'Remarks', key: 'remarks' },
+  ];
+  // College grading scale (1.00 highest, 5.00 lowest) — same value shown as
+  // the primary grade in each row below — not the raw percentage.
+  const exportRows = useMemo(() => grades.map((g) => {
+    const student = g.studentId || {};
+    return {
+      id: student.studentId || '—',
+      name: student.name || '—',
+      program: g.program || '—',
+      section: student.section || '—',
+      yearLevel: student.yearLevel || '—',
+      gradePoint: typeof g.gradePoint === 'number' ? g.gradePoint.toFixed(2) : '—',
+      remarks: g.remarks || '—',
+    };
+  }), [grades]);
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '40px' }}>
@@ -72,20 +82,20 @@ export default function Grades() {
               {isSuperAdmin && (
                 <SelectField label="Program" value={program} onChange={e => setProgram(e.target.value)} options={['All', 'CWTS', 'ROTC']} />
               )}
-              <SelectField label="Remarks" value={remarks} onChange={e => setRemarks(e.target.value)} options={['All', 'Passed', 'Warning', 'Failed', 'Incomplete']} />
+              <SelectField label="Remarks" value={remarks} onChange={e => setRemarks(e.target.value)} options={['All', 'Passed', 'Failed', 'Incomplete']} />
             </div>
-            <button onClick={handleExport} disabled={exporting} style={{
-              display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '8px',
-              border: 'none', background: 'var(--maroon)', color: '#fff', fontSize: '13px', fontWeight: 700,
-              cursor: exporting ? 'default' : 'pointer', fontFamily: 'inherit', opacity: exporting ? 0.7 : 1,
-            }}>
-              <Download size={15} /> {exporting ? 'Exporting...' : 'Export Report'}
+            <button
+              onClick={() => setExportModalOpen(true)}
+              disabled={exportRows.length === 0}
+              style={{
+                display: 'flex', alignItems: 'center', gap: '8px', padding: '10px 18px', borderRadius: '8px',
+                border: 'none', background: 'var(--maroon)', color: '#fff', fontSize: '13px', fontWeight: 700,
+                cursor: exportRows.length === 0 ? 'default' : 'pointer', fontFamily: 'inherit', opacity: exportRows.length === 0 ? 0.5 : 1,
+              }}
+            >
+              <Download size={15} /> Export Report
             </button>
           </div>
-
-          {exportError && (
-            <div style={{ margin: '16px 24px 0', background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '8px', padding: '10px 14px', fontSize: '12.5px' }}>{exportError}</div>
-          )}
 
           <AsyncSection
             loading={loading}
@@ -108,8 +118,9 @@ export default function Grades() {
                     <p style={{ margin: '2px 0 0', color: 'var(--text-secondary)', fontSize: '12px' }}>{student.studentId || ''}</p>
                   </div>
                   <div style={{ textAlign: 'right', minWidth: '90px' }}>
-                    <strong style={{ display: 'block', fontSize: '18px', color: REMARKS_COLORS[g.remarks] || '#6B7280' }}>{g.finalGrade?.toFixed(1) ?? '—'}</strong>
+                    <strong style={{ display: 'block', fontSize: '18px', color: REMARKS_COLORS[g.remarks] || '#6B7280' }}>{g.gradePoint?.toFixed(2) ?? '—'}</strong>
                     <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{g.remarks}</span>
+                    <span style={{ display: 'block', fontSize: '10px', color: 'var(--text-secondary)', marginTop: '2px' }}>{g.finalGrade?.toFixed(1) ?? '—'}%</span>
                   </div>
                 </div>
               );
@@ -117,6 +128,17 @@ export default function Grades() {
           </AsyncSection>
         </section>
       </main>
+
+      {exportModalOpen && (
+        <ExportConfirmModal
+          title="Grades"
+          description={`This will export ${exportRows.length} grade record(s)${program !== 'All' ? ` (${program})` : ''}${remarks !== 'All' ? `, ${remarks}` : ''}, in table layout.`}
+          filenameBase={`grades-report-${new Date().toISOString().slice(0, 10)}`}
+          columns={exportColumns}
+          rows={exportRows}
+          onClose={() => setExportModalOpen(false)}
+        />
+      )}
     </div>
   );
 }

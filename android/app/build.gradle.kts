@@ -8,7 +8,7 @@ plugins {
 android {
     namespace = "com.example.marsu_nstp_portal"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.11902837"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

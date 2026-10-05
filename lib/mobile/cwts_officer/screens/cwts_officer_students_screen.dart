@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'cwts_officer_student_detail_screen.dart';
+import 'rotc_officer_add_cadets_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
@@ -11,7 +12,12 @@ import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerStudentsScreen extends StatefulWidget {
-  const CwtsOfficerStudentsScreen({super.key});
+  /// Lets the back arrow jump to the shell's Home tab instead of trying to
+  /// pop a route — this screen is a bottom-nav tab, not a pushed page, so
+  /// there's normally nothing on the Navigator stack for it to pop.
+  final ValueChanged<int>? onNavigateToTab;
+
+  const CwtsOfficerStudentsScreen({super.key, this.onNavigateToTab});
 
   @override
   State<CwtsOfficerStudentsScreen> createState() =>
@@ -75,6 +81,14 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
     _debounce = Timer(const Duration(milliseconds: 400), _load);
   }
 
+  Future<void> _openAddCadets() async {
+    final added = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => const RotcOfficerAddCadetsScreen()),
+    );
+    if (added == true) _load();
+  }
+
   String _idOf(Map<String, dynamic> s) =>
       Fmt.str(s['studentId'] ?? s['cadetId'], '—');
 
@@ -90,7 +104,13 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: Colors.white, size: 20),
-          onPressed: () => Navigator.maybePop(context),
+          onPressed: () {
+            if (widget.onNavigateToTab != null) {
+              widget.onNavigateToTab!(0);
+            } else {
+              Navigator.maybePop(context);
+            }
+          },
         ),
         title: Text(
           isRotc ? 'Cadets' : 'Students',
@@ -101,6 +121,14 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
           ),
         ),
         actions: [
+          // ROTC cadets start with no company; a regular officer adds them
+          // here and they're placed under the officer's company.
+          if (isRotc && !Session.instance.isSpecialClassOfficer)
+            IconButton(
+              tooltip: 'Add cadets',
+              icon: const Icon(Icons.person_add_alt_1, color: Colors.white),
+              onPressed: _openAddCadets,
+            ),
           IconButton(
             icon: const Icon(Icons.refresh, color: Colors.white),
             onPressed: _load,
@@ -109,6 +137,17 @@ class _CwtsOfficerStudentsScreenState extends State<CwtsOfficerStudentsScreen> {
       ),
       body: Column(
         children: [
+          if (Session.instance.isSpecialClassOfficer)
+            Container(
+              width: double.infinity,
+              color: AppColors.primaryMaroon.withValues(alpha: 0.08),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                '${Session.instance.program} Inclusive Learning Section roster — every PWD/Medical '
+                'Condition trainee, program-wide.',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.primaryMaroon, fontWeight: FontWeight.w600),
+              ),
+            ),
           // ===== SEARCH BAR =====
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),

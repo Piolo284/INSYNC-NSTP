@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/attachment_preview_screen.dart';
 import '../../../../core/widgets/status_badge.dart';
 
 class CwtsOfficerAnnouncementScreen extends StatefulWidget {
@@ -57,7 +59,9 @@ class _CwtsOfficerAnnouncementScreenState
       isScrollControlled: true,
       backgroundColor: AppColors.cardBg,
       shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppColors.radius)),
+        borderRadius: BorderRadius.vertical(
+          top: Radius.circular(AppColors.radius),
+        ),
       ),
       builder: (_) => _AnnouncementEditor(existing: existing),
     );
@@ -89,8 +93,9 @@ class _CwtsOfficerAnnouncementScreenState
 
   Future<void> _resend(Map<String, dynamic> announcement) async {
     try {
-      final count =
-          await AnnouncementService.instance.send(Fmt.str(announcement['_id']));
+      final count = await AnnouncementService.instance.send(
+        Fmt.str(announcement['_id']),
+      );
       if (!mounted) return;
       AppSnack.success(context, 'Sent to $count user(s).');
     } catch (error) {
@@ -156,12 +161,45 @@ class _CwtsOfficerAnnouncementScreenState
   Widget _buildAnnouncementCard(Map<String, dynamic> announcement) {
     final isPinned = announcement['isPinned'] == true;
     final status = Fmt.str(announcement['status'], 'Published');
+    final imageUrl = Fmt.str(announcement['imageUrl']);
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // The program's AnnouncementTemplate poster, if one composited an
+          // image for this announcement at post time (see admin/src/utils/
+          // announcementGenerator.js) — tap to view full-screen.
+          if (imageUrl.isNotEmpty) ...[
+            GestureDetector(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => AttachmentPreviewScreen(
+                    fileUrl: imageUrl,
+                    fileName: Fmt.str(
+                      announcement['imageName'],
+                      'announcement.png',
+                    ),
+                  ),
+                ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                child: AspectRatio(
+                  aspectRatio: 16 / 9,
+                  child: Image.network(
+                    AppConfig.resolveFileUrl(imageUrl),
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) =>
+                        const ColoredBox(color: AppColors.grey100),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+          ],
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -220,7 +258,10 @@ class _CwtsOfficerAnnouncementScreenState
               StatusBadge(status, dense: true),
               if (isPinned)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 3,
+                  ),
                   decoration: BoxDecoration(
                     color: AppColors.goldLight,
                     borderRadius: BorderRadius.circular(AppColors.radiusSm),
@@ -228,7 +269,11 @@ class _CwtsOfficerAnnouncementScreenState
                   child: const Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.push_pin, size: 11, color: AppColors.primaryDark),
+                      Icon(
+                        Icons.push_pin,
+                        size: 11,
+                        color: AppColors.primaryDark,
+                      ),
                       SizedBox(width: 4),
                       Text(
                         'Pinned',
@@ -314,7 +359,9 @@ class _CwtsOfficerAnnouncementScreenState
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.w500,
-                color: isDestructive ? AppColors.error : AppColors.textSecondary,
+                color: isDestructive
+                    ? AppColors.error
+                    : AppColors.textSecondary,
               ),
             ),
           ],
@@ -388,8 +435,9 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
       lastDate: DateTime(2030),
       builder: (context, child) => Theme(
         data: Theme.of(context).copyWith(
-          colorScheme:
-              const ColorScheme.light(primary: AppColors.primaryMaroon),
+          colorScheme: const ColorScheme.light(
+            primary: AppColors.primaryMaroon,
+          ),
         ),
         child: child!,
       ),
@@ -413,14 +461,14 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
       if (_isEditing) {
         await AnnouncementService.instance
             .update(Fmt.str(widget.existing!['_id']), {
-          'title': _titleController.text.trim(),
-          'content': _contentController.text.trim(),
-          'location': _locationController.text.trim(),
-          'time': _timeController.text.trim(),
-          'targetAudience': _audience,
-          'date': _date.toIso8601String(),
-          'isPinned': _isPinned,
-        });
+              'title': _titleController.text.trim(),
+              'content': _contentController.text.trim(),
+              'location': _locationController.text.trim(),
+              'time': _timeController.text.trim(),
+              'targetAudience': _audience,
+              'date': _date.toIso8601String(),
+              'isPinned': _isPinned,
+            });
       } else {
         await AnnouncementService.instance.create(
           title: _titleController.text.trim(),
@@ -506,9 +554,14 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
                 child: DropdownButton<String>(
                   isExpanded: true,
                   value: _audience,
-                  icon: const Icon(Icons.keyboard_arrow_down,
-                      color: AppColors.textSecondary),
-                  style: const TextStyle(fontSize: 14, color: AppColors.textPrimary),
+                  icon: const Icon(
+                    Icons.keyboard_arrow_down,
+                    color: AppColors.textSecondary,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: AppColors.textPrimary,
+                  ),
                   onChanged: (v) => setState(() => _audience = v!),
                   items: _audiences
                       .map((a) => DropdownMenuItem(value: a, child: Text(a)))
@@ -524,8 +577,10 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
               onTap: _pickDate,
               borderRadius: BorderRadius.circular(AppColors.radiusSm),
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
                 decoration: BoxDecoration(
                   border: Border.all(color: AppColors.border),
                   borderRadius: BorderRadius.circular(AppColors.radiusSm),
@@ -536,11 +591,16 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
                       child: Text(
                         Fmt.dateWithDay(_date),
                         style: const TextStyle(
-                            fontSize: 14, color: AppColors.textPrimary),
+                          fontSize: 14,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
                     ),
-                    const Icon(Icons.calendar_today_outlined,
-                        size: 18, color: AppColors.textSecondary),
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 18,
+                      color: AppColors.textSecondary,
+                    ),
                   ],
                 ),
               ),
@@ -600,14 +660,17 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
                         height: 20,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor:
-                              AlwaysStoppedAnimation<Color>(Colors.white),
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            Colors.white,
+                          ),
                         ),
                       )
                     : Text(
                         _isEditing ? 'Save Changes' : 'Post Announcement',
                         style: const TextStyle(
-                            fontSize: 14, fontWeight: FontWeight.w600),
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
               ),
             ),
@@ -619,13 +682,13 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
   }
 
   Widget _label(String text) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          color: AppColors.textPrimary,
-        ),
-      );
+    text,
+    style: const TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      color: AppColors.textPrimary,
+    ),
+  );
 
   Widget _field(
     TextEditingController controller,
@@ -637,8 +700,10 @@ class _AnnouncementEditorState extends State<_AnnouncementEditor> {
       maxLines: maxLines,
       decoration: InputDecoration(
         hintText: hint,
-        contentPadding:
-            const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 14,
+          vertical: 12,
+        ),
       ),
     );
   }

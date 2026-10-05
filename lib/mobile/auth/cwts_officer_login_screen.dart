@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:marsu_nstp_portal/core/utils/login_validators.dart';
 import 'package:marsu_nstp_portal/mobile/cwts_officer/cwts_officer_main_shell.dart';
+import 'forgot_password_request_screen.dart';
+import 'two_factor_verify_screen.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/widgets/async_view.dart';
@@ -20,12 +21,9 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
   bool _isSubmitting = false;
 
   String? _validateEmail() {
-    final email = _emailController.text.trim();
-    if (email.isEmpty) {
-      return 'Please enter your email address.';
-    }
-    if (!LoginValidators.isValidEmail(email)) {
-      return 'Please enter a valid email address.';
+    final identifier = _emailController.text.trim();
+    if (identifier.isEmpty) {
+      return 'Please enter your Officer ID or email.';
     }
     return null;
   }
@@ -35,29 +33,7 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
     if (password.isEmpty) {
       return 'Please enter your password.';
     }
-    if (!LoginValidators.isStrongPassword(password)) {
-      return 'Password must contain at least 8 characters, 1 uppercase, 1 number, and 1 special character.';
-    }
     return null;
-  }
-
-  String get _passwordHintText {
-    final password = _passwordController.text;
-    if (password.isEmpty) {
-      return 'Use 8+ characters, 1 uppercase, 1 number, and 1 special character.';
-    }
-    if (LoginValidators.isStrongPassword(password)) {
-      return 'Password meets the requirements.';
-    }
-    return 'Password needs: 8+ characters, uppercase, number, and special character.';
-  }
-
-  Color get _passwordHintColor {
-    final password = _passwordController.text;
-    if (password.isEmpty) {
-      return AppColors.textSecondary;
-    }
-    return LoginValidators.isStrongPassword(password) ? AppColors.success : AppColors.orange;
   }
 
   Future<void> _submitLogin() async {
@@ -72,13 +48,28 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await AuthService.instance.login(
-        identifier: _emailController.text.trim(),
+      final identifier = _emailController.text.trim();
+      final result = await AuthService.instance.login(
+        identifier: identifier,
         password: _passwordController.text,
         expectedRole: 'officer',
       );
 
       if (!mounted) return;
+
+      if (result['requiresTwoFactor'] == true) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TwoFactorVerifyScreen(
+              identifier: (result['identifier'] ?? identifier).toString(),
+              homeScreenBuilder: (_) => const CwtsOfficerMainShell(),
+            ),
+          ),
+        );
+        return;
+      }
+
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const CwtsOfficerMainShell()),
@@ -103,385 +94,212 @@ class _CwtsOfficerLoginScreenState extends State<CwtsOfficerLoginScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
-      body: SingleChildScrollView(
-        child: Column(
-          children: [
-            // ===== HEADER WITH CURVE =====
-            Stack(
-              clipBehavior: Clip.none,
-              alignment: Alignment.bottomCenter,
-              children: [
-                ClipPath(
-                  clipper: _HeaderClipper(),
-                  child: Container(
-                    height: 220,
-                    width: double.infinity,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primaryMaroon, AppColors.primaryDark],
-                      ),
-                    ),
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          onPressed: () => Navigator.pop(context),
+        ),
+      ),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 28),
+          child: Column(
+            children: [
+              const SizedBox(height: 12),
+              Image.asset(
+                'assets/images/cwts_logo.png',
+                width: 96,
+                height: 96,
+                errorBuilder: (_, _, _) => Container(
+                  width: 96,
+                  height: 96,
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryMaroon.withValues(alpha: 0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(
+                    Icons.school,
+                    color: AppColors.primaryMaroon,
+                    size: 48,
                   ),
                 ),
-                // ===== LOGO =====
-                Positioned(
-                  bottom: -50,
-                  child: Container(
-                    width: 100,
-                    height: 100,
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: AppColors.white,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: AppColors.black.withValues(alpha: 0.12),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                'Welcome Officer!',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'CWTS Portal Login',
+                style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 28),
+              const _FieldLabel('Officer ID'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(
+                  hintText: 'Enter your Officer ID',
+                  prefixIcon: Icon(Icons.person_outline, color: AppColors.primaryMaroon, size: 20),
+                ),
+              ),
+              const SizedBox(height: 18),
+              const _FieldLabel('Password'),
+              const SizedBox(height: 6),
+              TextField(
+                controller: _passwordController,
+                obscureText: _obscurePassword,
+                textInputAction: TextInputAction.done,
+                onChanged: (_) => setState(() {}),
+                onSubmitted: (_) => _isSubmitting ? null : _submitLogin(),
+                decoration: InputDecoration(
+                  hintText: 'Enter your Password',
+                  prefixIcon: const Icon(Icons.lock_outline, color: AppColors.primaryMaroon, size: 20),
+                  suffixIcon: IconButton(
+                    icon: Icon(
+                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      color: AppColors.primaryMaroon,
+                      size: 20,
                     ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/images/marsu_logo.png',
-                        fit: BoxFit.cover,
-                        errorBuilder: (_, _, _) => const Icon(
-                          Icons.school,
-                          color: AppColors.primaryMaroon,
-                          size: 40,
-                        ),
-                      ),
-                    ),
+                    onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
                   ),
                 ),
-              ],
-            ),
-
-            const SizedBox(height: 60),
-
-            // ===== TITLE =====
-            const Text(
-              'MARSU – NSTP',
-              style: TextStyle(
-                color: AppColors.primaryMaroon,
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
               ),
-            ),
-            const SizedBox(height: 6),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                _buildTaglineText('Excellence'),
-                _buildDot(),
-                _buildTaglineText('Service'),
-                _buildDot(),
-                _buildTaglineText('Leadership'),
-              ],
-            ),
-            const SizedBox(height: 32),
-
-            // ===== OFFICER ICON =====
-            Container(
-              width: 64,
-              height: 64,
-              decoration: BoxDecoration(
-                color: AppColors.cwtsCardBg,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.admin_panel_settings_outlined,
-                color: AppColors.orange,
-                size: 32,
-              ),
-            ),
-            const SizedBox(height: 16),
-
-            // ===== LOGIN TITLE =====
-            const Text(
-              'CWTS Officer Login',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 40),
-              child: Text(
-                'Sign in to manage attendance, activities, and student records.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: AppColors.textSecondary, height: 1.4),
-              ),
-            ),
-            const SizedBox(height: 28),
-
-            // ===== FORM =====
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              const SizedBox(height: 10),
+              Row(
                 children: [
-                  // Email
-                  const Text(
-                    'Email Address',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      hintText: 'Enter your email',
-                      prefixIcon: Icon(Icons.email_outlined, color: AppColors.textSecondary, size: 20),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Password
-                  const Text(
-                    'Password',
-                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                  ),
-                  const SizedBox(height: 8),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      hintText: 'Enter your password',
-                      prefixIcon: const Icon(Icons.lock_outline, color: AppColors.textSecondary, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                          color: AppColors.textSecondary,
-                          size: 20,
-                        ),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    _passwordHintText,
-                    style: TextStyle(fontSize: 11.5, color: _passwordHintColor, fontWeight: FontWeight.w500),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Remember Me & Forgot Password
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: Checkbox(
-                              value: _rememberMe,
-                              onChanged: (v) => setState(() => _rememberMe = v ?? false),
-                            ),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Remember me',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: () {
-                          AppSnack.info(
-                            context,
-                            'Please contact your administrator to reset your password.',
-                          );
-                        },
-                        child: const Text(
-                          'Forgot password?',
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.primaryMaroon,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Sign In Button
                   SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: _isSubmitting ? null : _submitLogin,
-                      child: _isSubmitting
-                          ? const SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
-                              ),
-                            )
-                          : const Text(
-                              'Sign In',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: 0.5),
-                            ),
+                    height: 22,
+                    width: 22,
+                    child: Checkbox(
+                      value: _rememberMe,
+                      onChanged: (value) => setState(() => _rememberMe = value ?? false),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
                   ),
-                  const SizedBox(height: 20),
-
-                  // OR Divider
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        child: Text(
-                          'or',
-                          style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
+                  const SizedBox(width: 8),
+                  const Text(
+                    'Remember Me',
+                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
                   ),
-                  const SizedBox(height: 20),
-
-                  // Google Sign In
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () {
-                        AppSnack.info(
-                          context,
-                          'Google Sign-In is not enabled yet. Please use your email and password.',
-                        );
-                      },
-                      icon: Image.asset(
-                        'assets/images/google_icon.png',
-                        width: 20,
-                        height: 20,
-                        errorBuilder: (_, _, _) => const Icon(Icons.g_mobiledata, size: 20),
+                  const Spacer(),
+                  GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordRequestScreen(
+                            loginScreenBuilder: (_) => const CwtsOfficerLoginScreen(),
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Forgot Password?',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.primaryMaroon,
                       ),
-                      label: const Text('Sign in with Google'),
                     ),
                   ),
                 ],
               ),
-            ),
-            const SizedBox(height: 28),
-
-            // ===== INFO CARD =====
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppColors.orangeLight,
-                  borderRadius: BorderRadius.circular(AppColors.radiusSm),
-                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.3)),
+              const SizedBox(height: 22),
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton(
+                  onPressed: _isSubmitting ? null : _submitLogin,
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.white),
+                          ),
+                        )
+                      : const Text(
+                          'LOGIN',
+                          style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, letterSpacing: 1),
+                        ),
                 ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 40,
-                      height: 40,
+              ),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.cwtsCardBg,
-                        borderRadius: BorderRadius.circular(10),
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
                       ),
-                      child: const Icon(Icons.menu_book_outlined, color: AppColors.orange, size: 20),
-                    ),
-                    const SizedBox(width: 14),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Officer Access',
-                            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
-                          ),
-                          const SizedBox(height: 2),
-                          const Text(
-                            'Manage attendance, activities, and student submissions.',
-                            style: TextStyle(fontSize: 12, color: AppColors.textSecondary, height: 1.4),
-                          ),
-                        ],
+                      child: const Text(
+                        'or',
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
                     ),
-                  ],
+                  ),
+                  const Expanded(child: Divider(color: AppColors.border)),
+                ],
+              ),
+              const SizedBox(height: 22),
+              const Center(
+                child: Text.rich(
+                  TextSpan(
+                    text: 'Need help? ',
+                    style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
+                    children: [
+                      TextSpan(
+                        text: 'Contact your administrator.',
+                        style: TextStyle(fontWeight: FontWeight.bold, color: AppColors.primaryMaroon),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-            const SizedBox(height: 20),
-
-            // ===== HELP TEXT =====
-            const Center(
-              child: Text.rich(
-                TextSpan(
-                  text: 'Need help? ',
-                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  children: [
-                    TextSpan(
-                      text: 'Contact your administrator.',
-                      style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primaryMaroon),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 32),
-          ],
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildTaglineText(String text) {
-    return Text(
-      text,
-      style: TextStyle(
-        color: AppColors.primaryMaroon.withValues(alpha: 0.85),
-        fontSize: 11,
-        fontWeight: FontWeight.w500,
-      ),
-    );
-  }
-
-  Widget _buildDot() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 6),
-      child: Container(
-        width: 3,
-        height: 3,
-        decoration: const BoxDecoration(color: AppColors.primaryMaroon, shape: BoxShape.circle),
       ),
     );
   }
 }
 
-// ===== HEADER CLIPPER =====
-class _HeaderClipper extends CustomClipper<Path> {
-  @override
-  Path getClip(Size size) {
-    final path = Path();
-    path.lineTo(0, size.height - 40);
-    path.quadraticBezierTo(
-      size.width / 2,
-      size.height,
-      size.width,
-      size.height - 40,
-    );
-    path.lineTo(size.width, 0);
-    path.close();
-    return path;
-  }
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel(this.text);
+
+  final String text;
 
   @override
-  bool shouldReclip(CustomClipper<Path> oldClipper) => false;
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text,
+        style: const TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w600,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
 }

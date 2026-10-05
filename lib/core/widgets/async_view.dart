@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kDebugMode;
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
@@ -43,6 +44,12 @@ String describeError(Object error) {
       return 'Something went wrong. Please try again.';
     }
     return 'Something went wrong. Please try again.';
+  }
+  // Not a server ApiException — this is a client-side exception (e.g. from
+  // the file picker or a plugin). Print it so it's visible in the Flutter
+  // console/logcat instead of disappearing behind the generic message below.
+  if (kDebugMode) {
+    debugPrint('[describeError] unhandled ${error.runtimeType}: $error');
   }
   return 'Something went wrong. Please try again.';
 }

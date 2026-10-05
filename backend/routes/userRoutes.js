@@ -2,12 +2,22 @@ const router = require('express').Router();
 const ctrl = require('../controllers/userController');
 const { protect, authorize } = require('../middleware/auth');
 const { STAFF_ROLES } = require('../config/constants');
+const { uploader } = require('../middleware/upload');
 
 router.use(protect);
 
 router.get('/stats/overview', authorize(...STAFF_ROLES), ctrl.stats);
 router.get('/', authorize(...STAFF_ROLES), ctrl.list);
 router.post('/', authorize('super_admin'), ctrl.create);
+router.put(
+  '/me/avatar',
+  uploader('avatars', {
+    maxMb: 5,
+    allowedPattern: /\.(png|jpe?g|webp)$/i,
+    typeErrorMessage: 'Unsupported file type. Allowed: png, jpg, jpeg, webp.',
+  }).single('photo'),
+  ctrl.uploadAvatar
+);
 router.get('/:id', ctrl.get);
 router.put('/:id', ctrl.update);
 router.delete('/:id', authorize('super_admin'), ctrl.remove);

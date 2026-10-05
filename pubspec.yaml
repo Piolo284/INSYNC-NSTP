@@ -18,6 +18,8 @@ dependencies:
   qr_flutter: ^4.1.0
   flutter_secure_storage: ^10.3.1
   google_fonts: ^8.2.1
+  url_launcher: ^6.3.1
+  flutter_inappwebview: ^6.1.5
 
 dev_dependencies:
   flutter_test:
@@ -32,3 +34,24 @@ flutter:
     - assets/images/rotc_logo.png
     - assets/images/marsu_nstp_logo.png
     - assets/images/default_profile.png
+    - assets/images/cwts_banner.jpg
+    - assets/images/rotc_banner.png
+    - assets/images/rotc_activities/drill_training.jpg
+    - assets/images/rotc_activities/disaster_response.jpg
+    - assets/images/rotc_activities/first_aid_training.jpg
+    - assets/images/rotc_activities/leadership_exercises.jpg
+    - assets/images/rotc_activities/community_outreach.jpg
+    - assets/images/rotc_activities/environmental_cleanup.jpg
+    - assets/images/rotc_activities/flag_ceremony.jpg
+    - assets/images/rotc_activities/physical_fitness.jpg
+    - assets/images/rotc_activities/land_navigation.jpg
+    - assets/images/rotc_activities/leadership_summit.jpg
+    - assets/images/rotc_activities/raati.jpg
+    - assets/images/cwts_activities/community_cleanup.jpg
+    - assets/images/cwts_activities/coastal_cleanup.jpg
+    - assets/images/cwts_activities/tree_planting.jpg
+    - assets/images/cwts_activities/community_outreach.jpg
+    - assets/images/cwts_activities/feeding_program.jpg
+    - assets/images/cwts_activities/health_and_hygiene.jpg
+    - assets/images/cwts_activities/team_building.jpg
+    - assets/images/cwts_activities/clean_and_green.jpg

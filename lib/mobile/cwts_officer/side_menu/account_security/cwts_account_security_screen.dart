@@ -1,14 +1,22 @@
 import 'package:flutter/material.dart';
+import '../../../cwts/side_menu/account_security/manage_sessions_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/login_validators.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../main.dart' show SplashRouter;
 
-class CwtsAccountSecurityScreen extends StatelessWidget {
+class CwtsAccountSecurityScreen extends StatefulWidget {
   const CwtsAccountSecurityScreen({super.key});
 
+  @override
+  State<CwtsAccountSecurityScreen> createState() => _CwtsAccountSecurityScreenState();
+}
+
+class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
   /// Real password change against the API (hashed server-side with bcrypt).
   Future<void> _changePassword(BuildContext context) async {
     final currentController = TextEditingController();
@@ -74,11 +82,32 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
       return;
     }
 
+    String message;
     try {
-      await AuthService.instance.changePassword(
+      message = await AuthService.instance.requestPasswordChange(
         currentPassword: result[0],
         newPassword: result[1],
       );
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+      return;
+    }
+    if (!context.mounted) return;
+    AppSnack.info(context, message);
+
+    final code = await _promptForValue(
+      context,
+      title: 'Enter Code',
+      label: '6-digit code',
+      helperText: 'Sent to your registered email.',
+      keyboardType: TextInputType.number,
+      confirmLabel: 'Confirm',
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+
+    try {
+      await AuthService.instance.confirmPasswordChange(code.trim());
       if (!context.mounted) return;
       AppSnack.success(context, 'Password updated.');
     } catch (error) {
@@ -87,12 +116,225 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
     }
   }
 
-  void _notYetAvailable(BuildContext context, String feature) {
-    AppSnack.info(context, '$feature is not enabled yet.');
+  /// Prompts for a single text value inside a standard AlertDialog shell —
+  /// shared by the "new email"/"new contact number"/"6-digit code" prompts
+  /// below so the styling isn't reinvented four times.
+  Future<String?> _promptForValue(
+    BuildContext context, {
+    required String title,
+    required String label,
+    String? helperText,
+    TextInputType? keyboardType,
+    String confirmLabel = 'Continue',
+  }) async {
+    final controller = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+        content: TextField(
+          controller: controller,
+          keyboardType: keyboardType,
+          autofocus: true,
+          decoration: InputDecoration(
+            labelText: label,
+            helperText: helperText,
+            helperStyle: const TextStyle(fontSize: 11),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: Text(confirmLabel),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  Future<void> _changeEmail(BuildContext context) async {
+    final newEmail = await _promptForValue(
+      context,
+      title: 'Change Email',
+      label: 'New email address',
+      keyboardType: TextInputType.emailAddress,
+      confirmLabel: 'Send Code',
+    );
+    if (newEmail == null || newEmail.trim().isEmpty || !context.mounted) return;
+
+    String message;
+    try {
+      message = await AuthService.instance.requestEmailChange(newEmail.trim());
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+      return;
+    }
+    if (!context.mounted) return;
+    AppSnack.info(context, message);
+
+    final code = await _promptForValue(
+      context,
+      title: 'Enter Code',
+      label: '6-digit code',
+      keyboardType: TextInputType.number,
+      confirmLabel: 'Confirm',
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+
+    try {
+      await AuthService.instance.confirmEmailChange(code.trim());
+      if (!context.mounted) return;
+      setState(() {}); // re-read Session.instance.email into the subtitle
+      AppSnack.success(context, 'Your email address has been updated.');
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
+  }
+
+  Future<void> _changeContactNumber(BuildContext context) async {
+    final newNumber = await _promptForValue(
+      context,
+      title: 'Change Contact Number',
+      label: 'New contact number',
+      keyboardType: TextInputType.phone,
+      confirmLabel: 'Send Code',
+    );
+    if (newNumber == null || newNumber.trim().isEmpty || !context.mounted) return;
+
+    String message;
+    try {
+      message = await AuthService.instance.requestContactNumberChange(newNumber.trim());
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+      return;
+    }
+    if (!context.mounted) return;
+    AppSnack.info(context, message);
+
+    final code = await _promptForValue(
+      context,
+      title: 'Enter Code',
+      label: '6-digit code',
+      helperText: 'Sent to your registered email — there is no SMS verification yet.',
+      keyboardType: TextInputType.number,
+      confirmLabel: 'Confirm',
+    );
+    if (code == null || code.trim().isEmpty || !context.mounted) return;
+
+    try {
+      await AuthService.instance.confirmContactNumberChange(code.trim());
+      if (!context.mounted) return;
+      setState(() {});
+      AppSnack.success(context, 'Your contact number has been updated.');
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
+  }
+
+  Future<void> _toggleTwoFactor(BuildContext context) async {
+    final isEnabled = Session.instance.user?['twoFactorEnabled'] == true;
+    final action = isEnabled ? 'Turn Off' : 'Turn On';
+
+    final passwordController = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: Text(
+          '$action Two-Factor Authentication?',
+          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              isEnabled
+                  ? 'Logging in will only need your password once this is off.'
+                  : "You'll need to enter a code emailed to you every time you log in.",
+              style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
+            ),
+            const SizedBox(height: 14),
+            TextField(
+              controller: passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(labelText: 'Confirm your password'),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: Text(action),
+          ),
+        ],
+      ),
+    );
+    final password = passwordController.text;
+    passwordController.dispose();
+    if (confirmed != true || !context.mounted) return;
+
+    if (password.isEmpty) {
+      AppSnack.error(context, 'Please enter your password.');
+      return;
+    }
+
+    try {
+      await AuthService.instance.setTwoFactorEnabled(enable: !isEnabled, currentPassword: password);
+      if (!context.mounted) return;
+      setState(() {});
+      AppSnack.success(context, !isEnabled ? 'Two-factor authentication is now on.' : 'Two-factor authentication is now off.');
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
+  }
+
+  void _openSessions(BuildContext context) {
+    Navigator.push(context, MaterialPageRoute(builder: (_) => const ManageSessionsScreen()));
+  }
+
+  Future<void> _logoutAllDevices(BuildContext context) async {
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Logout All Devices?',
+      message: 'Every device signed into this account — including this one — will be logged out immediately.',
+      confirmLabel: 'Logout All',
+    );
+    if (!confirmed || !context.mounted) return;
+
+    try {
+      await AuthService.instance.revokeAllSessions();
+      await AuthService.instance.logout();
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const SplashRouter()),
+        (route) => false,
+      );
+    } catch (error) {
+      if (!context.mounted) return;
+      AppSnack.error(context, describeError(error));
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    final isTwoFactorEnabled = Session.instance.user?['twoFactorEnabled'] == true;
+
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
@@ -132,17 +374,14 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
                     icon: Icons.mail_outline,
                     label: 'Change Email',
                     subtitle: Session.instance.email,
-                    available: false,
-                    onTap: () => _notYetAvailable(context, 'Changing your email'),
+                    onTap: () => _changeEmail(context),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.phone_android_outlined,
                     label: 'Change Contact Number',
                     subtitle: Session.instance.user?['contactNumber']?.toString() ?? '',
-                    available: false,
-                    onTap: () => _notYetAvailable(
-                        context, 'Changing your contact number'),
+                    onTap: () => _changeContactNumber(context),
                   ),
                 ],
               ),
@@ -157,32 +396,26 @@ class CwtsAccountSecurityScreen extends StatelessWidget {
                   _buildMenuItem(
                     icon: Icons.mail_outline,
                     label: 'Two-Factor Authentication',
-                    subtitle: 'Attendance already uses email verification',
-                    available: false,
-                    onTap: () =>
-                        _notYetAvailable(context, 'Two-factor authentication'),
+                    subtitle: isTwoFactorEnabled ? 'On — a code is emailed at every login' : 'Off',
+                    onTap: () => _toggleTwoFactor(context),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.devices_outlined,
                     label: 'Login Devices',
-                    available: false,
-                    onTap: () => _notYetAvailable(context, 'Device history'),
+                    onTap: () => _openSessions(context),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.timer_outlined,
                     label: 'Active Sessions',
-                    available: false,
-                    onTap: () => _notYetAvailable(context, 'Session history'),
+                    onTap: () => _openSessions(context),
                   ),
                   _buildDivider(),
                   _buildMenuItem(
                     icon: Icons.logout_outlined,
                     label: 'Logout All Devices',
-                    available: false,
-                    onTap: () =>
-                        _notYetAvailable(context, 'Logging out all devices'),
+                    onTap: () => _logoutAllDevices(context),
                   ),
                 ],
               ),

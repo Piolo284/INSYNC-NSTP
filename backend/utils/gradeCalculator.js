@@ -1,7 +1,13 @@
 const Attendance = require('../models/Attendance');
 const Submission = require('../models/Submission');
 const Grade = require('../models/Grade');
-const { grading } = require('../config/constants');
+const User = require('../models/User');
+const Student = require('../models/Student');
+const Cadet = require('../models/Cadet');
+const Notification = require('../models/Notification');
+const { grading, attendanceRules } = require('../config/constants');
+const { gradePointFrom, PASSING_POINT } = require('../utils/gradeScale');
+const { notifyUser } = require('./notify');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -15,12 +21,14 @@ function attendanceScoreFrom(summary) {
   return round2((earned / summary.total) * 100);
 }
 
+/**
+ * Passed/Failed is decided off the 1.00-5.00 college grading scale
+ * equivalent of finalGrade, not the raw percentage: 3.00 and better passes,
+ * 3.25 and worse (i.e. below 75%) fails.
+ */
 function remarksFor(finalGrade, hasAnyData) {
   if (!hasAnyData) return 'Incomplete';
-  const { passing, warning } = grading();
-  if (finalGrade >= passing) return 'Passed';
-  if (finalGrade >= warning) return 'Warning';
-  return 'Failed';
+  return gradePointFrom(finalGrade) <= PASSING_POINT ? 'Passed' : 'Failed';
 }
 
 function lineFrom(submission, refField) {
@@ -76,7 +84,7 @@ async function recalculateGrade(userId, program, gradedBy = null) {
 
   // Weights of components with no data yet are redistributed across the
   // components that do, so an early-semester grade is not dragged to zero.
-  const { weights } = grading();
+  const { weights } = grading(program);
   const parts = [
     { value: moduleAvg, weight: weights.modules, has: moduleScores.length > 0 },
     { value: activityAvg, weight: weights.activities, has: activityScores.length > 0 },
@@ -109,7 +117,64 @@ async function recalculateGrade(userId, program, gradedBy = null) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
+  await autoDropIfOverAbsenceLimit(userId, program, summary.absent);
+
   return grade;
+}
+
+/**
+ * Enrollment policy: once a trainee's Absent count for a program reaches
+ * `maxAbsencesBeforeDrop`, they're automatically dropped from the program.
+ * Checked here (rather than at every place attendance can be marked Absent)
+ * because recalculateGrade already runs after every attendance change and
+ * already has the exact up-to-date absence count on hand.
+ */
+async function autoDropIfOverAbsenceLimit(userId, program, absentCount) {
+  const { maxAbsencesBeforeDrop } = attendanceRules();
+
+  if (absentCount < maxAbsencesBeforeDrop) {
+    await warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop);
+    return;
+  }
+
+  const user = await User.findById(userId);
+  if (!user || user.status === 'Dropped') return;
+
+  user.status = 'Dropped';
+  await user.save();
+
+  const ProfileModel = program === 'ROTC' ? Cadet : Student;
+  await ProfileModel.updateOne({ userId }, { status: 'Dropped' });
+
+  await notifyUser(userId, {
+    title: 'You have been dropped',
+    message: `You have reached the maximum of ${maxAbsencesBeforeDrop} absences allowed and have been automatically marked as Dropped from the program.`,
+    type: 'attendance',
+  });
+}
+
+/**
+ * Sends a one-time heads-up notification once a trainee is exactly one
+ * absence away from the auto-drop threshold. Guarded by a marker in
+ * `data.warningAbsentCount` so re-running recalculateGrade (e.g. after
+ * grading an unrelated submission) never re-sends the same warning.
+ */
+async function warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop) {
+  if (maxAbsencesBeforeDrop <= 1 || absentCount !== maxAbsencesBeforeDrop - 1) return;
+
+  const alreadyWarned = await Notification.exists({
+    recipientId: userId,
+    type: 'attendance',
+    'data.warningAbsentCount': absentCount,
+  });
+  if (alreadyWarned) return;
+
+  await notifyUser(userId, {
+    title: 'Attendance warning',
+    message: `You now have ${absentCount} absence(s). Reaching ${maxAbsencesBeforeDrop} absences will automatically drop you from the program.`,
+    type: 'attendance',
+    data: { warningAbsentCount: absentCount },
+  });
 }
 
 module.exports = {

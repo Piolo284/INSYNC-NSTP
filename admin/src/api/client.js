@@ -5,6 +5,18 @@
 
 export const BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
+/**
+ * Uploaded files (documents, certificates, module files, photos) are stored
+ * on Cloudinary and come back as absolute https:// URLs — this is only a
+ * fallback for any lingering relative "/uploads/..." path from before that
+ * migration.
+ */
+const FILE_HOST = BASE_URL.replace(/\/api\/?$/, '');
+export function resolveFileUrl(url) {
+  if (!url) return '';
+  return url.startsWith('http') ? url : `${FILE_HOST}${url}`;
+}
+
 const TOKEN_KEY = 'nstp_admin_token';
 const USER_KEY = 'nstp_admin_user';
 

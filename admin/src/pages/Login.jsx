@@ -43,7 +43,9 @@ export default function Login() {
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'linear-gradient(135deg, var(--sidebar-bg) 0%, var(--maroon) 100%)', padding: '20px',
+      background: `linear-gradient(135deg, rgba(48,8,16,0.82) 0%, rgba(139,0,0,0.78) 100%), url(/images/MARSU_BG.png)`,
+      backgroundSize: 'cover', backgroundPosition: 'center', backgroundRepeat: 'no-repeat',
+      padding: '20px',
     }}>
       <div style={{
         width: 'min(940px, 100%)', display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',

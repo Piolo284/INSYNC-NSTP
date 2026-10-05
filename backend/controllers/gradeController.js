@@ -4,6 +4,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
+const { gradePointFrom, PASSING_POINT } = require('../utils/gradeScale');
 const { grading, TRAINEE_ROLES } = require('../config/constants');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 
@@ -37,11 +38,12 @@ exports.list = asyncHandler(async (req, res) => {
     count: grades.length,
     stats: {
       passed: grades.filter((g) => g.remarks === 'Passed').length,
-      warning: grades.filter((g) => g.remarks === 'Warning').length,
       failed: grades.filter((g) => g.remarks === 'Failed').length,
       incomplete: grades.filter((g) => g.remarks === 'Incomplete').length,
     },
-    grading: grading(),
+    // Only meaningful when the list is scoped to one program (a super_admin
+    // viewing both at once has no single breakdown to report).
+    grading: grading(typeof filter.program === 'string' ? filter.program : undefined),
     data: grades,
   });
 });
@@ -70,7 +72,7 @@ exports.getForStudent = asyncHandler(async (req, res) => {
   const grade = await recalculateGrade(user._id, user.program || 'CWTS');
   await grade.populate('studentId', 'name studentId program section yearLevel profileImage');
 
-  res.json({ success: true, grading: grading(), data: grade });
+  res.json({ success: true, grading: grading(user.program), data: grade });
 });
 
 /** POST /api/grades — force a recalculation for one trainee or a whole program. */
@@ -122,6 +124,9 @@ exports.update = asyncHandler(async (req, res) => {
     }
     grade.finalGrade = value;
     grade.totalScore = value;
+    if (req.body.remarks === undefined) {
+      grade.remarks = gradePointFrom(value) <= PASSING_POINT ? 'Passed' : 'Failed';
+    }
   }
   if (req.body.remarks !== undefined) grade.remarks = req.body.remarks;
   grade.gradedBy = req.user._id;
@@ -153,7 +158,8 @@ exports.exportReport = asyncHandler(async (req, res) => {
     'Module Score',
     'Activity Score',
     'Attendance Score',
-    'Final Grade',
+    'Final Grade (%)',
+    'Grade Point',
     'Remarks',
   ];
 
@@ -173,6 +179,7 @@ exports.exportReport = asyncHandler(async (req, res) => {
       avg(g.activityScores),
       g.attendanceScore.toFixed(2),
       g.finalGrade.toFixed(2),
+      g.gradePoint.toFixed(2),
       g.remarks,
     ]
       .map((cell) => `"${String(cell).replace(/"/g, '""')}"`)

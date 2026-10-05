@@ -12,24 +12,15 @@ import {
 
 const AuthContext = createContext(null);
 
-// Only these three roles may use this admin panel — students/cadets/officers
-// sign in through the separate Flutter mobile app.
-const ALLOWED_ROLES = ['admin_cwts', 'admin_rotc', 'super_admin'];
-const PROGRAM_VIEW_KEY = 'nstp_admin_program_view';
+// Only these roles may use this admin panel — students/cadets/officers
+// sign in through the separate Flutter mobile app. system_maintenance_admin
+// is a technical-maintenance-only role (see Sidebar.jsx/App.js) — it shares
+// this login gate but gets a completely separate shell once inside.
+const ALLOWED_ROLES = ['admin_cwts', 'admin_rotc', 'super_admin', 'system_maintenance_admin'];
 
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(() => getStoredUser());
   const [initializing, setInitializing] = useState(true);
-  // super_admin can toggle between CWTS / ROTC / All; program-scoped admins
-  // are always implicitly locked to their own program.
-  const [programView, setProgramViewState] = useState(
-    () => localStorage.getItem(PROGRAM_VIEW_KEY) || 'All'
-  );
-
-  const setProgramView = useCallback((value) => {
-    setProgramViewState(value);
-    localStorage.setItem(PROGRAM_VIEW_KEY, value);
-  }, []);
 
   const logout = useCallback(() => {
     clearSession();
@@ -77,6 +68,14 @@ export function AuthProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Lets any screen (e.g. a profile-picture upload) push a fresh user object
+  // from the server into both state and localStorage in one call, so every
+  // consumer of currentUser (sidebars, TopBar, etc.) updates immediately.
+  const updateCurrentUser = useCallback((user) => {
+    setCurrentUser(user);
+    setStoredUser(user);
+  }, []);
+
   const login = useCallback(async (identifier, password) => {
     const res = await authApi.login(identifier, password);
     const { token, user } = res.data;
@@ -98,17 +97,17 @@ export function AuthProvider({ children }) {
   const isSuperAdmin = currentUser?.role === 'super_admin';
   const isAdminCwts = currentUser?.role === 'admin_cwts';
   const isAdminRotc = currentUser?.role === 'admin_rotc';
+  const isSystemMaintenanceAdmin = currentUser?.role === 'system_maintenance_admin';
 
   // The program a page should actually query/filter by: program-scoped
-  // admins are always locked to their own program; super_admin follows the
-  // sidebar toggle ('All' -> no filter / both programs).
+  // admins are always locked to their own program; super_admin always sees
+  // both (no filter).
   const effectiveProgram = useMemo(() => {
     if (!currentUser) return null;
     if (isAdminCwts) return 'CWTS';
     if (isAdminRotc) return 'ROTC';
-    if (isSuperAdmin) return programView === 'All' ? null : programView;
     return null;
-  }, [currentUser, isAdminCwts, isAdminRotc, isSuperAdmin, programView]);
+  }, [currentUser, isAdminCwts, isAdminRotc]);
 
   const value = useMemo(
     () => ({
@@ -116,15 +115,26 @@ export function AuthProvider({ children }) {
       initializing,
       login,
       logout,
+      updateCurrentUser,
       isAuthenticated: Boolean(currentUser),
       isSuperAdmin,
       isAdminCwts,
       isAdminRotc,
-      programView,
-      setProgramView,
+      isSystemMaintenanceAdmin,
       effectiveProgram,
     }),
-    [currentUser, initializing, login, logout, isSuperAdmin, isAdminCwts, isAdminRotc, programView, setProgramView, effectiveProgram]
+    [
+      currentUser,
+      initializing,
+      login,
+      logout,
+      updateCurrentUser,
+      isSuperAdmin,
+      isAdminCwts,
+      isAdminRotc,
+      isSystemMaintenanceAdmin,
+      effectiveProgram,
+    ]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

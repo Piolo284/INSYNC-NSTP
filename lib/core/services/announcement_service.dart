@@ -38,7 +38,7 @@ class AnnouncementService {
     final response = await _api.post('/announcements', body: {
       'title': title,
       'content': content,
-      if (program != null) 'program': program,
+      'program': ?program,
       'targetAudience': targetAudience,
       'location': location,
       'time': time,

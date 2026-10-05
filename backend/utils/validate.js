@@ -42,10 +42,24 @@ function isValidEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
 }
 
+/**
+ * Stricter check used specifically wherever a NEW email is being set
+ * (registration, admin-created accounts, email-change requests) — every
+ * account in this system must be on the official MARSU domain. Deliberately
+ * NOT used for login validation, which only checks that the typed text
+ * looks like an email at all; restricting login by domain too would lock
+ * out any already-existing account (including seed/test accounts) whose
+ * email predates this rule.
+ */
+function isMarsuEmail(value) {
+  return /^[^\s@]+@marsu\.edu\.ph$/i.test(String(value || '').trim());
+}
+
 module.exports = {
   requireFields,
   requireOneOf,
   assertEnum,
   assertObjectId,
   isValidEmail,
+  isMarsuEmail,
 };

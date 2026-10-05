@@ -6,12 +6,12 @@ class _ActivityInfo {
   const _ActivityInfo({
     required this.title,
     required this.description,
-    required this.icon,
+    required this.imagePath,
   });
 
   final String title;
   final String description;
-  final IconData icon;
+  final String imagePath;
 }
 
 class CwtsActivitiesScreen extends StatelessWidget {
@@ -19,24 +19,44 @@ class CwtsActivitiesScreen extends StatelessWidget {
 
   final List<_ActivityInfo> _activities = const [
     _ActivityInfo(
-      title: 'Feeding Program',
-      description: 'Providing meals to undernourished children & families in need.',
-      icon: Icons.restaurant,
-    ),
-    _ActivityInfo(
-      title: 'Disaster Preparedness Training',
-      description: 'Equipping students with skills for disaster prevention and response.',
-      icon: Icons.warning_amber_rounded,
+      title: 'Community Clean-up Drive',
+      description: 'Sweeping streets, collecting litter, and cleaning public spaces.',
+      imagePath: 'assets/images/cwts_activities/community_cleanup.jpg',
     ),
     _ActivityInfo(
       title: 'Coastal Clean-up',
-      description: 'Collecting and properly disposing waste to protect our shores.',
-      icon: Icons.waves,
+      description: 'Removing plastic, bottles, and other waste from beaches and shorelines.',
+      imagePath: 'assets/images/cwts_activities/coastal_cleanup.jpg',
     ),
     _ActivityInfo(
-      title: 'Tree Planting',
-      description: 'Planting trees to help conserve the environment.',
-      icon: Icons.park,
+      title: 'Tree-Planting Activity',
+      description: 'Planting trees and teaching residents how to care for them.',
+      imagePath: 'assets/images/cwts_activities/tree_planting.jpg',
+    ),
+    _ActivityInfo(
+      title: 'Community Outreach Program',
+      description: 'Distributing food, clothes, hygiene kits, or school supplies to families in need.',
+      imagePath: 'assets/images/cwts_activities/community_outreach.jpg',
+    ),
+    _ActivityInfo(
+      title: 'Feeding Program',
+      description: 'Preparing and serving nutritious meals to children or vulnerable residents.',
+      imagePath: 'assets/images/cwts_activities/feeding_program.jpg',
+    ),
+    _ActivityInfo(
+      title: 'Health and Hygiene Campaign',
+      description: 'Sharing information about proper handwashing, sanitation, nutrition, and disease prevention.',
+      imagePath: 'assets/images/cwts_activities/health_and_hygiene.jpg',
+    ),
+    _ActivityInfo(
+      title: 'CWTS Team-Building Games',
+      description: 'Organizing relays, trust exercises, problem-solving games, and group challenges.',
+      imagePath: 'assets/images/cwts_activities/team_building.jpg',
+    ),
+    _ActivityInfo(
+      title: 'Clean and Green Project',
+      description: 'Cleaning, painting, and beautifying schools, barangay facilities, parks, or waiting sheds.',
+      imagePath: 'assets/images/cwts_activities/clean_and_green.jpg',
     ),
   ];
 
@@ -84,7 +104,8 @@ class CwtsActivitiesScreen extends StatelessWidget {
 
   Widget _buildActivityCard(_ActivityInfo activity) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 16),
+      height: 136,
+      margin: const EdgeInsets.only(bottom: 18),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.cwtsCardBg,
@@ -92,35 +113,62 @@ class CwtsActivitiesScreen extends StatelessWidget {
         border: Border.all(color: AppColors.gold.withValues(alpha: 0.3)),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 56,
-            height: 56,
-            decoration: BoxDecoration(
-              color: AppColors.white,
-              borderRadius: BorderRadius.circular(14),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(AppColors.radiusSm),
+            child: Image.asset(
+              activity.imagePath,
+              width: 112,
+              height: 112,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => Container(
+                width: 112,
+                height: 112,
+                color: AppColors.white,
+              ),
             ),
-            child: Icon(activity.icon, color: AppColors.primaryMaroon, size: 26),
           ),
-          const SizedBox(width: 14),
+          const SizedBox(width: 16),
           Expanded(
             child: Column(
+              mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  activity.title,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.primaryMaroon,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      width: 7,
+                      height: 7,
+                      margin: const EdgeInsets.only(top: 5, right: 8),
+                      decoration: const BoxDecoration(
+                        color: AppColors.primaryMaroon,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        activity.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 15,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.primaryMaroon,
+                          height: 1.25,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 6),
+                const SizedBox(height: 8),
                 Text(
                   activity.description,
+                  maxLines: 3,
+                  overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
-                    fontSize: 12,
+                    fontSize: 12.5,
                     color: AppColors.textSecondary,
                     height: 1.4,
                   ),

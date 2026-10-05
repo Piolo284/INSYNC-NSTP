@@ -7,6 +7,7 @@ import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/notifications_sheet.dart';
 import '../../../core/widgets/profile_header.dart';
 import '../../../core/widgets/status_badge.dart';
 
@@ -29,6 +30,8 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
   List<Map<String, dynamic>> announcements = const [];
   List<Map<String, dynamic>> _toDo = const [];
   List<Map<String, dynamic>> _upcomingActivities = const [];
+
+  int _unreadNotifications = 0;
 
   @override
   void initState() {
@@ -55,6 +58,8 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
         _currentAnnouncementPage = 0;
         _state = LoadState.ready;
       });
+
+      _loadNotificationBadge();
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -62,6 +67,22 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
         _error = describeError(error);
       });
     }
+  }
+
+  /// Badge only — a failure here must never break the dashboard.
+  Future<void> _loadNotificationBadge() async {
+    try {
+      final result = await NotificationService.instance.mine(unreadOnly: true);
+      if (!mounted) return;
+      setState(() => _unreadNotifications = result['unreadCount'] as int? ?? 0);
+    } catch (_) {
+      /* ignore */
+    }
+  }
+
+  Future<void> _showNotifications() async {
+    await showNotificationsSheet(context);
+    await _loadNotificationBadge();
   }
 
   @override
@@ -87,6 +108,35 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
           ),
         ),
         actions: [
+          Stack(
+            alignment: Alignment.center,
+            children: [
+              IconButton(
+                icon: const Icon(Icons.notifications_outlined, color: AppColors.white),
+                onPressed: _showNotifications,
+              ),
+              if (_unreadNotifications > 0)
+                Positioned(
+                  top: 10,
+                  right: 10,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.error,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '$_unreadNotifications',
+                      style: const TextStyle(
+                        color: AppColors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
+          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
@@ -469,43 +519,43 @@ class _RotcDashboardScreenState extends State<RotcDashboardScreen> {
                   ),
                 ),
                 const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.textSecondary,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    StatusBadge(status, dense: true),
-                  ],
+                Text(
+                  'Due: ${Fmt.date(task['deadline'], fallback: 'No deadline')}',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
           ),
-          const SizedBox(width: 10),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (_) => const RotcActivitiesModulesScreen(),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              StatusBadge(status, dense: true),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const RotcActivitiesModulesScreen(),
+                    ),
+                  ).then((_) => _load());
+                },
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                 ),
-              ).then((_) => _load());
-            },
-            style: ElevatedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              minimumSize: Size.zero,
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-            ),
-            child: const Text('Proceed'),
+                child: const Text('Proceed'),
+              ),
+            ],
           ),
         ],
       ),

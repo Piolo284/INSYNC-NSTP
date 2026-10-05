@@ -1,31 +1,40 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, UserCog, FileText, ClipboardCheck, BookOpen, FileCheck2,
-  Megaphone, FolderOpen, BarChart3, Award, LogOut, ChevronRight, Eye, Settings, CalendarClock,
+  LayoutDashboard, Users, UserCog, FileText,
+  Megaphone, FolderOpen, BarChart3, Award, LogOut, ChevronRight, Eye, Settings,
+  HeartHandshake,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { resolveFileUrl } from '../api/client';
 
 const ROLE_LABELS = {
-  super_admin: 'Super Admin',
+  super_admin: 'NSTP-HEAD',
   admin_cwts: 'CWTS Administrator',
   admin_rotc: 'ROTC Administrator',
+  system_maintenance_admin: 'System Maintenance Administrator',
 };
 
 export default function Sidebar() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser, logout, isSuperAdmin, programView, setProgramView } = useAuth();
+  const { currentUser, logout, isSuperAdmin, effectiveProgram } = useAuth();
 
   const navItems = [
     { path: '/', label: 'Dashboard', icon: LayoutDashboard },
     { path: '/students', label: 'Students', icon: Users },
-    { path: '/monitor-students', label: 'Monitor Students', icon: Eye },
-    { path: '/officers', label: 'Officers', icon: UserCog },
-    { path: '/activities', label: 'Activities', icon: CalendarClock },
-    { path: '/attendance', label: 'Attendance', icon: ClipboardCheck },
-    { path: '/modules', label: 'Modules', icon: BookOpen },
-    { path: '/submissions', label: 'Submissions', icon: FileCheck2 },
+    // ROTC-only track (see backend utils/specialClass.js) — a CWTS-scoped
+    // admin has nothing to manage here.
+    ...(effectiveProgram === 'CWTS' ? [] : [
+      { path: '/medically-unfit', label: 'Inclusive Learning Section', icon: HeartHandshake },
+    ]),
+    // Monitoring/officers are program-admin-only — the masterlist and
+    // Programs & Brigades management live exclusively under the
+    // system_maintenance_admin's own nav (MaintenanceSidebar.jsx), not here.
+    ...(isSuperAdmin ? [] : [
+      { path: '/monitor-students', label: 'Monitor Students', icon: Eye },
+      { path: '/officers', label: 'Officers', icon: UserCog },
+    ]),
     { path: '/grades', label: 'Grades', icon: FileText },
     { path: '/announcements', label: 'Announcements', icon: Megaphone },
     { path: '/documents', label: 'Documents', icon: FolderOpen },
@@ -81,9 +90,11 @@ export default function Sidebar() {
           <div style={{
             width: '40px', height: '40px', borderRadius: '50%',
             background: 'rgba(255,255,255,0.15)', display: 'flex',
-            alignItems: 'center', justifyContent: 'center', flexShrink: 0
+            alignItems: 'center', justifyContent: 'center', flexShrink: 0, overflow: 'hidden'
           }}>
-            {initials ? (
+            {currentUser?.profileImage ? (
+              <img src={resolveFileUrl(currentUser.profileImage)} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : initials ? (
               <span style={{ fontSize: '13px', fontWeight: 700, color: '#fff' }}>{initials}</span>
             ) : (
               <Users size={18} color="#fff" />
@@ -98,31 +109,6 @@ export default function Sidebar() {
             </p>
           </div>
         </div>
-
-        {/* ===== PROGRAM SWITCHER (super_admin only) ===== */}
-        {isSuperAdmin && (
-          <div style={{ marginTop: '14px' }}>
-            <p style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.6px', color: 'rgba(255,255,255,0.45)', margin: '0 0 8px', textTransform: 'uppercase' }}>
-              Program View
-            </p>
-            <div style={{ display: 'flex', gap: '6px', background: 'rgba(255,255,255,0.06)', padding: '4px', borderRadius: '10px' }}>
-              {['All', 'CWTS', 'ROTC'].map((opt) => (
-                <button
-                  key={opt}
-                  onClick={() => setProgramView(opt)}
-                  style={{
-                    flex: 1, padding: '7px 0', borderRadius: '7px', border: 'none', cursor: 'pointer',
-                    background: programView === opt ? 'var(--gold)' : 'transparent',
-                    color: programView === opt ? 'var(--sidebar-bg)' : 'rgba(255,255,255,0.75)',
-                    fontSize: '11px', fontWeight: 700, fontFamily: 'inherit', transition: 'all 0.15s ease',
-                  }}
-                >
-                  {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       <nav style={{ flex: 1, padding: '8px 14px' }}>

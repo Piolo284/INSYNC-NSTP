@@ -66,4 +66,28 @@ async function sendAttendanceCode({ to, name, code, sessionTitle, minutes }) {
   return sendMail({ to, subject, text });
 }
 
-module.exports = { sendMail, sendAttendanceCode, isConfigured };
+async function sendPasswordResetCode({ to, name, code, minutes }) {
+  const subject = 'Your NSTP Portal password reset code';
+  const text =
+    `Hi ${name},\n\n` +
+    `Your password reset request has been approved. Your reset code is: ${code}\n\n` +
+    `This code expires in ${minutes} minutes.\n\n` +
+    `If you did not request a password reset, please contact your NSTP administrator.`;
+
+  return sendMail({ to, subject, text });
+}
+
+/** Shared by the email-change, contact-number-change, and two-factor-login
+ * flows — same "here's your 6-digit code" shape, different purpose line. */
+async function sendVerificationCode({ to, name, code, purpose, minutes }) {
+  const subject = 'Your NSTP Portal verification code';
+  const text =
+    `Hi ${name},\n\n` +
+    `Your verification code to ${purpose} is: ${code}\n\n` +
+    `This code expires in ${minutes} minutes.\n\n` +
+    `If you did not request this, please contact your NSTP administrator.`;
+
+  return sendMail({ to, subject, text });
+}
+
+module.exports = { sendMail, sendAttendanceCode, sendPasswordResetCode, sendVerificationCode, isConfigured };

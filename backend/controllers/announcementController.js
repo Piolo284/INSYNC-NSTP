@@ -3,7 +3,7 @@ const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
-const { PROGRAMS, TARGET_AUDIENCES } = require('../config/constants');
+const { PROGRAMS, TARGET_AUDIENCES, CAMPUSES } = require('../config/constants');
 const { notifyUsers } = require('../utils/notify');
 const { assertProgramAccess } = require('../utils/programScope');
 
@@ -51,9 +51,16 @@ exports.list = asyncHandler(async (req, res) => {
   if (['student', 'cadet'].includes(req.user.role)) {
     const audience = req.user.role === 'cadet' ? 'Cadets' : 'Students';
     filter.targetAudience = { $in: ['All', audience] };
-    filter.$or = [
-      { recipients: { $size: 0 } },
-      { recipients: req.user._id },
+    // A trainee only sees announcements targeted at their own campus (or
+    // every-campus ones) — same pattern as the program/audience narrowing
+    // above, just one more dimension.
+    filter.campus = { $in: [req.user.campus, 'All'] };
+    filter.$and = [
+      { $or: [{ recipients: { $size: 0 } }, { recipients: req.user._id }] },
+      // Belt-and-suspenders alongside the TTL index on the model — hides an
+      // already-past-expiry announcement in the few seconds before Mongo's
+      // background TTL sweep actually deletes the document.
+      { $or: [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }] },
     ];
   } else if (req.query.audience) {
     filter.targetAudience = req.query.audience;
@@ -96,6 +103,20 @@ exports.create = asyncHandler(async (req, res) => {
   requireFields(req.body, ['title', 'content']);
   assertEnum(req.body.program, [...PROGRAMS, 'All'], 'program');
   assertEnum(req.body.targetAudience, TARGET_AUDIENCES, 'targetAudience');
+  if (req.body.campus !== undefined) {
+    assertEnum(req.body.campus, [...CAMPUSES, 'All'], 'campus');
+  }
+
+  let expiresAt = null;
+  if (req.body.expiresAt) {
+    expiresAt = new Date(req.body.expiresAt);
+    if (Number.isNaN(expiresAt.getTime())) {
+      throw ApiError.badRequest('Please provide a valid expiry date.');
+    }
+    if (expiresAt <= new Date()) {
+      throw ApiError.badRequest('Expiry date must be in the future.');
+    }
+  }
 
   // Force the program (and, by extension, the audience) to the caller's own
   // program unless they are super_admin — closes the "target the other
@@ -117,13 +138,16 @@ exports.create = asyncHandler(async (req, res) => {
     content: req.body.content,
     program,
     targetAudience: req.body.targetAudience || 'All',
+    campus: req.body.campus || 'All',
     recipients: Array.isArray(req.body.recipients) ? req.body.recipients : [],
     date: req.body.date ? new Date(req.body.date) : new Date(),
     time: req.body.time || '',
     location: req.body.location || '',
     isPinned: Boolean(req.body.isPinned),
+    expiresAt,
     status: req.body.status || 'Published',
     createdBy: req.user._id,
+    ...(req.file ? { imageUrl: req.file.path, imageName: req.file.originalname } : {}),
   });
 
   if (announcement.status === 'Published') {
@@ -152,6 +176,9 @@ exports.update = asyncHandler(async (req, res) => {
 
   assertEnum(req.body.program, [...PROGRAMS, 'All'], 'program');
   assertEnum(req.body.targetAudience, TARGET_AUDIENCES, 'targetAudience');
+  if (req.body.campus !== undefined) {
+    assertEnum(req.body.campus, [...CAMPUSES, 'All'], 'campus');
+  }
   if (req.user.role !== 'super_admin' && req.body.program !== undefined) {
     req.body.program = req.user.program;
   }
@@ -161,6 +188,7 @@ exports.update = asyncHandler(async (req, res) => {
     'content',
     'program',
     'targetAudience',
+    'campus',
     'time',
     'location',
     'isPinned',
@@ -170,7 +198,25 @@ exports.update = asyncHandler(async (req, res) => {
   fields.forEach((f) => {
     if (req.body[f] !== undefined) announcement[f] = req.body[f];
   });
+  if (req.file) {
+    announcement.imageUrl = req.file.path;
+    announcement.imageName = req.file.originalname;
+  }
   if (req.body.date !== undefined) announcement.date = new Date(req.body.date);
+  if (req.body.expiresAt !== undefined) {
+    if (!req.body.expiresAt) {
+      announcement.expiresAt = null;
+    } else {
+      const expiresAt = new Date(req.body.expiresAt);
+      if (Number.isNaN(expiresAt.getTime())) {
+        throw ApiError.badRequest('Please provide a valid expiry date.');
+      }
+      if (expiresAt <= new Date()) {
+        throw ApiError.badRequest('Expiry date must be in the future.');
+      }
+      announcement.expiresAt = expiresAt;
+    }
+  }
 
   await announcement.save();
   res.json({ success: true, data: announcement });

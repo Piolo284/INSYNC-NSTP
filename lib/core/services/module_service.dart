@@ -44,24 +44,57 @@ class ModuleService {
     int totalPoints = 100,
     List<Map<String, dynamic>> rubrics = const [],
     String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
+    // A YouTube/video link instead of an uploaded file — mutually exclusive
+    // with filePath/fileBytes; ignored if either of those is also set.
+    String? fileUrl,
   }) async {
     final fields = {
       'title': title,
       'description': description,
-      if (program != null) 'program': program,
+      'program': ?program,
       'moduleCode': moduleCode,
       'section': section,
       'instructions': instructions,
       if (deadline != null) 'deadline': Fmt.apiDate(deadline),
       'totalPoints': '$totalPoints',
       if (rubrics.isNotEmpty) 'rubrics': jsonEncode(rubrics),
+      if (fileUrl != null && fileUrl.isNotEmpty) ...{
+        'fileUrl': fileUrl,
+        'fileName': fileName ?? 'Video Link',
+      },
     };
 
-    final response = await _api.upload('/modules', fields: fields, filePath: filePath);
+    final response = await _api.upload(
+      '/modules',
+      fields: fields,
+      filePath: filePath,
+      fileBytes: fileBytes,
+      fileName: fileName,
+    );
     return ApiService.mapOf(response);
   }
 
-  Future<Map<String, dynamic>> update(String id, Map<String, dynamic> body) async {
+  Future<Map<String, dynamic>> update(
+    String id,
+    Map<String, dynamic> body, {
+    String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
+  }) async {
+    if ((filePath != null && filePath.isNotEmpty) ||
+        (fileBytes != null && fileBytes.isNotEmpty)) {
+      final response = await _api.upload(
+        '/modules/$id',
+        method: 'PUT',
+        fields: body.map((k, v) => MapEntry(k, v.toString())),
+        filePath: filePath,
+        fileBytes: fileBytes,
+        fileName: fileName,
+      );
+      return ApiService.mapOf(response);
+    }
     final response = await _api.put('/modules/$id', body: body);
     return ApiService.mapOf(response);
   }

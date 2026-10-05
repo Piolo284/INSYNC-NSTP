@@ -20,6 +20,10 @@ const documentSchema = new mongoose.Schema(
       default: 'Missing',
     },
     uploadedAt: { type: Date, default: null },
+    // Who approved/rejected it — lets an admin see which officer reviewed a
+    // given requirement instead of only the resulting status.
+    reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    reviewedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

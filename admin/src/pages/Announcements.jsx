@@ -6,10 +6,14 @@ import AsyncSection from '../components/AsyncSection';
 import ConfirmDialog from '../components/ConfirmDialog';
 import { useApi, errorMessage } from '../hooks/useApi';
 import { announcementsApi } from '../api/announcements';
+import { resolveFileUrl } from '../api/client';
+import { announcementTemplatesApi } from '../api/announcementTemplates';
+import { composeAnnouncementImage, canvasToPngFile } from '../utils/announcementGenerator';
 import { useAuth } from '../context/AuthContext';
 
 const ICONS = { CWTS: Users, ROTC: CalendarDays, All: Megaphone };
 const STATUS_OPTIONS = ['Published', 'Draft', 'Archived'];
+const CAMPUS_OPTIONS = ['MARSU - Boac (Main)', 'MARSU - Torrijos', 'MARSU - Sta. Cruz', 'MARSU - Gasan'];
 
 export default function Announcements() {
   const { isSuperAdmin, currentUser } = useAuth();
@@ -81,6 +85,14 @@ export default function Announcements() {
                           {item.isPinned && <Pin size={12} color="var(--maroon)" />}
                           <h3 style={{ margin: 0, fontSize: '14px' }}>{item.title}</h3>
                           <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#F3F4F6', color: 'var(--text-secondary)' }}>{item.program} · {item.targetAudience}</span>
+                          {item.campus && item.campus !== 'All' && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#EFF6FF', color: '#2563EB' }}>{item.campus}</span>
+                          )}
+                          {item.expiresAt && (
+                            <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#FFF7ED', color: '#D97706' }}>
+                              Expires {new Date(item.expiresAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
+                            </span>
+                          )}
                         </div>
                         <p style={{ margin: '4px 0 0', color: 'var(--text-secondary)', fontSize: '11px' }}>Posted: {new Date(item.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
                       </div>
@@ -95,7 +107,16 @@ export default function Announcements() {
                       </button>
                     </div>
                     {expanded && (
-                      <p style={{ margin: '14px 0 0', paddingTop: '14px', borderTop: '1px solid var(--border)', fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.content}</p>
+                      <div style={{ margin: '14px 0 0', paddingTop: '14px', borderTop: '1px solid var(--border)' }}>
+                        {item.imageUrl && (
+                          <img
+                            src={resolveFileUrl(item.imageUrl)}
+                            alt="Announcement poster"
+                            style={{ maxWidth: '100%', borderRadius: '8px', marginBottom: '12px', border: '1px solid var(--border)' }}
+                          />
+                        )}
+                        <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-primary)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>{item.content}</p>
+                      </div>
                     )}
                   </article>
                 );
@@ -127,6 +148,28 @@ export default function Announcements() {
   );
 }
 
+/**
+ * Auto-composes a poster image from this program's AnnouncementTemplate (if
+ * one is configured) using the announcement's own field values — mirrors
+ * Certificate.jsx's ReviewModal doing the same for certificate requests.
+ * Never throws: posting an announcement must never fail just because poster
+ * generation hit a snag (no template configured, image failed to load,
+ * etc.) — it just silently falls back to no image, same as before this
+ * feature existed.
+ */
+async function tryGeneratePoster(program, announcementFields, currentUserName) {
+  if (program !== 'CWTS' && program !== 'ROTC') return undefined;
+  try {
+    const res = await announcementTemplatesApi.get(program);
+    const template = res.data;
+    if (!template || !template.imageUrl || !template.fields?.length) return undefined;
+    const canvas = await composeAnnouncementImage(announcementFields, template, currentUserName);
+    return await canvasToPngFile(canvas, `${announcementFields.title.replace(/[^a-z0-9]+/gi, '-')}-poster.png`);
+  } catch {
+    return undefined;
+  }
+}
+
 function AnnouncementModal({ announcement, onClose, onSaved }) {
   const { isSuperAdmin, currentUser } = useAuth();
   const isEdit = Boolean(announcement);
@@ -137,6 +180,13 @@ function AnnouncementModal({ announcement, onClose, onSaved }) {
     content: announcement?.content || '',
     program: announcement?.program || (isSuperAdmin ? 'All' : ownProgram),
     targetAudience: announcement?.targetAudience || 'All',
+    campus: announcement?.campus || 'All',
+    // <input type="date"> needs YYYY-MM-DD; the API gives back a full ISO
+    // timestamp, so trim it down.
+    expiresAt: announcement?.expiresAt ? announcement.expiresAt.slice(0, 10) : '',
+    date: announcement?.date ? announcement.date.slice(0, 10) : new Date().toISOString().slice(0, 10),
+    time: announcement?.time || '',
+    location: announcement?.location || '',
     isPinned: announcement?.isPinned || false,
     status: announcement?.status || 'Published',
   });
@@ -156,6 +206,10 @@ function AnnouncementModal({ announcement, onClose, onSaved }) {
       setError('Title and message are both required.');
       return;
     }
+    if (form.expiresAt && new Date(form.expiresAt) <= new Date()) {
+      setError('Expiry date must be in the future.');
+      return;
+    }
     setError('');
     setSubmitting(true);
     try {
@@ -163,12 +217,21 @@ function AnnouncementModal({ announcement, onClose, onSaved }) {
         title: form.title,
         content: form.content,
         targetAudience: form.targetAudience,
+        campus: form.campus,
+        expiresAt: form.expiresAt || '',
+        date: form.date,
+        time: form.time,
+        location: form.location,
         isPinned: form.isPinned,
         status: form.status,
         ...(isSuperAdmin ? { program: form.program } : {}),
       };
-      if (isEdit) await announcementsApi.update(announcement._id, payload);
-      else await announcementsApi.create(payload);
+
+      const effectiveProgram = isSuperAdmin ? form.program : ownProgram;
+      const file = await tryGeneratePoster(effectiveProgram, payload, currentUser?.name);
+
+      if (isEdit) await announcementsApi.update(announcement._id, payload, file);
+      else await announcementsApi.create(payload, file);
       onSaved();
     } catch (err) {
       setError(errorMessage(err, 'Unable to save announcement.'));
@@ -191,12 +254,30 @@ function AnnouncementModal({ announcement, onClose, onSaved }) {
             <Field label="Program"><select value={form.program} onChange={e => update('program', e.target.value)}><option value="All">All (CWTS + ROTC)</option><option value="CWTS">CWTS</option><option value="ROTC">ROTC</option></select></Field>
           )}
           <Field label="Target Audience"><select value={form.targetAudience} onChange={e => update('targetAudience', e.target.value)}>{audienceOptions.map(a => <option key={a} value={a}>{a}</option>)}</select></Field>
+          <Field label="Campus">
+            <select value={form.campus} onChange={e => update('campus', e.target.value)}>
+              <option value="All">All Campuses</option>
+              {CAMPUS_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
           <Field label="Message"><textarea value={form.content} onChange={e => update('content', e.target.value)} placeholder="Type your message here..." /></Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <Field label="Date"><input type="date" value={form.date} onChange={e => update('date', e.target.value)} /></Field>
+            <Field label="Time (optional)"><input type="time" value={form.time} onChange={e => update('time', e.target.value)} /></Field>
+          </div>
+          <Field label="Location (optional)"><input value={form.location} onChange={e => update('location', e.target.value)} placeholder="e.g. MARSU Gymnasium" /></Field>
+          <Field label="Expires On (optional)">
+            <input type="date" value={form.expiresAt} min={new Date(Date.now() + 86400000).toISOString().slice(0, 10)} onChange={e => update('expiresAt', e.target.value)} />
+          </Field>
+          <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)' }}>Leave blank for an announcement that never expires. Once the date passes, it's automatically removed from the system.</p>
           <Field label="Status"><select value={form.status} onChange={e => update('status', e.target.value)}><option value="Published">Published</option><option value="Draft">Draft</option><option value="Archived">Archived</option></select></Field>
           <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', fontWeight: 600 }}>
             <input type="checkbox" checked={form.isPinned} onChange={e => update('isPinned', e.target.checked)} /> Pin this announcement
           </label>
-          <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)' }}>Note: file attachments are not supported by the backend yet, so no attachment field is shown here.</p>
+          <p style={{ margin: 0, fontSize: '11.5px', color: 'var(--text-secondary)' }}>
+            If an Announcement Template is set up for this program, a poster image is generated automatically from
+            the fields above — no manual attachment needed.
+          </p>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '4px' }}>
             <button type="button" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
             <button type="submit" disabled={submitting} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'var(--maroon)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit', opacity: submitting ? 0.7 : 1 }}>

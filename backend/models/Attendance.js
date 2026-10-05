@@ -18,6 +18,11 @@ const attendanceSchema = new mongoose.Schema(
       index: true,
     },
     activityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Activity', default: null },
+    // Snapshotted at creation time (from the session, or the recording
+    // officer for manual marks) — never rewritten if the student's own
+    // brigade later changes, so historical records stay accurate to when
+    // they actually happened.
+    brigadeId: { type: mongoose.Schema.Types.ObjectId, ref: 'Brigade', default: null, index: true },
     studentId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User',
@@ -27,7 +32,7 @@ const attendanceSchema = new mongoose.Schema(
     program: { type: String, enum: PROGRAMS, required: true, index: true },
     title: { type: String, default: '' },
     date: { type: Date, required: true, index: true },
-    time: { type: String, default: '' }, // "10:20 AM"
+    time: { type: String, default: '' }, // "10:20 AM" — check-in time
     status: {
       type: String,
       enum: ATTENDANCE_STATUSES,
@@ -38,6 +43,19 @@ const attendanceSchema = new mongoose.Schema(
     verificationCode: { type: String, default: null, select: false },
     verificationExpiresAt: { type: Date, default: null },
     verified: { type: Boolean, default: false },
+    // Check-out side of the same day's attendance — set once the trainee (or
+    // officer, manually) checks out. Left null means "checked in but never
+    // checked out", which is what makes closeSession()/finalizeDay() flip
+    // this row to Absent once the officer finalizes the day.
+    checkOutTime: { type: String, default: '' },
+    checkOutAt: { type: Date, default: null },
+    outSessionId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'AttendanceSession',
+      default: null,
+    },
+    checkOutVerificationCode: { type: String, default: null, select: false },
+    checkOutVerificationExpiresAt: { type: Date, default: null },
     remarks: { type: String, default: '' },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },

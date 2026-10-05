@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'cwts_officer_grade_submission_screen.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_colors.dart';
@@ -67,6 +68,22 @@ class _CwtsOfficerStudentSubmissionScreenState
   }
 
   bool get _isGraded => _submission['status'] == 'Graded';
+
+  Future<void> _openFile(String fileUrl) async {
+    final uri = Uri.tryParse(AppConfig.resolveFileUrl(fileUrl));
+    if (uri == null) {
+      AppSnack.error(context, 'That file link looks invalid.');
+      return;
+    }
+    try {
+      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        AppSnack.error(context, 'Could not open the file. No app is available to view it.');
+      }
+    } catch (error) {
+      if (mounted) AppSnack.error(context, describeError(error));
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -326,12 +343,7 @@ class _CwtsOfficerStudentSubmissionScreenState
               color: fileUrl.isEmpty ? AppColors.textSecondary : AppColors.primaryMaroon,
               size: 20,
             ),
-            onPressed: fileUrl.isEmpty
-                ? null
-                : () => AppSnack.info(
-                      context,
-                      'Download link: ${AppConfig.resolveFileUrl(fileUrl)}',
-                    ),
+            onPressed: fileUrl.isEmpty ? null : () => _openFile(fileUrl),
           ),
         ],
       ),

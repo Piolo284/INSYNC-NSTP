@@ -1,12 +1,16 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const LoginSession = require('../models/LoginSession');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { STAFF_ROLES } = require('../config/constants');
 
-function signToken(user) {
+/** `jti` is a LoginSession document's _id — omitted for any caller that
+ * hasn't been updated to create one first, so older call sites keep working
+ * (protect() below treats a missing jti as "not session-tracked", not invalid). */
+function signToken(user, jti) {
   return jwt.sign(
-    { sub: String(user._id), role: user.role, program: user.program || null },
+    { sub: String(user._id), role: user.role, program: user.program || null, jti: jti ? String(jti) : undefined },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
   );
@@ -32,8 +36,28 @@ const protect = asyncHandler(async (req, _res, next) => {
   if (!user) {
     throw ApiError.unauthorized('Account no longer exists.');
   }
-  if (user.status === 'Inactive' || user.status === 'Dropped') {
-    throw ApiError.forbidden('This account is no longer active.');
+  if (user.status === 'Dropped') {
+    throw ApiError.forbidden(
+      'This account has been dropped for exceeding the maximum allowed absences. Please contact your program administrator to have your account reviewed.'
+    );
+  }
+  if (user.status === 'Inactive') {
+    throw ApiError.forbidden('This account is no longer active. Please contact your program administrator.');
+  }
+
+  // Session revocation ("Logout All Devices" / removing one device) only
+  // works because of this lookup — a JWT is normally stateless and would
+  // otherwise stay valid until it expires no matter what. A token with no
+  // jti (issued before this feature, or by a call site that hasn't been
+  // updated) skips the check entirely rather than being rejected.
+  if (payload.jti) {
+    const session = await LoginSession.findById(payload.jti);
+    if (!session || session.revokedAt) {
+      throw ApiError.unauthorized('This session has been logged out. Please log in again.');
+    }
+    session.lastSeenAt = new Date();
+    session.save().catch(() => {}); // best-effort — never block the request on this
+    req.sessionId = String(session._id);
   }
 
   req.user = user;

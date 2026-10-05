@@ -20,6 +20,7 @@ router.post('/verify', trainee, ctrl.verify);
 
 // --- Records ---
 router.get('/summary', ctrl.summary);
+router.post('/finalize', staff, ctrl.finalizeDay);
 router.get('/', ctrl.list);
 router.post('/', staff, ctrl.create);
 router.put('/:id', staff, ctrl.update);

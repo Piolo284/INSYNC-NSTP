@@ -5,6 +5,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
@@ -23,8 +24,13 @@ class CwtsOfficerManualAttendanceScreen extends StatefulWidget {
 class _CwtsOfficerManualAttendanceScreenState
     extends State<CwtsOfficerManualAttendanceScreen> {
   DateTime _selectedDate = DateTime.now();
-  String _selectedBrigade = 'Brigade Makakalikasan';
   String _selectedStatus = 'Present';
+
+  /// 'IN' picks a status as before. 'OUT' just stamps a check-out time onto
+  /// each student's existing check-in row — a student who checked in but
+  /// never gets checked out here is marked Absent once the officer finalizes
+  /// the day (see the dashboard's "Finalize Attendance" action).
+  String _checkType = 'IN';
 
   final TextEditingController _searchController = TextEditingController();
   final TextEditingController _notesController = TextEditingController();
@@ -37,12 +43,6 @@ class _CwtsOfficerManualAttendanceScreenState
   final List<Map<String, dynamic>> _addedStudents = [];
   bool _isSaving = false;
 
-  final List<String> _brigades = const [
-    'Brigade Makakalikasan',
-    'Brigade Kalikasan',
-    'Brigade Masipag',
-  ];
-
   static const List<String> _statuses = [
     'Present',
     'Late',
@@ -53,10 +53,6 @@ class _CwtsOfficerManualAttendanceScreenState
   @override
   void initState() {
     super.initState();
-    final sessionBrigade = Session.instance.brigade;
-    if (sessionBrigade.isNotEmpty && _brigades.contains(sessionBrigade)) {
-      _selectedBrigade = sessionBrigade;
-    }
     _loadRoster();
   }
 
@@ -151,25 +147,48 @@ class _CwtsOfficerManualAttendanceScreenState
     setState(() => _addedStudents.removeWhere((s) => _userIdOf(s) == id));
   }
 
+  bool get _isCheckOut => _checkType == 'OUT';
+
   Future<void> _save() async {
     if (_addedStudents.isEmpty) return;
+
+    final count = _addedStudents.length;
+    final names = _addedStudents.take(3).map((s) => Fmt.str(s['name'], 'Trainee')).join(', ');
+    final summary = count <= 3 ? names : '$names, and ${count - 3} more';
+    final confirmed = await showConfirmDialog(
+      context,
+      title: _isCheckOut ? 'Mark Check-Out?' : 'Mark Attendance?',
+      message: _isCheckOut
+          ? 'Check out $summary for ${Fmt.dateWithDay(_selectedDate)}?'
+          : 'Mark $summary as $_selectedStatus for ${Fmt.dateWithDay(_selectedDate)}?',
+      confirmLabel: 'Confirm',
+      danger: false,
+    );
+    if (!confirmed || !mounted) return;
 
     setState(() => _isSaving = true);
 
     try {
-      final count = await AttendanceService.instance.markManual(
+      final result = await AttendanceService.instance.markManual(
         studentIds: _addedStudents.map(_userIdOf).toList(),
         date: _selectedDate,
         status: _selectedStatus,
         program: Session.instance.program,
-        brigade: _selectedBrigade,
         remarks: _notesController.text.trim(),
-        title: '$_selectedBrigade Attendance',
+        title: '${Session.instance.brigade} Attendance',
+        checkType: _checkType,
       );
 
       if (!mounted) return;
       setState(() => _isSaving = false);
-      _showSuccess(count);
+      final failed = result['failed'] ?? 0;
+      if (failed > 0) {
+        AppSnack.info(
+          context,
+          '$failed student(s) skipped — they have not checked in yet.',
+        );
+      }
+      _showSuccess(result['count'] ?? 0);
     } catch (error) {
       if (!mounted) return;
       setState(() => _isSaving = false);
@@ -198,9 +217,9 @@ class _CwtsOfficerManualAttendanceScreenState
                 child: const Icon(Icons.check, color: AppColors.success, size: 32),
               ),
               const SizedBox(height: 20),
-              const Text(
-                'Attendance Recorded!',
-                style: TextStyle(
+              Text(
+                _isCheckOut ? 'Check-Out Recorded!' : 'Attendance Recorded!',
+                style: const TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
                   color: AppColors.textPrimary,
@@ -208,7 +227,9 @@ class _CwtsOfficerManualAttendanceScreenState
               ),
               const SizedBox(height: 8),
               Text(
-                '$count student(s) have been marked\nas $_selectedStatus manually',
+                _isCheckOut
+                    ? '$count student(s) have been checked out manually'
+                    : '$count student(s) have been marked\nas $_selectedStatus manually',
                 textAlign: TextAlign.center,
                 style: const TextStyle(
                   fontSize: 13,
@@ -219,18 +240,19 @@ class _CwtsOfficerManualAttendanceScreenState
               const SizedBox(height: 20),
               _buildSummaryRow('Date', Fmt.dateWithDay(_selectedDate)),
               const SizedBox(height: 8),
-              _buildSummaryRow('Brigade', _selectedBrigade),
+              _buildSummaryRow('Brigade', Session.instance.brigade),
               const SizedBox(height: 10),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Status',
-                    style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-                  ),
-                  StatusBadge(_selectedStatus, dense: true),
-                ],
-              ),
+              if (!_isCheckOut)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Status',
+                      style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                    ),
+                    StatusBadge(_selectedStatus, dense: true),
+                  ],
+                ),
               const SizedBox(height: 24),
               SizedBox(
                 width: double.infinity,
@@ -320,34 +342,66 @@ class _CwtsOfficerManualAttendanceScreenState
                   ),
                   const SizedBox(height: 20),
 
-                  // ===== SELECT BRIGADE =====
-                  _buildLabel('Select Brigade'),
+                  // ===== BRIGADE (read-only — always the officer's own) =====
+                  _buildLabel(Session.instance.isSpecialClassOfficer ? 'Roster' : 'Brigade'),
                   const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     decoration: BoxDecoration(
+                      color: AppColors.scaffoldBg,
                       border: Border.all(color: AppColors.border),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: DropdownButtonHideUnderline(
-                      child: DropdownButton<String>(
-                        isExpanded: true,
-                        value: _selectedBrigade,
-                        icon: const Icon(Icons.keyboard_arrow_down,
-                            color: AppColors.textSecondary),
-                        style: const TextStyle(
-                            fontSize: 14, color: AppColors.textPrimary),
-                        onChanged: (v) => setState(() => _selectedBrigade = v!),
-                        items: _brigades
-                            .map((b) =>
-                                DropdownMenuItem(value: b, child: Text(b)))
-                            .toList(),
-                      ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.groups_outlined, size: 18, color: AppColors.textSecondary),
+                        const SizedBox(width: 10),
+                        Text(
+                          Session.instance.isSpecialClassOfficer
+                              ? '${Session.instance.program} Inclusive Learning Section (program-wide)'
+                              : Session.instance.brigade.isEmpty
+                                  ? 'No brigade assigned — contact your administrator.'
+                                  : Session.instance.brigade,
+                          style: const TextStyle(fontSize: 14, color: AppColors.textPrimary, fontWeight: FontWeight.w600),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: 20),
 
+                  // ===== CHECK IN / CHECK OUT =====
+                  _buildLabel('Attendance Leg'),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildCheckTypeChip(
+                          label: 'Check In',
+                          value: 'IN',
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildCheckTypeChip(
+                          label: 'Check Out',
+                          value: 'OUT',
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_isCheckOut) ...[
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Only students already checked in for this date will be '
+                      'checked out — the rest are skipped.',
+                      style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                  const SizedBox(height: 20),
+
                   // ===== MARK AS =====
+                  if (!_isCheckOut) ...[
                   _buildLabel('Mark As'),
                   const SizedBox(height: 8),
                   Row(
@@ -382,6 +436,7 @@ class _CwtsOfficerManualAttendanceScreenState
                       );
                     }).toList(),
                   ),
+                  ],
                 ],
               ),
             ),
@@ -608,9 +663,9 @@ class _CwtsOfficerManualAttendanceScreenState
                               AlwaysStoppedAnimation<Color>(AppColors.white),
                         ),
                       )
-                    : const Text(
-                        'Add Manually',
-                        style: TextStyle(
+                    : Text(
+                        _isCheckOut ? 'Mark Check-Out' : 'Add Manually',
+                        style: const TextStyle(
                             fontSize: 14, fontWeight: FontWeight.w600),
                       ),
               ),
@@ -692,6 +747,29 @@ class _CwtsOfficerManualAttendanceScreenState
         fontSize: 13,
         fontWeight: FontWeight.w600,
         color: AppColors.textPrimary,
+      ),
+    );
+  }
+
+  Widget _buildCheckTypeChip({required String label, required String value}) {
+    final isSelected = _checkType == value;
+    return GestureDetector(
+      onTap: () => setState(() => _checkType = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.primaryMaroon : AppColors.grey100,
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: isSelected ? AppColors.white : AppColors.textSecondary,
+          ),
+        ),
       ),
     );
   }

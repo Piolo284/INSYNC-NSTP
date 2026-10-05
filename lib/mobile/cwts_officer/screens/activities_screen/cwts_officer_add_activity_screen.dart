@@ -1,4 +1,5 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../../../core/constants/app_colors.dart';
 import '../../../../../core/services/services.dart';
@@ -121,7 +122,13 @@ class _CwtsOfficerAddActivityScreenState
 
   Future<void> _pickPhoto() async {
     try {
-      final result = await FilePicker.platform.pickFiles(type: FileType.image);
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.image,
+        // Web never returns a real filesystem path — only bytes — so the
+        // upload has to travel as bytes for the photo to actually reach
+        // the server.
+        withData: true,
+      );
       if (result == null || result.files.isEmpty) return;
       setState(() => _photo = result.files.first);
     } catch (_) {
@@ -163,7 +170,9 @@ class _CwtsOfficerAddActivityScreenState
             'endTime': _formatApiTime(_endTime),
             'objectives': _objectivesController.text.trim(),
           },
-          photoPath: _photo?.path,
+          photoPath: kIsWeb ? null : _photo?.path,
+          photoBytes: _photo?.bytes,
+          photoName: _photo?.name,
         );
       } else {
         await ActivityService.instance.create(
@@ -176,7 +185,9 @@ class _CwtsOfficerAddActivityScreenState
           endTime: _formatApiTime(_endTime),
           objectives: _objectivesController.text.trim(),
           brigade: Session.instance.brigade,
-          photoPath: _photo?.path,
+          photoPath: kIsWeb ? null : _photo?.path,
+          photoBytes: _photo?.bytes,
+          photoName: _photo?.name,
         );
       }
 

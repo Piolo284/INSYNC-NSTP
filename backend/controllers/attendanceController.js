@@ -10,6 +10,7 @@ const { requireFields, assertEnum } = require('../utils/validate');
 const {
   PROGRAMS,
   ATTENDANCE_STATUSES,
+  SESSION_CHECK_TYPES,
   attendanceRules,
 } = require('../config/constants');
 const {
@@ -28,6 +29,21 @@ const {
   scopeFilterToProgram,
   resolveProgramForCreate,
 } = require('../utils/programScope');
+const {
+  assertBrigadeAccess,
+  scopeFilterToBrigade,
+  resolveBrigadeForCreate,
+} = require('../utils/brigadeScope');
+const {
+  assertSpecialClassManager,
+  isSpecialClassManager,
+  isSpecialClassTrainee,
+  specialClassTraineeIds,
+} = require('../utils/specialClass');
+const { SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
+const Brigade = require('../models/Brigade');
+const Student = require('../models/Student');
+const Cadet = require('../models/Cadet');
 
 const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
 
@@ -38,9 +54,31 @@ const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
 /** POST /api/attendance/sessions */
 exports.createSession = asyncHandler(async (req, res) => {
   requireFields(req.body, ['date', 'startTime', 'endTime']);
-  assertEnum(req.body.program, PROGRAMS, 'program');
 
-  const program = resolveProgramForCreate(req.user, req.body.program);
+  const checkType = req.body.checkType ? String(req.body.checkType).toUpperCase() : 'IN';
+  assertEnum(checkType, SESSION_CHECK_TYPES, 'checkType');
+
+  // An OUT session must open to exactly the same audience as the IN session
+  // it closes out, so every scoping field below is mirrored from that
+  // session below instead of re-derived from the request body.
+  let inSession = null;
+  if (checkType === 'OUT') {
+    requireFields(req.body, ['pairedSessionId']);
+    inSession = await AttendanceSession.findById(req.body.pairedSessionId);
+    if (!inSession || inSession.checkType === 'OUT') {
+      throw ApiError.badRequest('Select a valid check-in session to pair this check-out QR code with.');
+    }
+    assertProgramAccess(req.user, inSession.program);
+    if (inSession.isSpecialClass) {
+      await assertSpecialClassManager(req.user, inSession.program);
+    } else {
+      assertBrigadeAccess(req.user, inSession.brigadeId);
+    }
+  } else {
+    assertEnum(req.body.program, PROGRAMS, 'program');
+  }
+
+  const program = inSession ? inSession.program : resolveProgramForCreate(req.user, req.body.program);
   const date = new Date(req.body.date);
   if (Number.isNaN(date.getTime())) {
     throw ApiError.badRequest('Please provide a valid date.');
@@ -52,17 +90,59 @@ exports.createSession = asyncHandler(async (req, res) => {
     throw ApiError.badRequest('End time must be after the start time.');
   }
 
-  let activityId = req.body.activityId || null;
-  if (activityId) {
+  let activityId = inSession ? inSession.activityId : req.body.activityId || null;
+  // The assigned Special Class officer always creates Special Class
+  // sessions — no toggle needed, since that's the only thing they manage.
+  let isSpecialClass = inSession
+    ? inSession.isSpecialClass
+    : (req.user.role === 'officer' && (await isSpecialClassManager(req.user, program))) ||
+      req.body.isSpecialClass === true ||
+      req.body.isSpecialClass === 'true';
+  if (!inSession && activityId) {
     const activity = await Activity.findById(activityId);
     if (!activity) throw ApiError.notFound('Activity not found.');
     assertProgramAccess(req.user, activity.program);
+    if (activity.brigadeId) assertBrigadeAccess(req.user, activity.brigadeId);
+    // A session for a Special Class activity is always Special Class too,
+    // regardless of what the request body said.
+    isSpecialClass = isSpecialClass || activity.isSpecialClass;
   }
+  if (!inSession && isSpecialClass) {
+    await assertSpecialClassManager(req.user, program);
+  }
+
+  // The officer's own brigade — never manually picked (spec §8: "the system
+  // automatically knows the officer's brigade"). Special Class sessions are
+  // always program-wide instead, since that roster cuts across brigades.
+  const brigadeId = inSession
+    ? inSession.brigadeId
+    : isSpecialClass
+      ? null
+      : resolveBrigadeForCreate(req.user, req.body.brigadeId);
+  const brigade = inSession ? null : brigadeId ? await Brigade.findById(brigadeId) : null;
+  const brigadeName = inSession ? inSession.brigade : brigade ? brigade.name : '';
+
+  // Optional further narrowing within the brigade (a ROTC platoon or a CWTS
+  // section/task-force label) — left blank, the session stays open to the
+  // whole brigade exactly as before. Not offered on Special Class sessions,
+  // whose roster is already program-wide by design.
+  const subgroup = inSession
+    ? inSession.subgroup
+    : !isSpecialClass && req.body.subgroup
+      ? String(req.body.subgroup).trim()
+      : '';
+  const autoCloseAtEnd = req.body.autoCloseAtEnd === true || req.body.autoCloseAtEnd === 'true';
 
   const session = await AttendanceSession.create({
     activityId,
     program,
-    brigade: req.body.brigade || '',
+    brigadeId,
+    brigade: brigadeName,
+    isSpecialClass,
+    subgroup,
+    autoCloseAtEnd,
+    checkType,
+    pairedSessionId: inSession ? inSession._id : null,
     title: req.body.title || req.body.notes || `${program} Attendance`,
     date: startOfDay(date),
     startTime: req.body.startTime,
@@ -83,6 +163,26 @@ exports.createSession = asyncHandler(async (req, res) => {
 exports.listSessions = asyncHandler(async (req, res) => {
   const filter = {};
   scopeFilterToProgram(filter, req.user, req.query.program);
+  const program = filter.program || req.query.program;
+  // The assigned Special Class officer has no separate "Special" tab — their
+  // whole interface is the Special Class roster, so this defaults for them
+  // without needing ?specialClass=true explicitly.
+  const isOfficerSpecial =
+    req.user.role === 'officer' && Boolean(program) && (await isSpecialClassManager(req.user, program));
+  if (req.query.specialClass === 'true' || isOfficerSpecial) {
+    // A Special Class session's brigadeId is always null, so the normal
+    // brigade scoping below (which forces an officer onto their own
+    // brigadeId) would hide these entirely — filter by the flag instead.
+    if (!program) {
+      throw ApiError.badRequest('program is required when requesting a Special Class list.');
+    }
+    await assertSpecialClassManager(req.user, program);
+    filter.program = program;
+    filter.isSpecialClass = true;
+  } else {
+    scopeFilterToBrigade(filter, req.user, req.query.brigadeId);
+    filter.isSpecialClass = { $ne: true };
+  }
   if (req.query.status) filter.status = req.query.status;
   if (req.query.date) {
     const d = new Date(req.query.date);
@@ -104,6 +204,11 @@ exports.getSession = asyncHandler(async (req, res) => {
   );
   if (!session) throw ApiError.notFound('Attendance session not found.');
   assertProgramAccess(req.user, session.program);
+  if (session.isSpecialClass) {
+    await assertSpecialClassManager(req.user, session.program);
+  } else {
+    assertBrigadeAccess(req.user, session.brigadeId);
+  }
 
   const records = await Attendance.countDocuments({ sessionId: session._id });
   res.json({
@@ -117,11 +222,146 @@ exports.closeSession = asyncHandler(async (req, res) => {
   const session = await AttendanceSession.findById(req.params.id);
   if (!session) throw ApiError.notFound('Attendance session not found.');
   assertProgramAccess(req.user, session.program);
+  if (session.isSpecialClass) {
+    // brigadeId is always null here — that means "program-wide" everywhere
+    // else, but a Special Class session isn't open to every officer the way
+    // a program-wide one is, so assertBrigadeAccess's null-brigade skip
+    // would wrongly let any officer in; check the real gate instead.
+    await assertSpecialClassManager(req.user, session.program);
+  } else {
+    assertBrigadeAccess(req.user, session.brigadeId);
+  }
+
+  // Closing an OUT session is the "finalize the day" moment for its paired
+  // IN session: anyone who checked in there but never checked out here is
+  // marked Absent — mirrors a real roll call cutoff, just for the exit gate
+  // instead of the entry one.
+  if (session.checkType === 'OUT') {
+    const missingCheckout = session.pairedSessionId
+      ? await Attendance.find({
+          sessionId: session.pairedSessionId,
+          checkOutAt: null,
+          status: { $in: ['Present', 'Late'] },
+        })
+      : [];
+
+    if (missingCheckout.length) {
+      await Attendance.updateMany(
+        { _id: { $in: missingCheckout.map((r) => r._id) } },
+        {
+          $set: {
+            status: 'Absent',
+            remarks: 'Checked in but did not check out.',
+            recordedBy: req.user._id,
+          },
+        }
+      );
+
+      await Promise.all([
+        ...missingCheckout.map((r) =>
+          notifyUser(r.studentId, {
+            title: 'Attendance recorded',
+            message: `You were marked Absent for ${r.title || 'the session'} — you checked in but did not check out.`,
+            type: 'attendance',
+            data: { attendanceId: r._id },
+          })
+        ),
+        ...missingCheckout.map((r) => recalculateGrade(r.studentId, r.program)),
+      ]);
+    }
+
+    session.status = 'Closed';
+    await session.save();
+
+    return res.json({ success: true, data: session, markedAbsentCount: missingCheckout.length });
+  }
+
+  // Anyone in this session's roster who never scanned in is marked Absent the
+  // moment the officer closes it — mirrors a real roll call cutoff.
+  let roster;
+  if (session.isSpecialClass) {
+    const ProfileModel = session.program === 'ROTC' ? Cadet : Student;
+    const eligible = await ProfileModel.find({
+      program: session.program,
+      specialCategory: { $in: SPECIAL_CLASS_CATEGORIES },
+      status: 'Active',
+    }).select('userId');
+    roster = await User.find({ _id: { $in: eligible.map((c) => c.userId) }, status: 'Active' }).select('_id');
+  } else {
+    const rosterFilter = {
+      role: session.program === 'ROTC' ? 'cadet' : 'student',
+      program: session.program,
+      status: 'Active',
+    };
+    if (session.brigadeId) rosterFilter.brigadeId = session.brigadeId;
+    // A session narrowed to a platoon/section only ever had that subgroup's
+    // roster in scope — closing it must not sweep the rest of the brigade
+    // into Absent for a session they were never eligible to scan into.
+    if (session.subgroup) {
+      if (session.program === 'ROTC') {
+        const matches = await Cadet.find({ platoon: session.subgroup, status: 'Active' }).select('userId');
+        rosterFilter._id = { $in: matches.map((c) => c.userId) };
+      } else {
+        rosterFilter.section = session.subgroup;
+      }
+    }
+    roster = await User.find(rosterFilter).select('_id');
+  }
+
+  const scannedInIds = await Attendance.find({ sessionId: session._id }).distinct('studentId');
+
+  const scannedInSet = new Set(scannedInIds.map((id) => String(id)));
+  const missing = roster.filter((u) => !scannedInSet.has(String(u._id)));
+
+  if (missing.length) {
+    try {
+      await Attendance.insertMany(
+        missing.map((u) => ({
+          sessionId: session._id,
+          activityId: session.activityId,
+          brigadeId: session.brigadeId,
+          studentId: u._id,
+          program: session.program,
+          title: session.title,
+          date: session.date,
+          time: '',
+          status: 'Absent',
+          attendanceMethod: 'Manual',
+          verified: true,
+          remarks: 'Automatically marked absent when the session was closed.',
+          recordedBy: req.user._id,
+        })),
+        { ordered: false }
+      );
+    } catch (err) {
+      // A trainee may have scanned in during the same instant the session was
+      // closing — the unique {sessionId, studentId} index rejects just that
+      // row while every other Absent row still inserts (ordered: false).
+      const isDuplicateOnly =
+        err.code === 11000 ||
+        (Array.isArray(err.writeErrors) && err.writeErrors.every((e) => e.code === 11000));
+      if (!isDuplicateOnly) throw err;
+    }
+
+    await Promise.all([
+      ...missing.map((u) =>
+        notifyUser(u._id, {
+          title: 'Attendance recorded',
+          message: `You were marked Absent for ${session.title || 'the session'}.`,
+          type: 'attendance',
+          data: { sessionId: session._id },
+        })
+      ),
+      // Idempotent even for the rare race above — it recomputes from
+      // whatever attendance actually ended up on record.
+      ...missing.map((u) => recalculateGrade(u._id, session.program)),
+    ]);
+  }
 
   session.status = 'Closed';
   await session.save();
 
-  res.json({ success: true, data: session });
+  res.json({ success: true, data: session, markedAbsentCount: missing.length });
 });
 
 // ============================================================
@@ -150,11 +390,86 @@ exports.scan = asyncHandler(async (req, res) => {
   if (now < session.startsAt) {
     throw ApiError.badRequest('This attendance session has not started yet.');
   }
-  if (now > session.endsAt) {
-    throw ApiError.badRequest('This attendance session has already ended.');
+  // No upper time bound here by default — scanning stays open (marked Late
+  // once past the grace period below) for as long as the officer leaves the
+  // session Active, even past its scheduled end time. The officer closing
+  // the session is what actually cuts scanning off (checked above) and is
+  // also what sweeps everyone still missing into Absent (see closeSession).
+  // An officer can opt a session into a hard cutoff instead (autoCloseAtEnd).
+  if (session.autoCloseAtEnd && now > session.endsAt) {
+    throw ApiError.badRequest('This attendance session has ended.');
   }
   if (session.program !== req.user.program) {
     throw ApiError.forbidden(`This QR code is for ${session.program} only.`);
+  }
+  if (session.brigadeId && String(session.brigadeId) !== String(req.user.brigadeId)) {
+    throw ApiError.forbidden(`You are not assigned to this ${session.program} brigade.`);
+  }
+  if (session.isSpecialClass && !(await isSpecialClassTrainee(req.user._id, req.user.role))) {
+    throw ApiError.forbidden(`This QR code is for the ${session.program} Special Class track only.`);
+  }
+  if (session.subgroup) {
+    if (session.program === 'ROTC') {
+      const cadet = await Cadet.findOne({ userId: req.user._id }).select('platoon');
+      if (!cadet || cadet.platoon !== session.subgroup) {
+        throw ApiError.forbidden(`This QR code is for ${session.subgroup} platoon only.`);
+      }
+    } else if (req.user.section !== session.subgroup) {
+      throw ApiError.forbidden(`This QR code is for ${session.subgroup} only.`);
+    }
+  }
+
+  const { lateGraceMinutes, codeTtlMinutes } = attendanceRules();
+
+  // Check-out QR: find the attendance row this trainee's matching check-in
+  // created, and attach a check-out verification code to that SAME row
+  // instead of creating a new one — one row per trainee per day stays true.
+  if (session.checkType === 'OUT') {
+    const checkInRecord = await Attendance.findOne({
+      sessionId: session.pairedSessionId,
+      studentId: req.user._id,
+    }).select('+verificationCode +checkOutVerificationCode');
+
+    if (!checkInRecord) {
+      throw ApiError.badRequest('You must check in before you can check out.');
+    }
+    if (!checkInRecord.verified) {
+      throw ApiError.badRequest('Please verify your check-in first.');
+    }
+    if (checkInRecord.checkOutAt) {
+      throw ApiError.conflict('You have already checked out.');
+    }
+
+    const outCode = sixDigit();
+    const outExpiresAt = addMinutes(now, codeTtlMinutes);
+    checkInRecord.outSessionId = session._id;
+    checkInRecord.checkOutVerificationCode = outCode;
+    checkInRecord.checkOutVerificationExpiresAt = outExpiresAt;
+    await checkInRecord.save();
+
+    const outMail = await sendAttendanceCode({
+      to: req.user.email,
+      name: req.user.name,
+      code: outCode,
+      sessionTitle: session.title || `${session.program} Check-Out`,
+      minutes: codeTtlMinutes,
+    });
+
+    return res.status(201).json({
+      success: true,
+      message: outMail.delivered
+        ? `A verification code was sent to ${req.user.email}.`
+        : 'Verification code generated (development mode).',
+      data: {
+        attendanceId: checkInRecord._id,
+        sessionId: session.pairedSessionId,
+        status: checkInRecord.status,
+        time: checkInRecord.time,
+        emailSent: outMail.delivered,
+        expiresAt: outExpiresAt,
+        ...(outMail.devMode ? { devVerificationCode: outCode } : {}),
+      },
+    });
   }
 
   const existing = await Attendance.findOne({
@@ -165,7 +480,6 @@ exports.scan = asyncHandler(async (req, res) => {
     throw ApiError.conflict('You have already recorded attendance for this session.');
   }
 
-  const { lateGraceMinutes, codeTtlMinutes } = attendanceRules();
   const lateAfter = addMinutes(session.startsAt, lateGraceMinutes);
   const status = now > lateAfter ? 'Late' : 'Present';
 
@@ -179,6 +493,7 @@ exports.scan = asyncHandler(async (req, res) => {
       {
         sessionId: session._id,
         activityId: session.activityId,
+        brigadeId: session.brigadeId,
         studentId: req.user._id,
         program: session.program,
         title: session.title,
@@ -233,36 +548,60 @@ exports.scan = asyncHandler(async (req, res) => {
 exports.verify = asyncHandler(async (req, res) => {
   requireFields(req.body, ['verificationCode']);
 
-  const filter = { studentId: req.user._id, verified: false };
+  // A row can have a pending check-in code, a pending check-out code, or
+  // (once check-in is verified but check-out hasn't been scanned yet)
+  // neither — never both at once, since check-out can't start until
+  // check-in is verified. Whichever one is pending is the one being verified.
+  const filter = { studentId: req.user._id };
   if (req.body.attendanceId) {
     filter._id = req.body.attendanceId;
   } else if (req.body.sessionId) {
-    filter.sessionId = req.body.sessionId;
+    filter.$or = [{ sessionId: req.body.sessionId }, { outSessionId: req.body.sessionId }];
+  } else {
+    filter.$or = [{ verified: false }, { checkOutVerificationCode: { $ne: null } }];
   }
 
   const record = await Attendance.findOne(filter)
-    .select('+verificationCode')
-    .sort({ createdAt: -1 });
+    .select('+verificationCode +checkOutVerificationCode')
+    .sort({ updatedAt: -1 });
 
   if (!record) {
     throw ApiError.notFound('No pending attendance found. Please scan the QR code again.');
   }
-  if (record.verificationExpiresAt && record.verificationExpiresAt < new Date()) {
+
+  const isCheckOut = record.verified && Boolean(record.checkOutVerificationCode);
+  const pendingCode = isCheckOut ? record.checkOutVerificationCode : record.verificationCode;
+  const pendingExpiry = isCheckOut ? record.checkOutVerificationExpiresAt : record.verificationExpiresAt;
+
+  if (!pendingCode) {
+    throw ApiError.notFound('No pending attendance found. Please scan the QR code again.');
+  }
+  if (pendingExpiry && pendingExpiry < new Date()) {
     throw ApiError.badRequest('That code has expired. Please scan the QR code again.');
   }
-  if (record.verificationCode !== String(req.body.verificationCode).trim()) {
+  if (pendingCode !== String(req.body.verificationCode).trim()) {
     throw ApiError.badRequest('That verification code is incorrect.');
   }
 
-  record.verified = true;
-  record.verificationCode = null;
-  record.verificationExpiresAt = null;
+  if (isCheckOut) {
+    const now = new Date();
+    record.checkOutAt = now;
+    record.checkOutTime = formatTime12h(now);
+    record.checkOutVerificationCode = null;
+    record.checkOutVerificationExpiresAt = null;
+  } else {
+    record.verified = true;
+    record.verificationCode = null;
+    record.verificationExpiresAt = null;
+  }
   await record.save();
 
   await Promise.all([
     notifyUser(req.user._id, {
       title: 'Attendance recorded',
-      message: `You were marked ${record.status} for ${record.title || 'the session'}.`,
+      message: isCheckOut
+        ? `You checked out for ${record.title || 'the session'}.`
+        : `You were marked ${record.status} for ${record.title || 'the session'}.`,
       type: 'attendance',
       data: { attendanceId: record._id },
     }),
@@ -271,8 +610,10 @@ exports.verify = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: `Attendance recorded. You were marked ${record.status}.`,
-    data: record,
+    message: isCheckOut
+      ? `Checked out at ${record.checkOutTime}.`
+      : `Attendance recorded. You were marked ${record.status}.`,
+    data: isCheckOut ? { ...record.toObject(), time: record.checkOutTime } : record,
   });
 });
 
@@ -284,6 +625,15 @@ exports.verify = asyncHandler(async (req, res) => {
 exports.list = asyncHandler(async (req, res) => {
   const filter = {};
   scopeFilterToProgram(filter, req.user, req.query.program);
+  // A Special Class session/record's brigadeId is always null, so the usual
+  // scopeFilterToBrigade (which forces an officer onto their own personal
+  // brigade) would never match — the assigned Special Class officer is
+  // scoped to their trainee roster by studentId instead.
+  if (req.user.role === 'officer' && (await isSpecialClassManager(req.user, filter.program))) {
+    filter.studentId = { $in: await specialClassTraineeIds(filter.program) };
+  } else {
+    scopeFilterToBrigade(filter, req.user, req.query.brigadeId);
+  }
   if (req.query.status && req.query.status !== 'All') filter.status = req.query.status;
   if (req.query.sessionId) filter.sessionId = req.query.sessionId;
   if (req.query.activityId) filter.activityId = req.query.activityId;
@@ -332,7 +682,17 @@ exports.create = asyncHandler(async (req, res) => {
   if (!ids.length) {
     throw ApiError.badRequest('Select at least one student.');
   }
-  assertEnum(req.body.status, ATTENDANCE_STATUSES, 'status');
+
+  // 'IN' (the default) is today's original manual-mark behaviour — pick a
+  // status and write/update the row. 'OUT' instead finds each student's
+  // already-checked-in row for the day and stamps a check-out time onto it;
+  // it never creates a row on its own, since you can't check out before
+  // checking in.
+  const checkType = req.body.checkType ? String(req.body.checkType).toUpperCase() : 'IN';
+  assertEnum(checkType, SESSION_CHECK_TYPES, 'checkType');
+  if (checkType === 'IN') {
+    assertEnum(req.body.status, ATTENDANCE_STATUSES, 'status');
+  }
 
   const date = req.body.date ? new Date(req.body.date) : new Date();
   if (Number.isNaN(date.getTime())) {
@@ -344,6 +704,11 @@ exports.create = asyncHandler(async (req, res) => {
     session = await AttendanceSession.findById(req.body.sessionId);
     if (!session) throw ApiError.notFound('Attendance session not found.');
     assertProgramAccess(req.user, session.program);
+    if (session.isSpecialClass) {
+      await assertSpecialClassManager(req.user, session.program);
+    } else {
+      assertBrigadeAccess(req.user, session.brigadeId);
+    }
   }
 
   const users = await User.find({
@@ -357,11 +722,50 @@ exports.create = asyncHandler(async (req, res) => {
   if (users.some((u) => u.program !== program)) {
     throw ApiError.badRequest('All selected students must belong to the same program.');
   }
+
+  // The assigned Special Class officer's manual markings are always Special
+  // Class — no toggle needed, since that's the only roster they manage.
+  const isSpecialClass = session
+    ? session.isSpecialClass
+    : req.body.isSpecialClass === true ||
+      req.body.isSpecialClass === 'true' ||
+      (req.user.role === 'officer' && (await isSpecialClassManager(req.user, program)));
+
+  if (isSpecialClass && !session) {
+    await assertSpecialClassManager(req.user, program);
+  }
+
+  // An officer's manual roster search is already scoped to their own
+  // brigade (see userController's roster endpoint), but re-check here too —
+  // an officer must not be able to mark a student from another brigade by
+  // constructing the request directly. A Special Class marking checks
+  // Special Class membership instead, since that roster cuts across brigades.
+  const brigadeId = isSpecialClass
+    ? null
+    : session
+      ? session.brigadeId
+      : resolveBrigadeForCreate(req.user, req.body.brigadeId);
+  if (isSpecialClass) {
+    const ProfileModel = program === 'ROTC' ? Cadet : Student;
+    const eligible = await ProfileModel.find({
+      program,
+      specialCategory: { $in: SPECIAL_CLASS_CATEGORIES },
+      status: 'Active',
+    }).select('userId');
+    const eligibleIds = new Set(eligible.map((c) => String(c.userId)));
+    if (users.some((u) => !eligibleIds.has(String(u._id)))) {
+      throw ApiError.forbidden('All selected cadets must be in the ROTC Special Class track.');
+    }
+  } else if (brigadeId && users.some((u) => String(u.brigadeId || '') !== String(brigadeId))) {
+    throw ApiError.forbidden('All selected students must belong to your assigned brigade.');
+  }
+
   const status = req.body.status || 'Present';
   const now = new Date();
 
   const results = [];
   const skipped = [];
+  const failed = [];
 
   for (const user of users) {
     const dedupe = session
@@ -371,6 +775,33 @@ exports.create = asyncHandler(async (req, res) => {
           date: { $gte: startOfDay(date), $lte: endOfDay(date) },
           title: req.body.title || session?.title || `${program} Attendance`,
         };
+
+    if (checkType === 'OUT') {
+      const existing = await Attendance.findOne(dedupe);
+      if (!existing) {
+        failed.push({ studentId: user._id, reason: 'Has not checked in yet.' });
+        continue;
+      }
+      if (existing.checkOutAt) {
+        skipped.push({ studentId: user._id, action: 'already checked out' });
+        results.push(existing);
+        continue;
+      }
+      existing.checkOutAt = now;
+      existing.checkOutTime = req.body.time || formatTime12h(now);
+      existing.recordedBy = req.user._id;
+      if (req.body.remarks) existing.remarks = req.body.remarks;
+      await existing.save();
+      results.push(existing);
+
+      await notifyUser(user._id, {
+        title: 'Attendance updated',
+        message: `You checked out for ${existing.title}.`,
+        type: 'attendance',
+        data: { attendanceId: existing._id },
+      });
+      continue;
+    }
 
     const existing = await Attendance.findOne(dedupe);
     if (existing) {
@@ -389,6 +820,7 @@ exports.create = asyncHandler(async (req, res) => {
     const record = await Attendance.create({
       sessionId: session ? session._id : null,
       activityId: req.body.activityId || session?.activityId || null,
+      brigadeId: brigadeId || user.brigadeId || null,
       studentId: user._id,
       program,
       title: req.body.title || session?.title || `${program} Attendance`,
@@ -414,10 +846,82 @@ exports.create = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: `${results.length} attendance record(s) saved.`,
+    message:
+      checkType === 'OUT'
+        ? `${results.length} student(s) checked out.${failed.length ? ` ${failed.length} have not checked in yet.` : ''}`
+        : `${results.length} attendance record(s) saved.`,
     count: results.length,
     updated: skipped.length,
+    failed: failed.length,
     data: results,
+  });
+});
+
+/**
+ * POST /api/attendance/finalize
+ * "Finalize the day" for manual/ad hoc attendance that has no
+ * AttendanceSession to close (the QR equivalent is closing an OUT session —
+ * see closeSession). Marks Absent anyone in the given day/title/brigade
+ * scope who checked in but never checked out.
+ */
+exports.finalizeDay = asyncHandler(async (req, res) => {
+  requireFields(req.body, ['date']);
+
+  const date = new Date(req.body.date);
+  if (Number.isNaN(date.getTime())) {
+    throw ApiError.badRequest('Please provide a valid date.');
+  }
+
+  const program = req.user.role === 'super_admin' ? req.body.program || 'CWTS' : req.user.program;
+  const isOfficerSpecial = req.user.role === 'officer' && (await isSpecialClassManager(req.user, program));
+
+  const filter = {
+    program,
+    date: { $gte: startOfDay(date), $lte: endOfDay(date) },
+    checkOutAt: null,
+    status: { $in: ['Present', 'Late'] },
+  };
+  if (req.body.title) filter.title = req.body.title;
+
+  if (isOfficerSpecial) {
+    filter.studentId = { $in: await specialClassTraineeIds(program) };
+  } else {
+    scopeFilterToBrigade(filter, req.user, req.body.brigadeId);
+  }
+
+  const missingCheckout = await Attendance.find(filter);
+
+  if (missingCheckout.length) {
+    await Attendance.updateMany(
+      { _id: { $in: missingCheckout.map((r) => r._id) } },
+      {
+        $set: {
+          status: 'Absent',
+          remarks: 'Checked in but did not check out.',
+          recordedBy: req.user._id,
+        },
+      }
+    );
+
+    await Promise.all([
+      ...missingCheckout.map((r) =>
+        notifyUser(r.studentId, {
+          title: 'Attendance recorded',
+          message: `You were marked Absent for ${r.title || 'the session'} — you checked in but did not check out.`,
+          type: 'attendance',
+          data: { attendanceId: r._id },
+        })
+      ),
+      ...missingCheckout.map((r) => recalculateGrade(r.studentId, r.program)),
+    ]);
+  }
+
+  res.json({
+    success: true,
+    message: missingCheckout.length
+      ? `${missingCheckout.length} student(s) marked Absent for missing check-out.`
+      : 'Everyone who checked in also checked out — nothing to finalize.',
+    markedAbsentCount: missingCheckout.length,
   });
 });
 
@@ -426,6 +930,7 @@ exports.update = asyncHandler(async (req, res) => {
   const record = await Attendance.findById(req.params.id);
   if (!record) throw ApiError.notFound('Attendance record not found.');
   assertProgramAccess(req.user, record.program);
+  assertBrigadeAccess(req.user, record.brigadeId);
 
   assertEnum(req.body.status, ATTENDANCE_STATUSES, 'status');
 
@@ -445,6 +950,7 @@ exports.remove = asyncHandler(async (req, res) => {
   const record = await Attendance.findById(req.params.id);
   if (!record) throw ApiError.notFound('Attendance record not found.');
   assertProgramAccess(req.user, record.program);
+  assertBrigadeAccess(req.user, record.brigadeId);
 
   const { studentId, program } = record;
   await record.deleteOne();
@@ -464,8 +970,35 @@ exports.summary = asyncHandler(async (req, res) => {
       : req.user.program;
   const date = req.query.date ? new Date(req.query.date) : new Date();
 
+  // Officers only ever see their own brigade's numbers here — an officer
+  // with no brigade assigned yet sees all-zero rather than the whole program.
+  // The assigned Special Class officer has no separate tab, so this screen
+  // is their Attendance tab too — scoped by their trainee roster instead,
+  // since Special Class attendance is always program-wide (brigadeId: null).
+  // Kept separate from `brigadeFilter` below since Attendance.studentId (a
+  // User ref) and User.studentId (the trainee's ID number string) are
+  // unrelated fields that just happen to share a name.
+  const isOfficerSpecial =
+    req.user.role === 'officer' && (await isSpecialClassManager(req.user, program));
+  const brigadeFilter = {};
+  let totalStudentsQuery;
+  if (isOfficerSpecial) {
+    const traineeIds = await specialClassTraineeIds(program);
+    brigadeFilter.studentId = { $in: traineeIds };
+    totalStudentsQuery = Promise.resolve(traineeIds.length);
+  } else {
+    scopeFilterToBrigade(brigadeFilter, req.user, req.query.brigadeId);
+    totalStudentsQuery = User.countDocuments({
+      role: program === 'ROTC' ? 'cadet' : 'student',
+      program,
+      ...brigadeFilter,
+      status: 'Active',
+    });
+  }
+
   const dayFilter = {
     program,
+    ...brigadeFilter,
     date: { $gte: startOfDay(date), $lte: endOfDay(date) },
   };
 
@@ -474,15 +1007,12 @@ exports.summary = asyncHandler(async (req, res) => {
       { $match: dayFilter },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
-    User.countDocuments({
-      role: program === 'ROTC' ? 'cadet' : 'student',
-      program,
-      status: 'Active',
-    }),
+    totalStudentsQuery,
     Attendance.aggregate([
       {
         $match: {
           program,
+          ...brigadeFilter,
           date: {
             $gte: new Date(date.getFullYear(), date.getMonth(), 1),
             $lte: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59),
@@ -501,7 +1031,7 @@ exports.summary = asyncHandler(async (req, res) => {
       { $sort: { _id: 1 } },
     ]),
     Attendance.aggregate([
-      { $match: { program } },
+      { $match: { program, ...brigadeFilter } },
       { $group: { _id: '$status', count: { $sum: 1 } } },
     ]),
   ]);

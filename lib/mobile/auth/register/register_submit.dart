@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/services/services.dart';
+import '../../../core/widgets/app_dialogs.dart';
 import '../../../core/widgets/async_view.dart';
 import '../cwts_login_screen.dart';
 import '../rotc_login_screen.dart';
@@ -8,10 +9,17 @@ import 'register_draft.dart';
 /// One requirement document the user picked a local file for on the
 /// documents step, ready to be uploaded once the account exists.
 class PendingUpload {
-  const PendingUpload({required this.title, required this.filePath});
+  const PendingUpload({
+    required this.title,
+    this.filePath,
+    this.fileBytes,
+    this.fileName,
+  });
 
   final String title;
-  final String filePath;
+  final String? filePath;
+  final List<int>? fileBytes;
+  final String? fileName;
 }
 
 /// Creates the account from [draft], best-effort uploads any [uploads]
@@ -26,6 +34,25 @@ Future<void> submitRegistration({
   required RegisterDraft draft,
   List<PendingUpload> uploads = const [],
 }) async {
+  final confirmed = await showConfirmDialog(
+    context,
+    title: 'Confirm Registration',
+    message: 'Please review your details before submitting:\n\n'
+        'Name: ${draft.name}\n'
+        'Email: ${draft.email}\n'
+        'Student ID: ${draft.studentId}\n'
+        'Program: ${draft.nstpProgram}\n'
+        'Course: ${draft.course}\n'
+        'Year Level: ${draft.yearLevel}\n'
+        'Campus: ${draft.campus}\n\n'
+        'Do you want to proceed with registration?',
+    confirmLabel: 'Register',
+    cancelLabel: 'Review',
+    danger: false,
+  );
+  if (!confirmed) return;
+  if (!context.mounted) return;
+
   try {
     await AuthService.instance.register(
       name: draft.name,
@@ -36,6 +63,7 @@ Future<void> submitRegistration({
       course: draft.course,
       yearLevel: draft.yearLevel,
       specialCategory: draft.specialCategory,
+      campus: draft.campus,
     );
 
     // The register call just signed this device in — upload while we still
@@ -47,6 +75,8 @@ Future<void> submitRegistration({
         await DocumentService.instance.upload(
           title: upload.title,
           filePath: upload.filePath,
+          fileBytes: upload.fileBytes,
+          fileName: upload.fileName,
         );
       } catch (_) {
         uploadFailures++;

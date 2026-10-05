@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
+import '../../../../core/services/services.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 
@@ -12,6 +13,9 @@ class CwtsAboutScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final program = Session.instance.program;
+    final isRotc = program == 'ROTC';
+
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
@@ -22,9 +26,9 @@ class CwtsAboutScreen extends StatelessWidget {
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'About CWTS Portal',
-          style: TextStyle(
+        title: Text(
+          'About $program Portal',
+          style: const TextStyle(
             color: AppColors.white,
             fontSize: 18,
             fontWeight: FontWeight.w600,
@@ -59,9 +63,9 @@ class CwtsAboutScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'CWTS Student Portal',
-                    style: TextStyle(
+                  Text(
+                    '$program Officer Portal',
+                    style: const TextStyle(
                       fontSize: 17,
                       fontWeight: FontWeight.w700,
                       color: AppColors.textPrimary,
@@ -73,10 +77,12 @@ class CwtsAboutScreen extends StatelessWidget {
                     style: TextStyle(fontSize: 12.5, color: AppColors.textSecondary),
                   ),
                   const SizedBox(height: 14),
-                  const Text(
-                    'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently.',
+                  Text(
+                    isRotc
+                        ? 'The ROTC Portal is a platform designed to help cadets, officers and admins to manage the Reserve Officers\' Training Corps program efficiently.'
+                        : 'The CWTS Portal is a platform designed to help students, officers and admins to manage Community Welfare Training Service efficiently.',
                     textAlign: TextAlign.center,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 13,
                       color: AppColors.textSecondary,
                       height: 1.5,

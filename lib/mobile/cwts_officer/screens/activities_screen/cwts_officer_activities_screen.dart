@@ -11,7 +11,12 @@ import '../../../../../core/widgets/async_view.dart';
 import '../../../../../core/widgets/user_avatar.dart';
 
 class CwtsOfficerActivitiesScreen extends StatefulWidget {
-  const CwtsOfficerActivitiesScreen({super.key});
+  /// Lets the back arrow jump to the shell's Home tab instead of trying to
+  /// pop a route — this screen is a bottom-nav tab, not a pushed page, so
+  /// there's normally nothing on the Navigator stack for it to pop.
+  final ValueChanged<int>? onNavigateToTab;
+
+  const CwtsOfficerActivitiesScreen({super.key, this.onNavigateToTab});
 
   @override
   State<CwtsOfficerActivitiesScreen> createState() =>
@@ -88,7 +93,13 @@ class _CwtsOfficerActivitiesScreenState
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.white),
-          onPressed: () => Navigator.maybePop(context),
+          onPressed: () {
+            if (widget.onNavigateToTab != null) {
+              widget.onNavigateToTab!(0);
+            } else {
+              Navigator.maybePop(context);
+            }
+          },
         ),
         title: const Text(
           'Activities',
@@ -107,6 +118,17 @@ class _CwtsOfficerActivitiesScreenState
       ),
       body: Column(
         children: [
+          if (Session.instance.isSpecialClassOfficer)
+            Container(
+              width: double.infinity,
+              color: AppColors.primaryMaroon.withValues(alpha: 0.08),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Text(
+                '${Session.instance.program} Inclusive Learning Section activities — program-wide, '
+                'for PWD/Medical Condition trainees only.',
+                style: const TextStyle(fontSize: 11.5, color: AppColors.primaryMaroon, fontWeight: FontWeight.w600),
+              ),
+            ),
           // ===== SEARCH BAR =====
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),

@@ -1,11 +1,12 @@
 import React from 'react';
-import { UserPlus, FileCheck, Bell, Megaphone, BarChart3 } from 'lucide-react';
+import { UserPlus, FileCheck, Bell, Megaphone, BarChart3, CalendarDays } from 'lucide-react';
 
 const configMap = {
   enroll: { Icon: UserPlus, bg: '#ECFDF5', color: '#059669' },
   certificate: { Icon: FileCheck, bg: '#FEF3C7', color: '#D97706' },
   alert: { Icon: Bell, bg: '#FEE2E2', color: '#DC2626' },
   announcement: { Icon: Megaphone, bg: '#EFF6FF', color: '#2563EB' },
+  activity: { Icon: CalendarDays, bg: '#F3E8FF', color: '#7C3AED' },
   report: { Icon: BarChart3, bg: '#F3E8FF', color: '#7C3AED' },
 };
 

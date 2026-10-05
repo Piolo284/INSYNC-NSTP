@@ -1,15 +1,16 @@
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'cwts_officer_document_review_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/status_badge.dart';
+import '../../../../core/widgets/user_avatar.dart';
 
-/// Requirement checklist, backed by the documents collection.
-/// Uploading attaches the real file and moves the item to "Under Review".
+/// Officer's review queue for documents uploaded by the trainees they
+/// supervise (own program/brigade) — not a self-upload screen. An officer
+/// never uploads their own documents here, only approves/rejects theirs.
 class CwtsDocumentsScreen extends StatefulWidget {
   const CwtsDocumentsScreen({super.key});
 
@@ -24,18 +25,8 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
   LoadState _state = LoadState.loading;
   String _error = '';
 
-  List<Map<String, dynamic>> uploadedDocs = const [];
-  List<Map<String, dynamic>> pendingDocs = const [];
-
-  /// Offered when the officer has no checklist row for them yet.
-  static const List<String> _standardDocuments = [
-    'Registration Form',
-    'Medical Certificate',
-    'PWD ID (if applicable)',
-    'Parent Consent Form',
-    '2 x 2 Picture',
-    'Brigade Clearance',
-  ];
+  List<Map<String, dynamic>> _pendingDocs = const [];
+  List<Map<String, dynamic>> _reviewedDocs = const [];
 
   @override
   void initState() {
@@ -57,16 +48,17 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
     });
 
     try {
-      final result = await DocumentService.instance.mine();
+      final docs = await DocumentService.instance.reviewQueue();
       if (!mounted) return;
-      final uploaded = (result['uploaded'] as List).cast<Map<String, dynamic>>();
-      final pending = (result['pending'] as List).cast<Map<String, dynamic>>();
+      final uploaded = docs.where((d) => Fmt.str(d['fileUrl']).isNotEmpty).toList();
       setState(() {
-        uploadedDocs = uploaded;
-        pendingDocs = pending;
-        _state = (uploaded.isEmpty && pending.isEmpty)
-            ? LoadState.empty
-            : LoadState.ready;
+        _pendingDocs = uploaded
+            .where((d) => !['Approved', 'Rejected'].contains(Fmt.str(d['status'])))
+            .toList();
+        _reviewedDocs = uploaded
+            .where((d) => ['Approved', 'Rejected'].contains(Fmt.str(d['status'])))
+            .toList();
+        _state = docs.isEmpty ? LoadState.empty : LoadState.ready;
       });
     } catch (error) {
       if (!mounted) return;
@@ -77,61 +69,14 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
     }
   }
 
-  /// Asks which requirement is being uploaded, then attaches the file.
-  Future<void> _uploadDocument({String? presetTitle}) async {
-    var title = presetTitle;
-
-    if (title == null) {
-      final known = {
-        ...uploadedDocs.map((d) => Fmt.str(d['title'])),
-        ...pendingDocs.map((d) => Fmt.str(d['title'])),
-        ..._standardDocuments,
-      }.where((t) => t.isNotEmpty).toList()
-        ..sort();
-
-      title = await showAppBottomSheet<String>(
-        context,
-        title: 'Which document are you uploading?',
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.5,
-          ),
-          child: ListView.builder(
-            shrinkWrap: true,
-            itemCount: known.length,
-            itemBuilder: (sheetContext, index) => ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: const Icon(Icons.description_outlined,
-                  color: AppColors.primaryMaroon, size: 20),
-              title: Text(known[index], style: const TextStyle(fontSize: 14)),
-              onTap: () => Navigator.pop(sheetContext, known[index]),
-            ),
-          ),
-        ),
-      );
-    }
-
-    if (title == null || !mounted) return;
-
-    try {
-      final result = await FilePicker.platform.pickFiles(
-        type: FileType.custom,
-        allowedExtensions: const ['pdf', 'png', 'jpg', 'jpeg', 'doc', 'docx'],
-      );
-      if (result == null || result.files.isEmpty || !mounted) return;
-
-      await DocumentService.instance.upload(
-        title: title,
-        filePath: result.files.first.path,
-      );
-
-      if (!mounted) return;
-      AppSnack.success(context, '$title uploaded for review.');
-      await _load();
-    } catch (error) {
-      if (!mounted) return;
-      AppSnack.error(context, describeError(error));
-    }
+  Future<void> _openDocument(Map<String, dynamic> doc) async {
+    final changed = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => CwtsOfficerDocumentReviewScreen(document: doc),
+      ),
+    );
+    if (changed == true) await _load();
   }
 
   @override
@@ -147,7 +92,7 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
           onPressed: () => Navigator.pop(context),
         ),
         title: const Text(
-          'Documents',
+          'Document Review',
           style: TextStyle(
             color: AppColors.white,
             fontSize: 18,
@@ -163,67 +108,38 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
       ),
       body: Column(
         children: [
-          // Tab Bar (colors come from the app-wide TabBarTheme).
           Container(
             color: AppColors.white,
             child: TabBar(
               controller: _tabController,
               tabs: [
-                Tab(text: 'Uploaded (${uploadedDocs.length})'),
-                Tab(text: 'Pending (${pendingDocs.length})'),
+                Tab(text: 'Pending (${_pendingDocs.length})'),
+                Tab(text: 'Reviewed (${_reviewedDocs.length})'),
               ],
             ),
           ),
           const Divider(height: 1, color: AppColors.border),
-          // Tab Content
           Expanded(
             child: AsyncView(
               state: _state,
               message: _error,
               onRetry: _load,
-              emptyText: 'No documents on file yet.',
+              emptyText: 'No trainee documents on file yet.',
               emptyIcon: Icons.folder_open_outlined,
               child: TabBarView(
                 controller: _tabController,
                 children: [
                   _buildDocList(
-                    uploadedDocs,
-                    emptyText: 'Nothing uploaded yet.',
-                    emptyIcon: Icons.cloud_upload_outlined,
-                    dateField: 'uploadedAt',
-                    datePrefix: 'Uploaded on',
-                    fallbackStatus: 'Uploaded',
+                    _pendingDocs,
+                    emptyText: 'Nothing waiting for review.',
+                    emptyIcon: Icons.task_alt_outlined,
                   ),
                   _buildDocList(
-                    pendingDocs,
-                    emptyText: 'All requirements are submitted.',
-                    emptyIcon: Icons.verified_outlined,
-                    dateField: 'createdAt',
-                    datePrefix: 'Requested',
-                    fallbackStatus: 'Missing',
+                    _reviewedDocs,
+                    emptyText: 'No documents reviewed yet.',
+                    emptyIcon: Icons.history_outlined,
                   ),
                 ],
-              ),
-            ),
-          ),
-          // Bottom Button
-          Container(
-            color: AppColors.white,
-            padding: const EdgeInsets.all(20),
-            child: SafeArea(
-              child: SizedBox(
-                width: double.infinity,
-                height: 50,
-                child: ElevatedButton(
-                  onPressed: () => _uploadDocument(),
-                  child: const Text(
-                    'Upload New Document',
-                    style: TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
               ),
             ),
           ),
@@ -236,9 +152,6 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
     List<Map<String, dynamic>> docs, {
     required String emptyText,
     required IconData emptyIcon,
-    required String dateField,
-    required String datePrefix,
-    required String fallbackStatus,
   }) {
     if (docs.isEmpty) {
       return AsyncView(
@@ -259,31 +172,22 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
         itemBuilder: (context, index) {
           final doc = docs[index];
           final title = Fmt.str(doc['title'], 'Document');
-          final status = Fmt.str(doc['status'], fallbackStatus);
-          final style = StatusStyle.of(status);
+          final status = Fmt.str(doc['status'], 'Under Review');
 
           return AppCard(
             margin: const EdgeInsets.only(bottom: 12),
-            onTap: () => _uploadDocument(presetTitle: title),
+            onTap: () => _openDocument(doc),
             child: Row(
               children: [
-                Container(
-                  width: 40,
-                  height: 40,
-                  decoration: BoxDecoration(
-                    color: style.background,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(Icons.description_outlined, color: style.color, size: 20),
-                ),
-                const SizedBox(width: 14),
+                UserAvatar(imagePath: Fmt.str(doc['ownerProfileImage']), radius: 20, iconSize: 18),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
-                        maxLines: 2,
+                        Fmt.str(doc['ownerName'], 'Trainee'),
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 14,
@@ -291,10 +195,17 @@ class _CwtsDocumentsScreenState extends State<CwtsDocumentsScreen>
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 2),
                       Text(
-                        '$datePrefix ${Fmt.date(doc[dateField], fallback: '—')}',
+                        title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Uploaded ${Fmt.date(doc['uploadedAt'], fallback: '—')}',
+                        style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
                       ),
                     ],
                   ),

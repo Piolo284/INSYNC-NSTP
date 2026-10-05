@@ -109,6 +109,7 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
       Fmt.str(_profile['section']),
     ].where((s) => s.isNotEmpty).join(' - ');
     final nstpProgram = Fmt.str(_profile['program'], '—');
+    final campus = Fmt.str(_profile['campus'], '—');
     final status = Fmt.str(_profile['status'], '—');
     final email = Fmt.str(_profile['email'], '—');
     final contactNumber = Fmt.str(_profile['contactNumber'], '—');
@@ -192,6 +193,12 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
                       icon: Icons.military_tech_outlined,
                       label: 'NSTP Program',
                       value: nstpProgram,
+                    ),
+                    _tileDivider(),
+                    _infoTile(
+                      icon: Icons.location_city_outlined,
+                      label: 'Campus',
+                      value: campus,
                     ),
                     _tileDivider(),
                     _infoTile(

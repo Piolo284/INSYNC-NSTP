@@ -82,6 +82,12 @@ function SessionsTab() {
                   <strong style={{ fontSize: '14px' }}>{s.title || `${s.program} Attendance`}</strong>
                   <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: s.status === 'Active' ? '#ECFDF5' : '#F3F4F6', color: s.status === 'Active' ? '#059669' : '#6B7280' }}>{s.status}</span>
                   <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#F3F4F6', color: 'var(--text-secondary)' }}>{s.program}</span>
+                  {s.subgroup && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#EFF6FF', color: '#1D4ED8' }}>{s.subgroup}</span>
+                  )}
+                  {s.autoCloseAtEnd && (
+                    <span style={{ fontSize: '10px', fontWeight: 700, padding: '2px 8px', borderRadius: '10px', background: '#FFF7ED', color: '#D97706' }}>Auto-closes at end time</span>
+                  )}
                 </div>
                 <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--text-secondary)' }}>
                   {new Date(s.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })} · {s.startTime}–{s.endTime}
@@ -120,6 +126,8 @@ function CreateSessionModal({ isSuperAdmin, effectiveProgram, onClose, onCreated
   const [startTime, setStartTime] = useState('08:00');
   const [endTime, setEndTime] = useState('10:00');
   const [title, setTitle] = useState('');
+  const [subgroup, setSubgroup] = useState('');
+  const [autoCloseAtEnd, setAutoCloseAtEnd] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
@@ -142,6 +150,8 @@ function CreateSessionModal({ isSuperAdmin, effectiveProgram, onClose, onCreated
         startTime,
         endTime,
         title,
+        subgroup: subgroup || undefined,
+        autoCloseAtEnd,
         ...(isSuperAdmin ? { program } : {}),
       });
       onCreated(res.data);
@@ -176,6 +186,17 @@ function CreateSessionModal({ isSuperAdmin, effectiveProgram, onClose, onCreated
             <Field label="Start Time"><input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} /></Field>
             <Field label="End Time"><input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} /></Field>
           </div>
+          <Field label={program === 'ROTC' ? 'Platoon (optional)' : 'Section / Task Force (optional)'}>
+            <input
+              value={subgroup}
+              onChange={e => setSubgroup(e.target.value)}
+              placeholder={program === 'ROTC' ? 'Leave blank for the whole brigade' : 'Leave blank for the whole brigade'}
+            />
+          </Field>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: 'var(--text-primary)', fontWeight: 600 }}>
+            <input type="checkbox" checked={autoCloseAtEnd} onChange={e => setAutoCloseAtEnd(e.target.checked)} />
+            Automatically stop accepting scans at End Time
+          </label>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '4px' }}>
             <button type="button" onClick={onClose} style={cancelBtn}>Cancel</button>
             <button type="submit" disabled={submitting} style={{ ...saveBtn, opacity: submitting ? 0.7 : 1 }}>{submitting ? 'Creating...' : 'Create & Generate QR'}</button>

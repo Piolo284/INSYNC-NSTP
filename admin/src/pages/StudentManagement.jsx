@@ -1,14 +1,18 @@
-import React, { useCallback, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Users, Search, Upload, Plus, ChevronDown, X, Pencil } from 'lucide-react';
+import { Users, Search, Upload, Plus, ChevronDown, X } from 'lucide-react';
 import TopBar from '../components/TopBar';
 import AsyncSection from '../components/AsyncSection';
 import { useApi, errorMessage } from '../hooks/useApi';
 import { studentsApi } from '../api/students';
 import { cadetsApi } from '../api/cadets';
+import { programsApi } from '../api/programs';
 import { useAuth } from '../context/AuthContext';
 
-const STATUS_OPTIONS = ['All Status', 'Active', 'Inactive', 'Dropped', 'Pending'];
+const STATUS_OPTIONS = ['All Status', 'Active', 'Dropped'];
+const CAMPUS_OPTIONS = ['MARSU - Boac (Main)', 'MARSU - Torrijos', 'MARSU - Sta. Cruz', 'MARSU - Gasan'];
+// Torrijos and Gasan don't offer ROTC — only CWTS is available there.
+const ROTC_RESTRICTED_CAMPUSES = ['MARSU - Torrijos', 'MARSU - Gasan'];
 
 function CustomSelect({ value, onChange, options }) {
   return (
@@ -42,6 +46,8 @@ function normalizeStudent(s) {
     course: s.course || '—',
     yearLevel: s.yearLevel || '—',
     section: s.section || '—',
+    campus: s.campus || '—',
+    brigade: s.brigade || '—',
     email: s.email,
     contactNumber: s.contactNumber || '',
     status: s.status,
@@ -61,6 +67,9 @@ function normalizeCadet(c) {
     course: c.course || '—',
     yearLevel: c.yearLevel || '—',
     section: c.section || '—',
+    campus: c.campus || '—',
+    brigade: c.brigade || '—',
+    company: c.company || '—',
     email: c.email,
     contactNumber: c.contactNumber || '',
     status: c.status,
@@ -75,6 +84,8 @@ export default function StudentManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [programFilter, setProgramFilter] = useState('All Program');
+  const [courseFilter, setCourseFilter] = useState('All Course');
+  const [campusFilter, setCampusFilter] = useState('All Campus');
   const [modal, setModal] = useState(null); // { kind: 'student'|'cadet', mode: 'create'|'edit', record? }
 
   const fetcher = useCallback(async () => {
@@ -101,18 +112,39 @@ export default function StudentManagement() {
   const { data, loading, error, refetch } = useApi(fetcher, [fetcher]);
 
   const filteredRows = useMemo(
-    () => (data?.rows || []).filter((r) => programFilter === 'All Program' || r.program === programFilter),
-    [data, programFilter]
+    () => (data?.rows || []).filter((r) =>
+      (programFilter === 'All Program' || r.program === programFilter) &&
+      (courseFilter === 'All Course' || r.course === courseFilter) &&
+      (campusFilter === 'All Campus' || r.campus === campusFilter)
+    ),
+    [data, programFilter, courseFilter, campusFilter]
   );
+
+  // Populated from whatever's actually loaded, so the dropdown never offers
+  // a course that has no trainees to show for it.
+  const courseOptions = useMemo(() => {
+    const courses = new Set((data?.rows || []).map((r) => r.course).filter((c) => c && c !== '—'));
+    return ['All Course', ...Array.from(courses).sort()];
+  }, [data]);
 
   const totalEnrolled = (data?.studentStats?.total || 0) + (data?.cadetStats?.total || 0);
   const activeCount = (data?.studentStats?.active || 0) + (data?.cadetStats?.active || 0);
-  const inactiveCount = totalEnrolled - activeCount;
+  const droppedCount = totalEnrolled - activeCount;
 
-  const showAddStudent = effectiveProgram !== 'ROTC';
-  const showAddCadet = effectiveProgram !== 'CWTS';
+  // Only a program-scoped admin adds trainees into their own program — a
+  // super_admin can view every trainee here but not create new accounts.
+  const showAddStudent = !isSuperAdmin && effectiveProgram !== 'ROTC';
+  const showAddCadet = !isSuperAdmin && effectiveProgram !== 'CWTS';
 
   const pageTitle = effectiveProgram === 'ROTC' ? 'Cadet Management' : effectiveProgram === 'CWTS' ? 'Student Management' : 'Trainee Management';
+
+  // Program is redundant here when this page is already scoped to a single
+  // program (an ROTC admin only ever sees ROTC rows); show each cadet's
+  // company instead of Section, which CWTS students don't have.
+  const isRotcOnly = effectiveProgram === 'ROTC';
+  const columns = isRotcOnly
+    ? ['No.', 'Name', 'ID', 'Course / Year', 'Campus', 'Company', 'Status']
+    : ['No.', 'Name', 'ID', 'Program', 'Course / Year', 'Campus', 'Brigade', 'Status'];
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '40px' }}>
@@ -161,13 +193,15 @@ export default function StudentManagement() {
             {isSuperAdmin && (
               <CustomSelect value={programFilter} onChange={setProgramFilter} options={['All Program', 'CWTS', 'ROTC']} />
             )}
+            <CustomSelect value={courseFilter} onChange={setCourseFilter} options={courseOptions} />
+            <CustomSelect value={campusFilter} onChange={setCampusFilter} options={['All Campus', ...CAMPUS_OPTIONS]} />
             <CustomSelect value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} />
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '16px', marginBottom: '28px' }}>
             <SummaryCard title="Total Enrolled" value={totalEnrolled} color="var(--text-primary)" />
             <SummaryCard title="Active" value={activeCount} color="#059669" />
-            <SummaryCard title="Inactive / Dropped" value={inactiveCount} color="var(--red-status)" />
+            <SummaryCard title="Dropped" value={droppedCount} color="var(--red-status)" />
           </div>
 
           <AsyncSection
@@ -181,7 +215,7 @@ export default function StudentManagement() {
               <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                 <thead>
                   <tr style={{ borderBottom: '2px solid var(--border)' }}>
-                    {['No.', 'Name', 'ID', 'Program', 'Course / Year', 'Section', 'Status', ''].map((h) => (
+                    {columns.map((h) => (
                       <th key={h} style={{ textAlign: 'left', padding: '14px 16px', fontSize: '13px', fontWeight: 700, color: 'var(--text-primary)' }}>{h}</th>
                     ))}
                   </tr>
@@ -192,20 +226,16 @@ export default function StudentManagement() {
                       <td style={cellStyle}>{idx + 1}</td>
                       <td style={{ ...cellStyle, fontWeight: 600, color: 'var(--text-primary)' }}>{row.name}</td>
                       <td style={cellStyle}>{row.id}</td>
-                      <td style={cellStyle}>{row.program}</td>
+                      {!isRotcOnly && <td style={cellStyle}>{row.program}</td>}
                       <td style={cellStyle}>{row.course} / {row.yearLevel}</td>
-                      <td style={cellStyle}>{row.section}</td>
+                      <td style={cellStyle}>{row.campus}</td>
+                      <td style={cellStyle}>{isRotcOnly ? row.company : row.brigade}</td>
                       <td style={{ padding: '14px 16px' }}>
                         <span style={{
                           display: 'inline-block', padding: '5px 16px', borderRadius: '20px', fontSize: '12px', fontWeight: 700,
                           background: row.status === 'Active' ? '#ECFDF5' : '#FEF2F2',
                           color: row.status === 'Active' ? '#059669' : '#DC2626',
                         }}>{row.status}</span>
-                      </td>
-                      <td style={{ padding: '14px 16px' }}>
-                        <button aria-label="Edit" onClick={() => setModal({ kind: row.kind, mode: 'edit', record: row })} style={{ border: 0, background: 'none', color: 'var(--text-secondary)', cursor: 'pointer' }}>
-                          <Pencil size={15} />
-                        </button>
                       </td>
                     </tr>
                   ))}
@@ -258,7 +288,7 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
     course: raw?.course || '',
     yearLevel: raw?.yearLevel || '',
     section: raw?.section || '',
-    brigade: raw?.brigade || '',
+    campus: raw?.campus || '',
     platoon: raw?.platoon || '',
     company: raw?.company || '',
     contactNumber: raw?.contactNumber || '',
@@ -268,15 +298,35 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
   });
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [programs, setPrograms] = useState([]);
+  const [programsLoading, setProgramsLoading] = useState(true);
+
+  // Course options + the brigade each maps to — brigade is never typed by
+  // hand, it's shown read-only once a course is picked (see brigadeName below).
+  useEffect(() => {
+    let cancelled = false;
+    setProgramsLoading(true);
+    programsApi
+      .list({ nstpProgram: isCadet ? 'ROTC' : 'CWTS', status: 'Active' })
+      .then((res) => { if (!cancelled) setPrograms(res?.data || []); })
+      .catch(() => { if (!cancelled) setPrograms([]); })
+      .finally(() => { if (!cancelled) setProgramsLoading(false); });
+    return () => { cancelled = true; };
+  }, [isCadet]);
+
+  const brigadeName = programs.find((p) => p.name === form.course)?.brigadeId?.name || raw?.brigade || '';
 
   const update = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
   const validate = () => {
     if (!form.name.trim()) return 'Name is required.';
-    if (!form.email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) return 'Enter a valid email address.';
+    if (!form.email.trim() || !/^[^\s@]+@marsu\.edu\.ph$/i.test(form.email)) return 'Enter an official MARSU email address (e.g. juandelacruz@marsu.edu.ph).';
     if (!isEdit) {
       if (!form.idNumber.trim()) return `${isCadet ? 'Cadet' : 'Student'} ID is required.`;
       if (!form.password || form.password.length < 8) return 'Password must be at least 8 characters long.';
+    }
+    if (isCadet && form.campus && ROTC_RESTRICTED_CAMPUSES.includes(form.campus)) {
+      return `ROTC is not offered at ${form.campus}. Only CWTS is available at this campus.`;
     }
     return '';
   };
@@ -298,7 +348,7 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
           course: form.course,
           yearLevel: form.yearLevel,
           section: form.section,
-          brigade: form.brigade,
+          campus: form.campus,
           contactNumber: form.contactNumber,
           address: form.address,
           emergencyContact: form.emergencyContact,
@@ -315,7 +365,7 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
           course: form.course,
           yearLevel: form.yearLevel,
           section: form.section,
-          brigade: form.brigade,
+          campus: form.campus,
           contactNumber: form.contactNumber,
           address: form.address,
           emergencyContact: form.emergencyContact,
@@ -353,9 +403,25 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
           {!isEdit && (
             <Field label="Password"><input type="password" value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="Min. 8 characters" /></Field>
           )}
-          <Field label="Course"><input value={form.course} onChange={(e) => update('course', e.target.value)} placeholder="e.g. BSIT" /></Field>
+          <Field label="Course">
+            <select value={form.course} onChange={(e) => update('course', e.target.value)} disabled={programsLoading}>
+              <option value="">{programsLoading ? 'Loading courses...' : 'Select a course'}</option>
+              {programs.map((p) => <option key={p._id} value={p.name}>{p.name} ({p.code})</option>)}
+            </select>
+          </Field>
           <Field label="Year Level"><input value={form.yearLevel} onChange={(e) => update('yearLevel', e.target.value)} placeholder="e.g. 2nd Year" /></Field>
           <Field label="Section"><input value={form.section} onChange={(e) => update('section', e.target.value)} /></Field>
+          <Field label="Campus">
+            <select value={form.campus} onChange={(e) => update('campus', e.target.value)}>
+              <option value="">Select a campus</option>
+              {CAMPUS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </Field>
+          {isCadet && form.campus && ROTC_RESTRICTED_CAMPUSES.includes(form.campus) && (
+            <div style={{ gridColumn: 'span 2', ...errorBoxStyle, marginBottom: 0 }}>
+              ROTC is not offered at {form.campus}. Only CWTS is available at this campus.
+            </div>
+          )}
           <Field label="Contact Number"><input value={form.contactNumber} onChange={(e) => update('contactNumber', e.target.value)} /></Field>
           {isCadet ? (
             <>
@@ -363,14 +429,17 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
               <Field label="Company"><input value={form.company} onChange={(e) => update('company', e.target.value)} /></Field>
             </>
           ) : null}
-          <Field label="Brigade"><input value={form.brigade} onChange={(e) => update('brigade', e.target.value)} /></Field>
+          <label style={{ display: 'grid', gap: '6px', fontSize: '12.5px', fontWeight: 700, color: 'var(--text-primary)' }}>
+            Brigade
+            <div style={{ padding: '10px 12px', border: '1px solid var(--border)', borderRadius: '7px', fontSize: '13px', color: 'var(--text-secondary)', background: 'var(--bg)' }}>
+              {brigadeName || 'Determined automatically from course'}
+            </div>
+          </label>
           {isEdit && (
             <Field label="Status">
               <select value={form.status} onChange={(e) => update('status', e.target.value)}>
                 <option value="Active">Active</option>
-                <option value="Inactive">Inactive</option>
                 <option value="Dropped">Dropped</option>
-                <option value="Pending">Pending</option>
               </select>
             </Field>
           )}

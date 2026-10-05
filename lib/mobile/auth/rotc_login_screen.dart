@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
+import 'forgot_password_request_screen.dart';
+import 'two_factor_verify_screen.dart';
 import 'register/register_basic_info_screen.dart';
 import '../splash/nstp_selection_screen.dart';
 import '../rotc/rotc_main_shell.dart';
+import '../rotc_special/rotc_special_main_shell.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/widgets/async_view.dart';
@@ -33,7 +36,7 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
     final password = _passwordController.text;
 
     if (identifier.isEmpty) {
-      AppSnack.error(context, 'Please enter your Cadet ID or email.');
+      AppSnack.error(context, 'Please enter your Student ID or email.');
       return;
     }
     if (password.isEmpty) {
@@ -44,16 +47,33 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
     setState(() => _isSubmitting = true);
 
     try {
-      await AuthService.instance.login(
+      final result = await AuthService.instance.login(
         identifier: identifier,
         password: password,
         expectedRole: 'cadet',
       );
 
       if (!mounted) return;
+
+      Widget homeBuilder(BuildContext _) =>
+          Session.instance.isSpecialClassTrainee ? const RotcSpecialMainShell() : const RotcMainShell();
+
+      if (result['requiresTwoFactor'] == true) {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => TwoFactorVerifyScreen(
+              identifier: (result['identifier'] ?? identifier).toString(),
+              homeScreenBuilder: homeBuilder,
+            ),
+          ),
+        );
+        return;
+      }
+
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const RotcMainShell()),
+        MaterialPageRoute(builder: homeBuilder),
         (route) => false,
       );
     } catch (error) {
@@ -64,37 +84,63 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
     }
   }
 
+  void _backToSelection() {
+    Navigator.pushAndRemoveUntil(
+      context,
+      MaterialPageRoute(builder: (_) => const NstpSelectionScreen()),
+      (route) => false,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.white,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        automaticallyImplyLeading: false,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
+          onPressed: _backToSelection,
+        ),
+      ),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28),
           child: Column(
             children: [
-              const SizedBox(height: 32),
-              Image.asset(
-                'assets/images/marsu_logo.png',
-                width: 96,
-                height: 96,
-                errorBuilder: (_, _, _) => Container(
-                  width: 96,
-                  height: 96,
-                  decoration: BoxDecoration(
-                    color: AppColors.primaryMaroon.withValues(alpha: 0.1),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(
-                    Icons.school,
-                    color: AppColors.primaryMaroon,
-                    size: 48,
+              const SizedBox(height: 12),
+              SizedBox(
+                width: 150,
+                height: 150,
+                // Zoom into the artwork rather than just growing the box —
+                // the source PNG has transparent padding baked around the
+                // seal, so a plain resize keeps the visible seal small.
+                child: ClipRect(
+                  child: Transform.scale(
+                    scale: 0.9,
+                    child: Image.asset(
+                      'assets/images/rotc_logo.png',
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, _, _) => Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryMaroon.withValues(alpha: 0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.school,
+                          color: AppColors.primaryMaroon,
+                          size: 90,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 18),
               const Text(
-                'Welcome, Cadet!',
+                'Welcome Cadet!',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
@@ -103,22 +149,22 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
               ),
               const SizedBox(height: 4),
               const Text(
-                'Sign in to your ROTC Portal',
+                'ROTC Portal Login',
                 style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
               ),
-              const SizedBox(height: 32),
-              _FieldLabel('Cadet ID / Email'),
+              const SizedBox(height: 28),
+              const _FieldLabel('Student ID'),
               const SizedBox(height: 6),
               TextField(
                 controller: _identifierController,
                 textInputAction: TextInputAction.next,
                 decoration: const InputDecoration(
-                  hintText: 'Enter your Cadet ID',
+                  hintText: 'Enter your Student ID',
                   prefixIcon: Icon(Icons.person_outline, color: AppColors.primaryMaroon, size: 20),
                 ),
               ),
               const SizedBox(height: 18),
-              _FieldLabel('Password'),
+              const _FieldLabel('Password'),
               const SizedBox(height: 6),
               TextField(
                 controller: _passwordController,
@@ -158,9 +204,13 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
                   const Spacer(),
                   GestureDetector(
                     onTap: () {
-                      AppSnack.info(
+                      Navigator.push(
                         context,
-                        'Please contact your ROTC officer to reset your password.',
+                        MaterialPageRoute(
+                          builder: (_) => ForgotPasswordRequestScreen(
+                            loginScreenBuilder: (_) => const RotcLoginScreen(),
+                          ),
+                        ),
                       );
                     },
                     child: const Text(
@@ -195,7 +245,30 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
                         ),
                 ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.border)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.border),
+                      ),
+                      child: const Text(
+                        'or',
+                        style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                      ),
+                    ),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.border)),
+                ],
+              ),
+              const SizedBox(height: 22),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -223,19 +296,7 @@ class _RotcLoginScreenState extends State<RotcLoginScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              TextButton.icon(
-                onPressed: () {
-                  Navigator.pushAndRemoveUntil(
-                    context,
-                    MaterialPageRoute(builder: (_) => const NstpSelectionScreen()),
-                    (route) => false,
-                  );
-                },
-                icon: const Icon(Icons.arrow_back_ios, size: 14),
-                label: const Text('Back to selection page'),
-              ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -258,7 +319,7 @@ class _FieldLabel extends StatelessWidget {
         style: const TextStyle(
           fontSize: 12.5,
           fontWeight: FontWeight.w600,
-          color: AppColors.textSecondary,
+          color: AppColors.textPrimary,
         ),
       ),
     );

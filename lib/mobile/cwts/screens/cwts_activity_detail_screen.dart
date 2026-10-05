@@ -1,11 +1,12 @@
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import '../../../core/config/app_config.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/attachment_preview_screen.dart';
 import '../../../core/widgets/status_badge.dart';
 
 /// Module/assignment detail with the trainee's own submission.
@@ -92,6 +93,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       final result = await FilePicker.platform.pickFiles(
         type: FileType.custom,
         allowedExtensions: const ['pdf', 'doc', 'docx', 'png', 'jpg', 'jpeg'],
+        // Web never returns a real filesystem path — only bytes — so the
+        // upload has to travel as bytes for the submission to actually
+        // reach the officer.
+        withData: true,
       );
       if (result == null || result.files.isEmpty) return;
       setState(() => _pickedFile = result.files.first);
@@ -119,7 +124,9 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     try {
       await SubmissionService.instance.submit(
         moduleId: widget.moduleId,
-        filePath: _pickedFile?.path,
+        filePath: kIsWeb ? null : _pickedFile?.path,
+        fileBytes: _pickedFile?.bytes,
+        fileName: _pickedFile?.name,
         comment: _commentController.text.trim(),
       );
 
@@ -391,6 +398,9 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
     return AppCard(
       padding: const EdgeInsets.all(14),
+      onTap: fileUrl.isEmpty
+          ? null
+          : () => openAttachmentPreview(context, fileUrl: fileUrl, fileName: fileName),
       child: Row(
         children: [
           Container(
@@ -434,22 +444,12 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
               ],
             ),
           ),
-          IconButton(
-            icon: Icon(
-              Icons.download_outlined,
-              color: fileUrl.isEmpty
-                  ? AppColors.textSecondary
-                  : AppColors.primaryMaroon,
-              size: 22,
-            ),
-            onPressed: fileUrl.isEmpty
-                ? null
-                : () {
-                    AppSnack.info(
-                      context,
-                      'Download link: ${AppConfig.resolveFileUrl(fileUrl)}',
-                    );
-                  },
+          Icon(
+            Icons.visibility_outlined,
+            color: fileUrl.isEmpty
+                ? AppColors.textSecondary
+                : AppColors.primaryMaroon,
+            size: 22,
           ),
         ],
       ),

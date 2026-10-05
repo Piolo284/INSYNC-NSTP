@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../../core/constants/app_colors.dart';
 import 'register_documents_screen.dart';
 import 'register_draft.dart';
+import 'register_program_banner.dart';
 import 'register_submit.dart';
 
 /// Step 2 of 3 — "Are you a PWD / SK Chairperson / student with a medical
@@ -78,10 +79,6 @@ class _RegisterAdditionalInfoScreenState
           icon: const Icon(Icons.arrow_back_ios, color: Colors.black87, size: 20),
           onPressed: () => Navigator.pop(context),
         ),
-        title: const Text(
-          'Back',
-          style: TextStyle(color: Colors.black87, fontSize: 16, fontWeight: FontWeight.w500),
-        ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -114,7 +111,8 @@ class _RegisterAdditionalInfoScreenState
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: Colors.grey.shade500),
               ),
-              const SizedBox(height: 28),
+              RegisterProgramBanner(nstpProgram: widget.draft.nstpProgram),
+              const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: Text(

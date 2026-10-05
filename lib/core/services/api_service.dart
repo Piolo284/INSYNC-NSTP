@@ -117,10 +117,18 @@ class ApiService {
   }
 
   /// Multipart upload used by module files, submissions and activity photos.
+  ///
+  /// [fileBytes] takes priority over [filePath] — `file_picker` never
+  /// returns a real filesystem path on Flutter Web (only bytes), so every
+  /// caller should pick with `withData: true` and pass the picked file's
+  /// bytes here. [filePath] remains as a fallback for callers that only
+  /// have a path (native platforms).
   Future<Map<String, dynamic>> upload(
     String path, {
     required Map<String, String> fields,
     String? filePath,
+    List<int>? fileBytes,
+    String? fileName,
     String fileField = 'file',
     String method = 'POST',
   }) async {
@@ -129,7 +137,13 @@ class ApiService {
         ..headers.addAll(_headers(json: false))
         ..fields.addAll(fields);
 
-      if (filePath != null && filePath.isNotEmpty) {
+      if (fileBytes != null && fileBytes.isNotEmpty) {
+        request.files.add(http.MultipartFile.fromBytes(
+          fileField,
+          fileBytes,
+          filename: (fileName == null || fileName.isEmpty) ? 'upload' : fileName,
+        ));
+      } else if (filePath != null && filePath.isNotEmpty) {
         request.files.add(await http.MultipartFile.fromPath(fileField, filePath));
       }
 

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'cwts_activity_detail_screen.dart';
-import '../../../core/config/app_config.dart';
+import 'cwts_module_detail_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
@@ -98,34 +98,25 @@ class _CwtsActivitiesModulesScreenState
       body: Column(
         children: [
           Container(
-            decoration: const BoxDecoration(color: AppColors.primaryMaroon),
-            child: Container(
-              decoration: const BoxDecoration(
-                color: AppColors.white,
-                borderRadius: BorderRadius.only(
-                  topLeft: Radius.circular(24),
-                  topRight: Radius.circular(24),
-                ),
+            color: AppColors.white,
+            child: TabBar(
+              controller: _tabController,
+              labelColor: AppColors.primaryMaroon,
+              unselectedLabelColor: AppColors.textSecondary,
+              indicatorColor: AppColors.primaryMaroon,
+              indicatorWeight: 2,
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
-              child: TabBar(
-                controller: _tabController,
-                labelColor: AppColors.primaryMaroon,
-                unselectedLabelColor: AppColors.textSecondary,
-                indicatorColor: AppColors.primaryMaroon,
-                indicatorWeight: 2,
-                labelStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-                unselectedLabelStyle: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-                tabs: const [
-                  Tab(text: 'Activities'),
-                  Tab(text: 'Modules'),
-                ],
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
               ),
+              tabs: const [
+                Tab(text: 'Activities'),
+                Tab(text: 'Modules'),
+              ],
             ),
           ),
           Expanded(
@@ -288,10 +279,20 @@ class _CwtsActivitiesModulesScreenState
             );
           }
           final module = modules[index - 1];
-          final fileUrl = Fmt.str(module['fileUrl']);
 
           return AppCard(
             margin: const EdgeInsets.only(bottom: 12),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CwtsModuleDetailScreen(
+                    moduleId: Fmt.str(module['_id']),
+                    title: Fmt.str(module['title'], 'Module'),
+                  ),
+                ),
+              );
+            },
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -335,6 +336,8 @@ class _CwtsActivitiesModulesScreenState
                           module['description'],
                           'No description provided.',
                         ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
                         style: const TextStyle(
                           fontSize: 12,
                           color: AppColors.textSecondary,
@@ -344,20 +347,12 @@ class _CwtsActivitiesModulesScreenState
                     ],
                   ),
                 ),
-                if (fileUrl.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.download_outlined,
-                      color: AppColors.primaryMaroon,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      AppSnack.info(
-                        context,
-                        'Download link: ${AppConfig.resolveFileUrl(fileUrl)}',
-                      );
-                    },
-                  ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
               ],
             ),
           );
@@ -365,4 +360,5 @@ class _CwtsActivitiesModulesScreenState
       ),
     );
   }
+
 }

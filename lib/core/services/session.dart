@@ -39,8 +39,43 @@ class Session {
   String get profileImage =>
       (_profile?['profileImage'] ?? _user?['profileImage'] ?? '').toString();
 
+  /// PWD / SK Chairperson / Medical Condition / None — collected at
+  /// registration, only ever set on a trainee's profile.
+  String get specialCategory =>
+      (_profile?['specialCategory'] ?? 'None').toString();
+
+  /// True for a cadet whose specialCategory means they physically cannot
+  /// undergo field training/drills (PWD or Medical Condition — NOT SK
+  /// Chairperson, which is a civic-duty exemption, not a physical one).
+  /// Routes them to the dedicated Inclusive Learning Section shell
+  /// (RotcSpecialMainShell) instead of the regular one. ROTC only — CWTS has
+  /// no physically-demanding requirement this track was designed to exempt
+  /// someone from, so a CWTS student is never routed there regardless of
+  /// their specialCategory. See backend utils/specialClass.js, which
+  /// enforces this same rule server-side.
+  bool get isSpecialClassTrainee =>
+      role == 'cadet' &&
+      (specialCategory == 'PWD' || specialCategory == 'Medical Condition');
+
+  /// True for the ROTC officer assigned to handle the Inclusive Learning
+  /// Section — set on the Officer profile by admin_rotc/super_admin. Only
+  /// meaningful when role == 'officer' && program == 'ROTC'; the backend
+  /// never allows this to be set true for a CWTS officer.
+  bool get isSpecialClassOfficer =>
+      program == 'ROTC' && _profile?['isSpecialClassOfficer'] == true;
+
   bool get isTrainee => role == 'student' || role == 'cadet';
   bool get isStaff => role == 'officer';
+
+  /// Brigade Commander / Platoon Leader / Attendance Officer — only
+  /// meaningful when role == 'officer'. See backend/config/constants.js
+  /// OFFICER_POSITIONS for the exact values per program.
+  String get position => (_profile?['position'] ?? '').toString();
+
+  /// True for an officer whose sole responsibility is Attendance — the app
+  /// scopes their shell/drawer down to just that feature rather than the
+  /// full officer menu, since they were never given management duties.
+  bool get isAttendanceOnlyOfficer => role == 'officer' && position == 'Attendance Officer';
 
   Future<void> save({
     required Map<String, dynamic> user,

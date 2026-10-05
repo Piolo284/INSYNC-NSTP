@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../cwts/screens/cwts_activity_detail_screen.dart';
-import '../../../core/config/app_config.dart';
+import '../../cwts/screens/cwts_module_detail_screen.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
@@ -289,10 +289,20 @@ class _RotcActivitiesModulesScreenState
             );
           }
           final module = _modules[index - 1];
-          final fileUrl = Fmt.str(module['fileUrl']);
 
           return AppCard(
             margin: const EdgeInsets.only(bottom: 12),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => CwtsModuleDetailScreen(
+                    moduleId: Fmt.str(module['_id']),
+                    title: Fmt.str(module['title'], 'Module'),
+                  ),
+                ),
+              );
+            },
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -345,20 +355,12 @@ class _RotcActivitiesModulesScreenState
                     ],
                   ),
                 ),
-                if (fileUrl.isNotEmpty)
-                  IconButton(
-                    icon: const Icon(
-                      Icons.download_outlined,
-                      color: AppColors.primaryMaroon,
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      AppSnack.info(
-                        context,
-                        'Download link: ${AppConfig.resolveFileUrl(fileUrl)}',
-                      );
-                    },
-                  ),
+                const SizedBox(width: 4),
+                const Icon(
+                  Icons.chevron_right,
+                  color: AppColors.textSecondary,
+                  size: 20,
+                ),
               ],
             ),
           );

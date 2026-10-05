@@ -11,9 +11,17 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
-const { ADMIN_ROLES } = require('../config/constants');
-const { requireFields, isValidEmail } = require('../utils/validate');
+const { ADMIN_ROLES, ROTC_RESTRICTED_CAMPUSES, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
+const { assertSpecialClassManager, isSpecialClassManager } = require('../utils/specialClass');
+const { requireFields, isMarsuEmail } = require('../utils/validate');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
+const { assertBrigadeAccess, scopeFilterToBrigade } = require('../utils/brigadeScope');
+const Brigade = require('../models/Brigade');
+const {
+  resolveBrigadeForCourse,
+  applyBrigadeFields,
+  assignCadetToBrigade,
+} = require('../utils/brigadeAssignment');
 
 async function resolveCadet(idOrNumber) {
   const or = [{ cadetId: idOrNumber }];
@@ -31,14 +39,41 @@ exports.list = asyncHandler(async (req, res) => {
   if (req.query.status) filter.status = req.query.status;
   if (req.query.platoon) filter.platoon = req.query.platoon;
   if (req.query.company) filter.company = req.query.company;
+  if (req.query.brigadeId) filter.brigadeId = req.query.brigadeId;
+  if (req.query.yearLevel) filter.yearLevel = req.query.yearLevel;
+  if (req.query.course) filter.course = req.query.course;
   if (req.query.search) {
     const rx = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ fullName: rx }, { cadetId: rx }, { email: rx }];
   }
   scopeFilterToProgram(filter, req.user, req.query.program);
 
+  // The assigned Special Class officer has no separate "Special" tab — this
+  // roster IS their Cadets tab, cutting across every company instead of
+  // being locked to their own the way a regular officer is.
+  const isOfficerSpecial =
+    req.user.role === 'officer' && filter.program && (await isSpecialClassManager(req.user, filter.program));
+  if (isOfficerSpecial) {
+    delete filter.platoon;
+    delete filter.company;
+    delete filter.brigadeId;
+    filter.specialCategory = { $in: SPECIAL_CLASS_CATEGORIES };
+  } else {
+    scopeFilterToBrigade(filter, req.user, req.query.brigadeId);
+  }
+
   const cadets = await Cadet.find(filter).sort({ fullName: 1 });
-  const countScope = filter.program ? { program: filter.program } : {};
+
+  // Stat cards must match the same scope as the roster above — an officer's
+  // "Total"/"Active" counts otherwise silently included every company in
+  // the program instead of just what they actually manage.
+  const countScope = {};
+  if (filter.program) countScope.program = filter.program;
+  if (isOfficerSpecial) {
+    countScope.specialCategory = { $in: SPECIAL_CLASS_CATEGORIES };
+  } else if (filter.brigadeId !== undefined) {
+    countScope.brigadeId = filter.brigadeId;
+  }
   const [total, active] = await Promise.all([
     Cadet.countDocuments(countScope),
     Cadet.countDocuments({ ...countScope, status: 'Active' }),
@@ -52,6 +87,24 @@ exports.list = asyncHandler(async (req, res) => {
   });
 });
 
+/**
+ * GET /api/cadets/special-class — the ROTC Special Class roster (every
+ * Active PWD/Medical-Condition cadet, cutting across brigades/companies).
+ * Only the assigned Special Class officer or an admin_rotc/super_admin may
+ * view it — not any random officer.
+ */
+exports.specialClassRoster = asyncHandler(async (req, res) => {
+  await assertSpecialClassManager(req.user, 'ROTC');
+
+  const cadets = await Cadet.find({
+    program: 'ROTC',
+    specialCategory: { $in: SPECIAL_CLASS_CATEGORIES },
+    status: 'Active',
+  }).sort({ fullName: 1 });
+
+  res.json({ success: true, count: cadets.length, data: cadets });
+});
+
 /** GET /api/cadets/:id */
 exports.get = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
@@ -59,17 +112,29 @@ exports.get = asyncHandler(async (req, res) => {
   assertSelfOrStaff(req, userId);
   if (String(req.user._id) !== String(userId)) {
     assertProgramAccess(req.user, cadet.program);
+    assertBrigadeAccess(req.user, cadet.brigadeId);
   }
   res.json({ success: true, data: cadet });
 });
 
-/** PUT /api/cadets/:id */
+/**
+ * PUT /api/cadets/:id — admins (admin_cwts/admin_rotc/super_admin) have no
+ * authority to edit a trainee's record; enrollment data comes from the
+ * masterlist, and status changes are automatic (see gradeCalculator.js).
+ * Only the cadet themselves (self-service) or an officer may edit here.
+ */
 exports.update = asyncHandler(async (req, res) => {
   const cadet = await resolveCadet(req.params.id);
   const userId = cadet.userId?._id || cadet.userId;
   assertSelfOrStaff(req, userId);
-  if (String(req.user._id) !== String(userId)) {
+
+  const isSelf = String(req.user._id) === String(userId);
+  if (!isSelf) {
+    if (ADMIN_ROLES.includes(req.user.role)) {
+      throw ApiError.forbidden('Admins do not have permission to edit trainee records.');
+    }
     assertProgramAccess(req.user, cadet.program);
+    assertBrigadeAccess(req.user, cadet.brigadeId);
   }
 
   const fields = [
@@ -78,7 +143,6 @@ exports.update = asyncHandler(async (req, res) => {
     'course',
     'platoon',
     'company',
-    'brigade',
     'yearLevel',
     'section',
     'contactNumber',
@@ -86,11 +150,33 @@ exports.update = asyncHandler(async (req, res) => {
     'emergencyContact',
     'profileImage',
   ];
-  if (ADMIN_ROLES.includes(req.user.role) || req.user.role === 'officer') fields.push('status');
+  if (req.user.role === 'officer') fields.push('status');
 
   fields.forEach((f) => {
     if (req.body[f] !== undefined) cadet[f] = req.body[f];
   });
+
+  if (req.body.campus !== undefined) {
+    const nextCampus = req.body.campus || null;
+    if (nextCampus && ROTC_RESTRICTED_CAMPUSES.includes(nextCampus)) {
+      throw ApiError.badRequest(
+        `ROTC is not offered at ${nextCampus}. Only CWTS is available at this campus.`
+      );
+    }
+    cadet.campus = nextCampus;
+  }
+
+  // A cadet's company comes from their handling officer, not their course,
+  // so a course change only refreshes program/campus.
+  if (req.body.course !== undefined) {
+    const resolved = await resolveBrigadeForCourse(cadet.course, cadet.program);
+    applyBrigadeFields(cadet, resolved, { assignBrigade: false });
+    await User.findByIdAndUpdate(userId, {
+      programId: cadet.programId,
+      campus: cadet.campus,
+    });
+  }
+
   await cadet.save();
 
   res.json({ success: true, data: cadet });
@@ -103,6 +189,7 @@ exports.dashboard = asyncHandler(async (req, res) => {
   assertSelfOrStaff(req, userId);
   if (String(req.user._id) !== String(userId)) {
     assertProgramAccess(req.user, cadet.program);
+    assertBrigadeAccess(req.user, cadet.brigadeId);
   }
 
   const program = 'ROTC';
@@ -174,6 +261,7 @@ exports.attendance = asyncHandler(async (req, res) => {
   assertSelfOrStaff(req, userId);
   if (String(req.user._id) !== String(userId)) {
     assertProgramAccess(req.user, cadet.program);
+    assertBrigadeAccess(req.user, cadet.brigadeId);
   }
 
   const filter = { studentId: userId };
@@ -194,6 +282,7 @@ exports.grades = asyncHandler(async (req, res) => {
   assertSelfOrStaff(req, userId);
   if (String(req.user._id) !== String(userId)) {
     assertProgramAccess(req.user, cadet.program);
+    assertBrigadeAccess(req.user, cadet.brigadeId);
   }
 
   const grade = await recalculateGrade(userId, 'ROTC');
@@ -213,21 +302,26 @@ exports.create = asyncHandler(async (req, res) => {
     course = '',
     platoon = '',
     company = '',
-    brigade = '',
     yearLevel = '',
     section = '',
     contactNumber = '',
     address = '',
     emergencyContact = '',
+    campus = '',
   } = req.body;
 
   requireFields(req.body, ['name', 'email', 'password', 'cadetId']);
 
-  if (!isValidEmail(email)) {
-    throw ApiError.badRequest('Please enter a valid email address.');
+  if (!isMarsuEmail(email)) {
+    throw ApiError.badRequest('Please use an official MARSU email address (e.g. juandelacruz@marsu.edu.ph).');
   }
   if (String(password).length < 8) {
     throw ApiError.badRequest('Password must be at least 8 characters long.');
+  }
+  if (campus && ROTC_RESTRICTED_CAMPUSES.includes(campus)) {
+    throw ApiError.badRequest(
+      `ROTC is not offered at ${campus}. Only CWTS is available at this campus.`
+    );
   }
 
   const existing = await User.findOne({
@@ -241,38 +335,117 @@ exports.create = asyncHandler(async (req, res) => {
     );
   }
 
-  const user = await User.create({
-    name,
-    email,
-    password,
-    role: 'cadet',
-    studentId: cadetId,
-    program: 'ROTC',
-    yearLevel,
-    section,
-    contactNumber,
-    status: 'Active',
-  });
+  const resolved = await resolveBrigadeForCourse(course, 'ROTC');
 
-  const cadet = await Cadet.create({
-    userId: user._id,
-    cadetId,
-    fullName: name,
-    email: String(email).toLowerCase(),
-    program: 'ROTC',
-    course,
-    platoon,
-    company,
-    brigade,
-    yearLevel,
-    section,
-    contactNumber,
-    address,
-    emergencyContact,
-    status: 'Active',
-  });
+  const user = await User.create(
+    applyBrigadeFields(
+      {
+        name,
+        email,
+        password,
+        role: 'cadet',
+        studentId: cadetId,
+        program: 'ROTC',
+        yearLevel,
+        section,
+        campus: campus || null,
+        contactNumber,
+        status: 'Active',
+      },
+      resolved,
+      { assignBrigade: false }
+    )
+  );
+
+  const cadet = await Cadet.create(
+    applyBrigadeFields(
+      {
+        userId: user._id,
+        cadetId,
+        fullName: name,
+        email: String(email).toLowerCase(),
+        program: 'ROTC',
+        course,
+        platoon,
+        company,
+        yearLevel,
+        section,
+        campus: campus || null,
+        contactNumber,
+        address,
+        emergencyContact,
+        status: 'Active',
+      },
+      resolved,
+      { assignBrigade: false }
+    )
+  );
 
   res.status(201).json({ success: true, data: { user: user.toPublic(), cadet } });
+});
+
+/**
+ * Throws unless `user` is a ROTC officer with a company, and returns that
+ * company (Brigade doc) — the one their handled cadets get put under.
+ */
+async function officerCompany(user) {
+  if (user.role !== 'officer' || user.program !== 'ROTC') {
+    throw ApiError.forbidden('Only ROTC officers can add cadets to their company.');
+  }
+  const brigade = user.brigadeId ? await Brigade.findById(user.brigadeId) : null;
+  if (!brigade) {
+    throw ApiError.badRequest(
+      'Your officer account has no company assigned yet. Contact your administrator.'
+    );
+  }
+  return brigade;
+}
+
+/**
+ * GET /api/cadets/unassigned — registered ROTC cadets no officer has handled
+ * yet (no company). Special Class cadets are left out: the Special Class
+ * officer already handles them program-wide.
+ */
+exports.unassigned = asyncHandler(async (req, res) => {
+  await officerCompany(req.user);
+
+  const filter = {
+    program: 'ROTC',
+    status: 'Active',
+    specialCategory: { $nin: SPECIAL_CLASS_CATEGORIES },
+    $or: [{ brigadeId: null }, { brigadeId: { $exists: false } }],
+  };
+  if (req.query.search) {
+    const rx = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$and = [{ $or: [{ fullName: rx }, { cadetId: rx }, { email: rx }] }];
+  }
+
+  const cadets = await Cadet.find(filter).sort({ fullName: 1 });
+  res.json({ success: true, count: cadets.length, data: cadets });
+});
+
+/**
+ * POST /api/cadets/:id/assign — the signed-in ROTC officer adds an
+ * unassigned cadet to their handled cadets; the cadet automatically gets
+ * the officer's company.
+ */
+exports.assignToMe = asyncHandler(async (req, res) => {
+  const brigade = await officerCompany(req.user);
+  const cadet = await resolveCadet(req.params.id);
+
+  if (cadet.brigadeId) {
+    if (String(cadet.brigadeId) === String(brigade._id)) {
+      throw ApiError.conflict(`${cadet.fullName} is already in ${brigade.name}.`);
+    }
+    throw ApiError.conflict(
+      `${cadet.fullName} is already handled by another company (${cadet.company || cadet.brigade}).`
+    );
+  }
+
+  await assignCadetToBrigade(cadet, brigade);
+  await cadet.save();
+
+  res.json({ success: true, message: `${cadet.fullName} added to ${brigade.name}.`, data: cadet });
 });
 
 exports.resolveCadet = resolveCadet;

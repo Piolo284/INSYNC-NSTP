@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../cwts_officer_student_detail_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
@@ -13,9 +17,15 @@ import '../../../../core/widgets/user_avatar.dart';
 class CwtsOfficerAttendanceListScreen extends StatefulWidget {
   final String category;
 
+  /// Pre-selects the date filter — set when drilling in from a dashboard
+  /// stat card, so the list only shows that day's students instead of the
+  /// full history.
+  final DateTime? initialDate;
+
   const CwtsOfficerAttendanceListScreen({
     super.key,
     required this.category,
+    this.initialDate,
   });
 
   @override
@@ -32,9 +42,18 @@ class _CwtsOfficerAttendanceListScreenState
   List<Map<String, dynamic>> _rows = const [];
 
   /// null means "all dates" — matches the dashboard totals it drills into.
-  DateTime? _selectedDate;
+  /// Seeded from [widget.initialDate] when arriving from a stat card.
+  late DateTime? _selectedDate = widget.initialDate;
+
+  /// Only used when [widget.category] is 'All Attendance' — the search/filter
+  /// entry point lands here and can narrow by status from that one screen.
+  String? _statusFilter;
+
+  bool _isNotifying = false;
+  bool _isExporting = false;
 
   bool get _isAtRisk => widget.category == 'At-Risk Students';
+  bool get _isAllAttendance => widget.category == 'All Attendance';
 
   /// Maps the dashboard card label onto an attendance status.
   String? get _status {
@@ -45,6 +64,10 @@ class _CwtsOfficerAttendanceListScreenState
         return 'Absent';
       case 'Late Students':
         return 'Late';
+      case 'Excused Students':
+        return 'Excused';
+      case 'All Attendance':
+        return _statusFilter;
       default:
         return null;
     }
@@ -112,12 +135,15 @@ class _CwtsOfficerAttendanceListScreenState
 
     final student = row['studentId'];
     final user = student is Map ? student : const {};
+    final checkOutTime = Fmt.str(row['checkOutTime']);
+    final timeLabel = checkOutTime.isEmpty
+        ? Fmt.str(row['time'], '---')
+        : '${Fmt.str(row['time'], '---')} → $checkOutTime';
     return {
       'userId': Fmt.str(user['_id']),
       'name': Fmt.str(user['name'], 'Trainee'),
       'idNumber': Fmt.str(user['studentId'], '—'),
-      'subtitle':
-          '${Fmt.date(row['date'])}  •  ${Fmt.str(row['time'], '---')}',
+      'subtitle': '${Fmt.date(row['date'])}  •  $timeLabel',
       'image': Fmt.str(user['profileImage']),
     };
   }
@@ -153,11 +179,13 @@ class _CwtsOfficerAttendanceListScreenState
   }
 
   Future<void> _notifyAll() async {
+    if (_isNotifying) return;
     if (_rows.isEmpty) {
       AppSnack.info(context, 'There is nobody to notify.');
       return;
     }
 
+    setState(() => _isNotifying = true);
     try {
       var sent = 0;
       for (final row in _rows) {
@@ -179,6 +207,93 @@ class _CwtsOfficerAttendanceListScreenState
     } catch (error) {
       if (!mounted) return;
       AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _isNotifying = false);
+    }
+  }
+
+  Future<void> _openFilterSheet() async {
+    final options = const ['All', 'Present', 'Late', 'Absent', 'Excused'];
+    final picked = await showAppBottomSheet<String>(
+      context,
+      title: 'Filter by status',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: options.map((status) {
+          final value = status == 'All' ? null : status;
+          final selected = _statusFilter == value;
+          return ListTile(
+            title: Text(status),
+            trailing: selected ? const Icon(Icons.check, color: AppColors.primaryMaroon) : null,
+            onTap: () => Navigator.pop(context, status),
+          );
+        }).toList(),
+      ),
+    );
+    if (picked == null) return;
+    setState(() => _statusFilter = picked == 'All' ? null : picked);
+    await _load();
+  }
+
+  String _csvCell(String value) {
+    final escaped = value.replaceAll('"', '""');
+    return '"$escaped"';
+  }
+
+  Future<void> _export() async {
+    if (_isExporting) return;
+    if (_filteredRows.isEmpty) {
+      AppSnack.info(context, 'There is nothing to export.');
+      return;
+    }
+
+    setState(() => _isExporting = true);
+    try {
+      final header = [
+        'Student Number',
+        'Name',
+        'Program',
+        'Date',
+        'Status',
+        'Time',
+        'Remarks',
+      ].map(_csvCell).join(',');
+
+      final lines = _filteredRows.map((row) {
+        final data = _rowData(row);
+        final status = _isAtRisk ? 'At-Risk' : Fmt.str(row['status'], _status ?? '');
+        return [
+          data['idNumber'] ?? '',
+          data['name'] ?? '',
+          Fmt.str(row['program'], Session.instance.program),
+          _isAtRisk ? '' : Fmt.date(row['date']),
+          status,
+          _isAtRisk ? '' : Fmt.str(row['time']),
+          Fmt.str(row['remarks']),
+        ].map(_csvCell).join(',');
+      });
+
+      final csv = ([header, ...lines]).join('\r\n');
+      final fileName =
+          '${Session.instance.program.toLowerCase()}-attendance-${widget.category.toLowerCase().replaceAll(' ', '-')}.csv';
+
+      final savedPath = await FilePicker.platform.saveFile(
+        dialogTitle: 'Save attendance export',
+        fileName: fileName,
+        bytes: Uint8List.fromList(csv.codeUnits),
+      );
+
+      if (!mounted) return;
+      if (savedPath == null) {
+        AppSnack.info(context, 'Export cancelled.');
+      } else {
+        AppSnack.success(context, 'Attendance exported.');
+      }
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _isExporting = false);
     }
   }
 
@@ -205,18 +320,39 @@ class _CwtsOfficerAttendanceListScreenState
         actions: _isAtRisk
             ? [
                 TextButton(
-                  onPressed: _notifyAll,
-                  child: const Text(
-                    'Notify all',
-                    style: TextStyle(
-                      color: AppColors.white,
-                      fontSize: 13,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
+                  onPressed: _isNotifying ? null : _notifyAll,
+                  child: _isNotifying
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white),
+                        )
+                      : const Text(
+                          'Notify all',
+                          style: TextStyle(
+                            color: AppColors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
                 ),
               ]
             : [
+                if (_isAllAttendance)
+                  IconButton(
+                    icon: const Icon(Icons.filter_list, color: AppColors.white, size: 20),
+                    onPressed: _openFilterSheet,
+                  ),
+                IconButton(
+                  icon: _isExporting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white),
+                        )
+                      : const Icon(Icons.file_download_outlined, color: AppColors.white, size: 20),
+                  onPressed: _isExporting ? null : _export,
+                ),
                 IconButton(
                   icon: const Icon(Icons.refresh,
                       color: AppColors.white, size: 20),

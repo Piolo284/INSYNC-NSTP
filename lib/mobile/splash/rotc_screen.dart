@@ -23,74 +23,115 @@ class RotcScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Brand banner — a gradient hero with the program logo
-                  // instead of a stock photo, since no ROTC group photo
-                  // asset ships with the app.
-                  Container(
-                    width: double.infinity,
-                    height: 190,
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primaryMaroon, AppColors.primaryDark],
-                      ),
-                    ),
-                    child: Center(
-                      child: Container(
-                        width: 92,
-                        height: 92,
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: AppColors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: AppColors.black.withValues(alpha: 0.15),
-                              blurRadius: 12,
-                              offset: const Offset(0, 4),
+                  Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Column(
+                        children: [
+                          ClipRRect(
+                            child: Image.asset(
+                              'assets/images/rotc_banner.png',
+                              width: double.infinity,
+                              height: 200,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => Container(
+                                width: double.infinity,
+                                height: 200,
+                                color: AppColors.grey200,
+                                alignment: Alignment.center,
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.image_outlined,
+                                      color: AppColors.grey500,
+                                      size: 36,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Add photo at\nassets/images/rotc_banner.png',
+                                      textAlign: TextAlign.center,
+                                      style: TextStyle(
+                                        color: AppColors.grey600,
+                                        fontSize: 11,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
-                          ],
-                        ),
-                        child: Image.asset(
-                          'assets/images/rotc_logo.png',
-                          errorBuilder: (_, _, _) => const Icon(
-                            Icons.shield,
-                            color: AppColors.primaryMaroon,
-                            size: 40,
+                          ),
+                          Container(
+                            width: double.infinity,
+                            decoration: const BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.centerLeft,
+                                end: Alignment.centerRight,
+                                colors: [
+                                  AppColors.primaryDark,
+                                  AppColors.primaryMaroon,
+                                ],
+                              ),
+                            ),
+                            padding: const EdgeInsets.fromLTRB(112, 12, 20, 16),
+                            child: const Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'R.O.T.C.',
+                                  style: TextStyle(
+                                    fontSize: 20,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.white,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                SizedBox(height: 2),
+                                Text(
+                                  "RESERVE OFFICERS' TRAINING CORPS",
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w500,
+                                    color: AppColors.white,
+                                    letterSpacing: 0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      // Program seal, straddling the seam between the
+                      // photo and the maroon info strip.
+                      Positioned(
+                        top: 150,
+                        left: 20,
+                        child: Container(
+                          width: 84,
+                          height: 84,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: AppColors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.black.withValues(alpha: 0.2),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Image.asset(
+                            'assets/images/rotc_logo.png',
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.shield,
+                              color: AppColors.primaryMaroon,
+                              size: 44,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                  Container(
-                    width: double.infinity,
-                    color: AppColors.cwtsCardBg,
-                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-                    child: const Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'R.O.T.C.',
-                          style: TextStyle(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.primaryMaroon,
-                            letterSpacing: 1,
-                          ),
-                        ),
-                        SizedBox(height: 2),
-                        Text(
-                          "RESERVE OFFICERS' TRAINING CORPS",
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w500,
-                            color: AppColors.primaryMaroon,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
+                    ],
                   ),
                   Padding(
                     padding: const EdgeInsets.all(24),
@@ -100,14 +141,21 @@ class RotcScreen extends StatelessWidget {
                           icon: Icons.track_changes,
                           title: 'MISSION',
                           description:
-                              'To train and develop students to become responsible, disciplined, and patriotic citizens through military and civic education.',
+                              'To mold students into responsible, disciplined and service-oriented citizens through military training and community involvement.',
                         ),
                         const SizedBox(height: 24),
                         _buildInfoRow(
                           icon: Icons.visibility,
                           title: 'VISION',
                           description:
-                              'To produce competent and morally upright citizen-soldiers ready to serve the nation in times of peace and crisis.',
+                              'To develop future leaders with strong patriotism, discipline and dedication to serve the nation.',
+                        ),
+                        const SizedBox(height: 24),
+                        _buildInfoRow(
+                          icon: Icons.flag,
+                          title: 'OBJECTIVES',
+                          description:
+                              'To instill discipline, leadership, and patriotism in cadets through military training, drills, and community service activities.',
                         ),
                       ],
                     ),

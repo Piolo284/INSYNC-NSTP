@@ -26,13 +26,16 @@ class StatusStyle {
         return const StatusStyle(AppColors.success, AppColors.greenLight);
 
       case 'late':
+        return const StatusStyle(AppColors.lateStatus, AppColors.orangeLight);
+
       case 'warning':
       case 'pending':
+      case 'pending review':
       case 'under review':
       case 'in progress':
       case 'awaiting approval':
       case 'upcoming':
-        return StatusStyle(AppColors.warning, AppColors.orangeLight);
+        return const StatusStyle(AppColors.warning, AppColors.orangeLight);
 
       case 'absent':
       case 'failed':

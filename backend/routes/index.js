@@ -7,9 +7,22 @@ router.get('/', (_req, res) => {
     version: '1.0.0',
     endpoints: [
       'POST   /api/auth/login',
+      'POST   /api/auth/validate-enrollment',
       'POST   /api/auth/register',
       'GET    /api/auth/me',
       'PUT    /api/auth/password',
+      'POST   /api/auth/forgot-password',
+      'POST   /api/auth/reset-password',
+      'POST   /api/auth/2fa/verify',
+      'PUT    /api/auth/2fa',
+      'POST   /api/auth/email/request-change',
+      'POST   /api/auth/email/confirm',
+      'POST   /api/auth/contact-number/request-change',
+      'POST   /api/auth/contact-number/confirm',
+      'GET    /api/auth/sessions',
+      'DELETE /api/auth/sessions/:id',
+      'POST   /api/auth/sessions/logout-all',
+      'GET    /api/account-activity',
       'GET    /api/users',
       'GET    /api/users/:id',
       'PUT    /api/users/:id',
@@ -53,11 +66,43 @@ router.get('/', (_req, res) => {
       'GET    /api/dashboard/officer',
       'GET    /api/dashboard/admin',
       'GET    /api/documents',
+      'GET    /api/files/:id',
       'GET    /api/officers',
       'GET    /api/officers/:id',
       'POST   /api/officers',
       'PUT    /api/officers/:id',
       'DELETE /api/officers/:id',
+      'GET    /api/programs',
+      'GET    /api/programs/:id',
+      'POST   /api/programs',
+      'PUT    /api/programs/:id',
+      'DELETE /api/programs/:id',
+      'GET    /api/brigades',
+      'GET    /api/brigades/:id',
+      'PUT    /api/brigades/:id',
+      'GET    /api/attendance-contests/mine',
+      'GET    /api/attendance-contests',
+      'POST   /api/attendance-contests',
+      'GET    /api/attendance-contests/:id',
+      'PUT    /api/attendance-contests/:id',
+      'GET    /api/certificate-requests/mine',
+      'GET    /api/certificate-requests',
+      'POST   /api/certificate-requests',
+      'GET    /api/certificate-requests/:id',
+      'PUT    /api/certificate-requests/:id',
+      'GET    /api/master-enrollment',
+      'POST   /api/master-enrollment',
+      'POST   /api/master-enrollment/upload',
+      'DELETE /api/master-enrollment/:id',
+      'DELETE /api/master-enrollment',
+      'GET    /api/password-reset-requests',
+      'POST   /api/password-reset-requests/:id/approve',
+      'POST   /api/password-reset-requests/:id/reject',
+      'GET    /api/system/config',
+      'PUT    /api/system/config/general',
+      'PUT    /api/system/config/maintenance',
+      'PUT    /api/system/config/qr',
+      'PUT    /api/system/config/email',
     ],
   });
 });
@@ -75,6 +120,17 @@ router.use('/grades', require('./gradeRoutes'));
 router.use('/notifications', require('./notificationRoutes'));
 router.use('/dashboard', require('./dashboardRoutes'));
 router.use('/documents', require('./documentRoutes'));
+router.use('/files', require('./fileRoutes'));
 router.use('/officers', require('./officerRoutes'));
+router.use('/programs', require('./programRoutes'));
+router.use('/brigades', require('./brigadeRoutes'));
+router.use('/attendance-contests', require('./attendanceContestRoutes'));
+router.use('/certificate-requests', require('./certificateRequestRoutes'));
+router.use('/certificate-templates', require('./certificateTemplateRoutes'));
+router.use('/announcement-templates', require('./announcementTemplateRoutes'));
+router.use('/master-enrollment', require('./masterlistRoutes'));
+router.use('/password-reset-requests', require('./passwordResetRequestRoutes'));
+router.use('/account-activity', require('./accountActivityRoutes'));
+router.use('/system/config', require('./systemConfigRoutes'));
 
 module.exports = router;
