@@ -3,7 +3,7 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { notifyUser } = require('../utils/notify');
-const { CERTIFICATE_STATUSES } = require('../config/constants');
+const { CERTIFICATE_STATUSES, CERTIFICATE_TYPES } = require('../config/constants');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 const { assertBrigadeAccess, scopeFilterToBrigade } = require('../utils/brigadeScope');
@@ -15,6 +15,9 @@ const { eligibilityFor } = require('../utils/certificateEligibility');
  */
 exports.create = asyncHandler(async (req, res) => {
   requireFields(req.body, ['type']);
+  if (!CERTIFICATE_TYPES.includes(req.body.type)) {
+    throw ApiError.badRequest(`Only a ${CERTIFICATE_TYPES.join(' or ')} can be requested.`);
+  }
 
   const existingPending = await CertificateRequest.findOne({
     studentId: req.user._id,

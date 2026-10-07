@@ -5,9 +5,10 @@ const User = require('../models/User');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
 const Notification = require('../models/Notification');
-const { grading, attendanceRules } = require('../config/constants');
+const { grading, attendanceRules, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
+const Officer = require('../models/Officer');
 const { gradePointFrom, PASSING_POINT } = require('../utils/gradeScale');
-const { notifyUser } = require('./notify');
+const { notifyUser, notifyUsers } = require('./notify');
 
 const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -117,19 +118,20 @@ async function recalculateGrade(userId, program, gradedBy = null) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  await autoDropIfOverAbsenceLimit(userId, program, summary.absent);
+  await flagForDropReviewIfOverAbsenceLimit(userId, program, summary.absent);
 
   return grade;
 }
 
 /**
  * Enrollment policy: once a trainee's Absent count for a program reaches
- * `maxAbsencesBeforeDrop`, they're automatically dropped from the program.
- * Checked here (rather than at every place attendance can be marked Absent)
- * because recalculateGrade already runs after every attendance change and
- * already has the exact up-to-date absence count on hand.
+ * `maxAbsencesBeforeDrop`, they are NOT dropped automatically — they're
+ * flagged "for drop review" and their assigned officer must confirm the drop
+ * (or keep them) in the officer app (controllers/dropReviewController.js).
+ * Checked here because recalculateGrade already runs after every attendance
+ * change and has the exact up-to-date absence count on hand.
  */
-async function autoDropIfOverAbsenceLimit(userId, program, absentCount) {
+async function flagForDropReviewIfOverAbsenceLimit(userId, program, absentCount) {
   const { maxAbsencesBeforeDrop } = attendanceRules();
 
   if (absentCount < maxAbsencesBeforeDrop) {
@@ -138,19 +140,48 @@ async function autoDropIfOverAbsenceLimit(userId, program, absentCount) {
   }
 
   const user = await User.findById(userId);
-  if (!user || user.status === 'Dropped') return;
+  if (!user || user.status === 'Dropped' || user.dropPendingSince) return;
+  // An officer already reviewed and kept them at this count — only a new
+  // absence brings them back for review.
+  if (absentCount <= (user.dropKeptAtAbsences || 0)) return;
 
-  user.status = 'Dropped';
+  user.dropPendingSince = new Date();
+  user.dropReviewAbsences = absentCount;
   await user.save();
 
-  const ProfileModel = program === 'ROTC' ? Cadet : Student;
-  await ProfileModel.updateOne({ userId }, { status: 'Dropped' });
-
   await notifyUser(userId, {
-    title: 'You have been dropped',
-    message: `You have reached the maximum of ${maxAbsencesBeforeDrop} absences allowed and have been automatically marked as Dropped from the program.`,
+    title: 'Absence limit reached',
+    message: `You have reached ${absentCount} absences (limit: ${maxAbsencesBeforeDrop}). Your officer will review whether you will be dropped from the program.`,
     type: 'attendance',
   });
+
+  const officerIds = await assignedOfficerIds(user, program);
+  if (officerIds.length) {
+    await notifyUsers(officerIds, {
+      title: 'Drop review needed',
+      message: `${user.name} (${user.studentId}) has ${absentCount} absences. Please confirm whether to drop this trainee.`,
+      type: 'attendance',
+      data: { dropReviewUserId: user._id },
+    });
+  }
+}
+
+/** Active officers handling this trainee: their brigade/company's officers,
+ * or the Special Class officer for a PWD/Medical-Condition cadet. */
+async function assignedOfficerIds(user, program) {
+  const ProfileModel = program === 'ROTC' ? Cadet : Student;
+  const profile = await ProfileModel.findOne({ userId: user._id }).select('specialCategory');
+  const isSpecial =
+    program === 'ROTC' && profile && SPECIAL_CLASS_CATEGORIES.includes(profile.specialCategory);
+  if (isSpecial) {
+    const specialOfficers = await Officer.find({ program: 'ROTC', isSpecialClassOfficer: true }).select('userId');
+    const ids = specialOfficers.map((o) => o.userId);
+    return (await User.find({ _id: { $in: ids }, status: 'Active' }).select('_id')).map((u) => u._id);
+  }
+  if (!user.brigadeId) return [];
+  return (
+    await User.find({ role: 'officer', program, brigadeId: user.brigadeId, status: 'Active' }).select('_id')
+  ).map((u) => u._id);
 }
 
 /**
@@ -171,7 +202,7 @@ async function warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBefore
 
   await notifyUser(userId, {
     title: 'Attendance warning',
-    message: `You now have ${absentCount} absence(s). Reaching ${maxAbsencesBeforeDrop} absences will automatically drop you from the program.`,
+    message: `You now have ${absentCount} absence(s). Reaching ${maxAbsencesBeforeDrop} absences will refer you to your officer for dropping from the program.`,
     type: 'attendance',
     data: { warningAbsentCount: absentCount },
   });

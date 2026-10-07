@@ -61,7 +61,7 @@ async function assertMasterlistMatch({ studentId, name, course, program }) {
   }
   if (!(await courseProgramMatches(masterRecord.courseProgram, course, program))) {
     throw ApiError.forbidden(
-      'The course/program entered does not match the official student record.'
+      'The program entered does not match the official student record.'
     );
   }
   return masterRecord;

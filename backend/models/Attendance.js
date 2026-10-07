@@ -42,6 +42,7 @@ const attendanceSchema = new mongoose.Schema(
     attendanceMethod: { type: String, enum: ATTENDANCE_METHODS, default: 'QR' },
     verificationCode: { type: String, default: null, select: false },
     verificationExpiresAt: { type: Date, default: null },
+    verificationAttempts: { type: Number, default: 0, select: false },
     verified: { type: Boolean, default: false },
     // Check-out side of the same day's attendance — set once the trainee (or
     // officer, manually) checks out. Left null means "checked in but never
@@ -56,7 +57,13 @@ const attendanceSchema = new mongoose.Schema(
     },
     checkOutVerificationCode: { type: String, default: null, select: false },
     checkOutVerificationExpiresAt: { type: Date, default: null },
+    checkOutVerificationAttempts: { type: Number, default: 0, select: false },
     remarks: { type: String, default: '' },
+    // True for an Absent row the system wrote on its own because the trainee
+    // never scanned before the session's end time (utils/attendanceSweep.js).
+    // While the officer still leaves that session open, a later scan replaces
+    // it under the normal late policy instead of being blocked as a duplicate.
+    autoAbsent: { type: Boolean, default: false },
     recordedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true }

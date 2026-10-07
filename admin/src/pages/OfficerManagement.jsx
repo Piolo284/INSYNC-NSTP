@@ -9,6 +9,7 @@ import { brigadesApi } from '../api/programs';
 import { studentsApi } from '../api/students';
 import { cadetsApi } from '../api/cadets';
 import { useAuth } from '../context/AuthContext';
+import { CONTACT_NUMBER_MAX_LENGTH, sanitizeContactNumber, contactNumberError } from '../utils/contactNumber';
 
 // Officer title choices, scoped by program — CWTS's brigade-level lead is
 // titled differently from ROTC's platoon-level lead, but both share the same
@@ -294,6 +295,8 @@ function OfficerFormModal({ officer, onClose, onSaved }) {
   };
 
   const validate = () => {
+    const contactError = contactNumberError(form.contactNumber);
+    if (contactError) return contactError;
     if (isEdit) {
       if (!form.name.trim()) return 'Name is required.';
       if (!form.email.trim()) return 'Email is required.';
@@ -419,7 +422,7 @@ function OfficerFormModal({ officer, onClose, onSaved }) {
           </Field>
           {isEdit && (
             <>
-              <Field label="Contact Number"><input value={form.contactNumber} onChange={e => update('contactNumber', e.target.value)} /></Field>
+              <Field label="Contact Number"><input value={form.contactNumber} inputMode="numeric" maxLength={CONTACT_NUMBER_MAX_LENGTH} placeholder="e.g. 09123456789" onChange={(e) => update('contactNumber', sanitizeContactNumber(e.target.value))} /></Field>
               <Field label="Brigade">
                 <select value={form.brigadeId} onChange={e => update('brigadeId', e.target.value)} disabled={brigadesLoading}>
                   <option value="">{brigadesLoading ? 'Loading brigades...' : 'No brigade assigned'}</option>

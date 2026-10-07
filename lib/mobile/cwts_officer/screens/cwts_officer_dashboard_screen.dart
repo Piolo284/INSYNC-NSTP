@@ -71,14 +71,16 @@ class _CwtsOfficerDashboardScreenState
 
       final data = results[0] as Map<String, dynamic>;
       final activities = (results[1] as List).cast<Map<String, dynamic>>();
-      // The backend only flips a session's status to 'Closed' when the
-      // officer explicitly taps "Close Session" — a session whose time
-      // window has already lapsed but was never closed would otherwise
-      // keep showing here as "Active" forever. Drop those too.
+      // A session stays open until the officer explicitly taps "Close
+      // Session" (same rule as AttendanceSession.isOpenAt on the backend),
+      // even after its scheduled end time — so it keeps showing here and the
+      // officer can reopen it to take more attendance. Only sessions set to
+      // auto-close at their end time drop off once that time has passed.
       final now = DateTime.now();
       final activeSessions = (results[2] as List)
           .cast<Map<String, dynamic>>()
           .where((s) {
+            if (s['autoCloseAtEnd'] != true) return true;
             final endsAt = Fmt.parse(s['endsAt']);
             return endsAt == null || !endsAt.isBefore(now);
           })
@@ -249,6 +251,11 @@ class _CwtsOfficerDashboardScreenState
                             _buildTodaysAttendance(),
                             const SizedBox(height: 28),
 
+                            if (Fmt.toInt(_overview['pendingDrops']) > 0) ...[
+                              _buildDropReviewBanner(Fmt.toInt(_overview['pendingDrops'])),
+                              const SizedBox(height: 28),
+                            ],
+
                             const SectionHeader(title: 'Overview'),
                             const SizedBox(height: 14),
 
@@ -359,6 +366,42 @@ class _CwtsOfficerDashboardScreenState
   }
 
   // ===== TODAY'S ATTENDANCE =====
+  /// Shown while trainees who reached the absence limit are waiting for this
+  /// officer to confirm (or cancel) their drop.
+  Widget _buildDropReviewBanner(int count) {
+    return AppCard(
+      onTap: () => _navigateToList('At-Risk Students'),
+      child: Row(
+        children: [
+          Container(
+            width: 46,
+            height: 46,
+            decoration: const BoxDecoration(color: AppColors.errorLight, shape: BoxShape.circle),
+            child: const Icon(Icons.person_remove_outlined, color: AppColors.error, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$count trainee${count == 1 ? '' : 's'} for drop review',
+                  style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 2),
+                const Text(
+                  'Reached the absence limit. Confirm drop or keep enrolled.',
+                  style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          const Icon(Icons.chevron_right, color: AppColors.textSecondary, size: 20),
+        ],
+      ),
+    );
+  }
+
   Widget _buildTodaysAttendance() {
     final session = _activeSession;
     if (session == null) {

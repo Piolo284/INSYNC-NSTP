@@ -10,6 +10,7 @@ const { notifyUser } = require('../utils/notify');
 const { PASSWORD_RESET_STATUSES, PASSWORD_RESET_CODE_TTL_MINUTES } = require('../config/constants');
 
 const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+const { codeSentMessage } = require('../utils/verificationCode');
 
 function findUserByIdentifier(identifier) {
   const raw = String(identifier).trim();
@@ -106,13 +107,9 @@ exports.approve = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: mail.devMode
-      ? `Approved. SMTP is not configured (DEV mode) — the code is ${code}.`
-      : 'Approved. A reset code has been emailed to the student.',
+    message: `Approved. ${codeSentMessage(mail, "the student's registered email")}`,
     // resetCode is select:false in the schema, but a document just saved in
-    // memory still carries it — strip it here so it never leaves the server
-    // once real delivery has happened (DEV mode surfaces it via `message`
-    // above instead, since there's no real inbox to check it comes through).
+    // memory still carries it — strip it here so it never leaves the server.
     data: { ...request.toObject(), resetCode: undefined },
   });
 });

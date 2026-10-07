@@ -24,7 +24,7 @@ const jwt = require('jsonwebtoken');
  * lets the request through so whichever route's own `protect` can issue the
  * real 401.
  */
-const ALLOWED_PATH_PREFIXES = ['/auth', '/notifications', '/system', '/certificate-templates', '/announcement-templates', '/master-enrollment', '/password-reset-requests', '/programs', '/brigades', '/account-activity'];
+const ALLOWED_PATH_PREFIXES = ['/auth', '/notifications', '/system', '/certificate-templates', '/announcement-templates', '/master-enrollment', '/password-reset-requests', '/programs', '/brigades', '/account-activity', '/admin-accounts'];
 
 function systemAdminScope(req, res, next) {
   const header = req.headers.authorization || '';

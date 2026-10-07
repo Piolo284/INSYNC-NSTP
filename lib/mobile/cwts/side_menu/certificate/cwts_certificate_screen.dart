@@ -231,35 +231,22 @@ class _RequestCertificateForm extends StatefulWidget {
 }
 
 class _RequestCertificateFormState extends State<_RequestCertificateForm> {
-  static const List<String> _types = [
-    'Certificate of Completion',
-    'Certificate of Participation',
-    'Certificate of Good Moral Character',
-    'Certificate of Enrollment',
-    'Other',
-  ];
+  /// The only certificate a trainee can request — the backend rejects any
+  /// other type (certificateRequestController.create).
+  static const List<String> _types = ['Certificate of Completion'];
 
   String _selectedType = _types.first;
-  final TextEditingController _customTypeController = TextEditingController();
   final TextEditingController _purposeController = TextEditingController();
   bool _isSaving = false;
 
   @override
   void dispose() {
-    _customTypeController.dispose();
     _purposeController.dispose();
     super.dispose();
   }
 
   Future<void> _submit() async {
-    final type = _selectedType == 'Other'
-        ? _customTypeController.text.trim()
-        : _selectedType;
-
-    if (type.isEmpty) {
-      AppSnack.error(context, 'Please specify the certificate type.');
-      return;
-    }
+    final type = _selectedType;
 
     setState(() => _isSaving = true);
     try {
@@ -306,13 +293,6 @@ class _RequestCertificateFormState extends State<_RequestCertificateForm> {
             ),
           ),
         ),
-        if (_selectedType == 'Other') ...[
-          const SizedBox(height: 14),
-          TextField(
-            controller: _customTypeController,
-            decoration: const InputDecoration(hintText: 'Describe the certificate you need'),
-          ),
-        ],
         const SizedBox(height: 16),
         const Text(
           'Purpose (optional)',

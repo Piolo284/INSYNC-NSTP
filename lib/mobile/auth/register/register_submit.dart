@@ -42,7 +42,7 @@ Future<void> submitRegistration({
         'Email: ${draft.email}\n'
         'Student ID: ${draft.studentId}\n'
         'Program: ${draft.nstpProgram}\n'
-        'Course: ${draft.course}\n'
+        'Program: ${draft.course}\n'
         'Year Level: ${draft.yearLevel}\n'
         'Campus: ${draft.campus}\n\n'
         'Do you want to proceed with registration?',

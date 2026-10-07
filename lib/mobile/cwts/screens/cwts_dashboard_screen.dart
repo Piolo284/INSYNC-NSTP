@@ -183,6 +183,14 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
   }
 
   Widget _buildProfileHeader() {
+    // Rebuilds as soon as the session changes (e.g. a new profile photo).
+    return ValueListenableBuilder<int>(
+      valueListenable: Session.instance.changes,
+      builder: (_, _, _) => _profileHeaderContent(),
+    );
+  }
+
+  Widget _profileHeaderContent() {
     final session = Session.instance;
     final yearCourse = [session.yearLevel, session.course]
         .where((s) => s.isNotEmpty)

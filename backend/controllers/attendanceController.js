@@ -14,6 +14,7 @@ const {
   attendanceRules,
 } = require('../config/constants');
 const {
+  APP_TIMEZONE,
   startOfDay,
   endOfDay,
   combineDateAndTime,
@@ -44,8 +45,9 @@ const { SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
 const Brigade = require('../models/Brigade');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
+const { markMissingAbsent } = require('../utils/attendanceSweep');
 
-const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+const { sixDigit, codeSentMessage, checkCode } = require('../utils/verificationCode');
 
 // ============================================================
 // SESSIONS (officer "Create QR Code" flow)
@@ -276,92 +278,20 @@ exports.closeSession = asyncHandler(async (req, res) => {
     return res.json({ success: true, data: session, markedAbsentCount: missingCheckout.length });
   }
 
-  // Anyone in this session's roster who never scanned in is marked Absent the
-  // moment the officer closes it — mirrors a real roll call cutoff.
-  let roster;
-  if (session.isSpecialClass) {
-    const ProfileModel = session.program === 'ROTC' ? Cadet : Student;
-    const eligible = await ProfileModel.find({
-      program: session.program,
-      specialCategory: { $in: SPECIAL_CLASS_CATEGORIES },
-      status: 'Active',
-    }).select('userId');
-    roster = await User.find({ _id: { $in: eligible.map((c) => c.userId) }, status: 'Active' }).select('_id');
-  } else {
-    const rosterFilter = {
-      role: session.program === 'ROTC' ? 'cadet' : 'student',
-      program: session.program,
-      status: 'Active',
-    };
-    if (session.brigadeId) rosterFilter.brigadeId = session.brigadeId;
-    // A session narrowed to a platoon/section only ever had that subgroup's
-    // roster in scope — closing it must not sweep the rest of the brigade
-    // into Absent for a session they were never eligible to scan into.
-    if (session.subgroup) {
-      if (session.program === 'ROTC') {
-        const matches = await Cadet.find({ platoon: session.subgroup, status: 'Active' }).select('userId');
-        rosterFilter._id = { $in: matches.map((c) => c.userId) };
-      } else {
-        rosterFilter.section = session.subgroup;
-      }
-    }
-    roster = await User.find(rosterFilter).select('_id');
-  }
-
-  const scannedInIds = await Attendance.find({ sessionId: session._id }).distinct('studentId');
-
-  const scannedInSet = new Set(scannedInIds.map((id) => String(id)));
-  const missing = roster.filter((u) => !scannedInSet.has(String(u._id)));
-
-  if (missing.length) {
-    try {
-      await Attendance.insertMany(
-        missing.map((u) => ({
-          sessionId: session._id,
-          activityId: session.activityId,
-          brigadeId: session.brigadeId,
-          studentId: u._id,
-          program: session.program,
-          title: session.title,
-          date: session.date,
-          time: '',
-          status: 'Absent',
-          attendanceMethod: 'Manual',
-          verified: true,
-          remarks: 'Automatically marked absent when the session was closed.',
-          recordedBy: req.user._id,
-        })),
-        { ordered: false }
-      );
-    } catch (err) {
-      // A trainee may have scanned in during the same instant the session was
-      // closing — the unique {sessionId, studentId} index rejects just that
-      // row while every other Absent row still inserts (ordered: false).
-      const isDuplicateOnly =
-        err.code === 11000 ||
-        (Array.isArray(err.writeErrors) && err.writeErrors.every((e) => e.code === 11000));
-      if (!isDuplicateOnly) throw err;
-    }
-
-    await Promise.all([
-      ...missing.map((u) =>
-        notifyUser(u._id, {
-          title: 'Attendance recorded',
-          message: `You were marked Absent for ${session.title || 'the session'}.`,
-          type: 'attendance',
-          data: { sessionId: session._id },
-        })
-      ),
-      // Idempotent even for the rare race above — it recomputes from
-      // whatever attendance actually ended up on record.
-      ...missing.map((u) => recalculateGrade(u._id, session.program)),
-    ]);
-  }
+  // Anyone in this session's roster without a successful scan is marked
+  // Absent the moment the officer closes it — mirrors a real roll call
+  // cutoff. Same routine the automatic end-of-session sweep uses, so it's a
+  // no-op for anyone that sweep already handled.
+  const markedAbsentCount = await markMissingAbsent(session, {
+    recordedBy: req.user._id,
+    remarks: 'Automatically marked absent when the session was closed.',
+  });
 
   session.status = 'Closed';
+  if (!session.absentSweptAt) session.absentSweptAt = new Date();
   await session.save();
 
-  res.json({ success: true, data: session, markedAbsentCount: missing.length });
+  res.json({ success: true, data: session, markedAbsentCount });
 });
 
 // ============================================================
@@ -445,6 +375,7 @@ exports.scan = asyncHandler(async (req, res) => {
     checkInRecord.outSessionId = session._id;
     checkInRecord.checkOutVerificationCode = outCode;
     checkInRecord.checkOutVerificationExpiresAt = outExpiresAt;
+    checkInRecord.checkOutVerificationAttempts = 0;
     await checkInRecord.save();
 
     const outMail = await sendAttendanceCode({
@@ -457,9 +388,7 @@ exports.scan = asyncHandler(async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: outMail.delivered
-        ? `A verification code was sent to ${req.user.email}.`
-        : 'Verification code generated (development mode).',
+      message: codeSentMessage(outMail, req.user.email),
       data: {
         attendanceId: checkInRecord._id,
         sessionId: session.pairedSessionId,
@@ -467,7 +396,6 @@ exports.scan = asyncHandler(async (req, res) => {
         time: checkInRecord.time,
         emailSent: outMail.delivered,
         expiresAt: outExpiresAt,
-        ...(outMail.devMode ? { devVerificationCode: outCode } : {}),
       },
     });
   }
@@ -476,7 +404,10 @@ exports.scan = asyncHandler(async (req, res) => {
     sessionId: session._id,
     studentId: req.user._id,
   });
-  if (existing && existing.verified) {
+  // An Absent the system wrote on its own at the scheduled end time doesn't
+  // block a scan while the officer still leaves the session open — the
+  // trainee arrived after all, so the normal late policy below applies.
+  if (existing && existing.verified && !existing.autoAbsent) {
     throw ApiError.conflict('You have already recorded attendance for this session.');
   }
 
@@ -504,6 +435,9 @@ exports.scan = asyncHandler(async (req, res) => {
         verificationCode: code,
         verificationExpiresAt: expiresAt,
         verified: false,
+        verificationAttempts: 0,
+        autoAbsent: false,
+        remarks: '',
       },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     );
@@ -525,9 +459,7 @@ exports.scan = asyncHandler(async (req, res) => {
 
   res.status(201).json({
     success: true,
-    message: mail.delivered
-      ? `A verification code was sent to ${req.user.email}.`
-      : 'Verification code generated (development mode).',
+    message: codeSentMessage(mail, req.user.email),
     data: {
       attendanceId: record._id,
       sessionId: session._id,
@@ -535,8 +467,6 @@ exports.scan = asyncHandler(async (req, res) => {
       time: record.time,
       emailSent: mail.delivered,
       expiresAt,
-      // Only exposed when SMTP is not configured, so local testing still works.
-      ...(mail.devMode ? { devVerificationCode: code } : {}),
     },
   });
 });
@@ -562,7 +492,7 @@ exports.verify = asyncHandler(async (req, res) => {
   }
 
   const record = await Attendance.findOne(filter)
-    .select('+verificationCode +checkOutVerificationCode')
+    .select('+verificationCode +checkOutVerificationCode +verificationAttempts +checkOutVerificationAttempts')
     .sort({ updatedAt: -1 });
 
   if (!record) {
@@ -571,28 +501,25 @@ exports.verify = asyncHandler(async (req, res) => {
 
   const isCheckOut = record.verified && Boolean(record.checkOutVerificationCode);
   const pendingCode = isCheckOut ? record.checkOutVerificationCode : record.verificationCode;
-  const pendingExpiry = isCheckOut ? record.checkOutVerificationExpiresAt : record.verificationExpiresAt;
 
   if (!pendingCode) {
     throw ApiError.notFound('No pending attendance found. Please scan the QR code again.');
   }
-  if (pendingExpiry && pendingExpiry < new Date()) {
-    throw ApiError.badRequest('That code has expired. Please scan the QR code again.');
-  }
-  if (pendingCode !== String(req.body.verificationCode).trim()) {
-    throw ApiError.badRequest('That verification code is incorrect.');
-  }
+  // Expiry + a capped number of wrong guesses; clears the code on success.
+  await checkCode(record, {
+    codeField: isCheckOut ? 'checkOutVerificationCode' : 'verificationCode',
+    expiresField: isCheckOut ? 'checkOutVerificationExpiresAt' : 'verificationExpiresAt',
+    attemptsField: isCheckOut ? 'checkOutVerificationAttempts' : 'verificationAttempts',
+    input: req.body.verificationCode,
+    restartHint: 'Please scan the QR code again.',
+  });
 
   if (isCheckOut) {
     const now = new Date();
     record.checkOutAt = now;
     record.checkOutTime = formatTime12h(now);
-    record.checkOutVerificationCode = null;
-    record.checkOutVerificationExpiresAt = null;
   } else {
     record.verified = true;
-    record.verificationCode = null;
-    record.verificationExpiresAt = null;
   }
   await record.save();
 
@@ -1021,7 +948,7 @@ exports.summary = asyncHandler(async (req, res) => {
       },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$date' } },
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$date', timezone: APP_TIMEZONE } },
           present: {
             $sum: { $cond: [{ $in: ['$status', ['Present', 'Late', 'Excused']] }, 1, 0] },
           },

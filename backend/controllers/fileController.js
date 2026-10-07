@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { getBucket } = require('../middleware/upload');
+const { getBucket, mimeFor } = require('../middleware/upload');
 
 /**
  * GET /api/files/:id — streams a GridFS-stored upload back out.
@@ -23,8 +23,13 @@ exports.stream = asyncHandler(async (req, res) => {
   const [file] = await bucket.find({ _id }).toArray();
   if (!file) throw ApiError.notFound('File not found.');
 
-  res.set('Content-Type', file.contentType || 'application/octet-stream');
-  res.set('Content-Disposition', `inline; filename="${encodeURIComponent(file.filename || 'file')}"`);
+  // Files uploaded before the extension-based fix were stored as a generic
+  // application/octet-stream — serve those by their real extension too.
+  const stored = file.contentType && file.contentType !== 'application/octet-stream' ? file.contentType : null;
+  res.set('Content-Type', stored || mimeFor(file.filename));
+  // RFC 5987 form, so a name with spaces/accents saves exactly as uploaded
+  // ("My File.jpg", not "My%20File.jpg").
+  res.set('Content-Disposition', `inline; filename*=UTF-8''${encodeURIComponent(file.filename || 'file')}`);
   res.set('Cache-Control', 'public, max-age=31536000, immutable');
 
   const downloadStream = bucket.openDownloadStream(_id);

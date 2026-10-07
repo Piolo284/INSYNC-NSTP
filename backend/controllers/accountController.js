@@ -1,14 +1,13 @@
-const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { requireFields, isMarsuEmail } = require('../utils/validate');
+const { requireFields, isMarsuEmail, assertContactNumber } = require('../utils/validate');
 const { assertStrongPassword } = require('../utils/passwordStrength');
 const { sendVerificationCode } = require('../utils/mailer');
 const { logAccountActivity } = require('../utils/accountActivity');
 
-const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+const { sixDigit, codeSentMessage, checkCode } = require('../utils/verificationCode');
 const CODE_TTL_MINUTES = 15;
 
 /**
@@ -37,6 +36,7 @@ exports.requestEmailChange = asyncHandler(async (req, res) => {
   user.pendingEmail = newEmail;
   user.pendingEmailCode = code;
   user.pendingEmailCodeExpiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60000);
+  user.pendingEmailCodeAttempts = 0;
   await user.save();
 
   const mail = await sendVerificationCode({
@@ -49,9 +49,7 @@ exports.requestEmailChange = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: mail.devMode
-      ? `A code was sent to ${newEmail}. SMTP is not configured (DEV mode) — the code is ${code}.`
-      : `A code was sent to ${newEmail}. Enter it to confirm the change.`,
+    message: codeSentMessage(mail, newEmail),
   });
 });
 
@@ -59,16 +57,18 @@ exports.requestEmailChange = asyncHandler(async (req, res) => {
 exports.confirmEmailChange = asyncHandler(async (req, res) => {
   requireFields(req.body, ['code']);
 
-  const user = await User.findById(req.user._id).select('+pendingEmail +pendingEmailCode +pendingEmailCodeExpiresAt');
+  const user = await User.findById(req.user._id).select(
+    '+pendingEmail +pendingEmailCode +pendingEmailCodeExpiresAt +pendingEmailCodeAttempts'
+  );
   if (!user.pendingEmail || !user.pendingEmailCode) {
     throw ApiError.badRequest('No email change is in progress. Please request one first.');
   }
-  if (user.pendingEmailCodeExpiresAt && user.pendingEmailCodeExpiresAt < new Date()) {
-    throw ApiError.badRequest('This code has expired. Please request a new one.');
-  }
-  if (user.pendingEmailCode !== String(req.body.code).trim()) {
-    throw ApiError.badRequest('Incorrect code.');
-  }
+  await checkCode(user, {
+    codeField: 'pendingEmailCode',
+    expiresField: 'pendingEmailCodeExpiresAt',
+    attemptsField: 'pendingEmailCodeAttempts',
+    input: req.body.code,
+  });
 
   // Re-check uniqueness — someone else may have claimed it while this code
   // was outstanding.
@@ -98,15 +98,14 @@ exports.confirmEmailChange = asyncHandler(async (req, res) => {
 exports.requestContactNumberChange = asyncHandler(async (req, res) => {
   requireFields(req.body, ['newContactNumber']);
   const newContactNumber = String(req.body.newContactNumber).trim();
-  if (newContactNumber.length < 7) {
-    throw ApiError.badRequest('Please enter a valid contact number.');
-  }
+  assertContactNumber(newContactNumber, { required: true });
 
   const code = sixDigit();
   const user = await User.findById(req.user._id);
   user.pendingContactNumber = newContactNumber;
   user.pendingContactNumberCode = code;
   user.pendingContactNumberCodeExpiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60000);
+  user.pendingContactNumberCodeAttempts = 0;
   await user.save();
 
   const mail = await sendVerificationCode({
@@ -119,9 +118,7 @@ exports.requestContactNumberChange = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: mail.devMode
-      ? `A code was sent to your email. SMTP is not configured (DEV mode) — the code is ${code}.`
-      : 'A code was sent to your registered email. Enter it to confirm the change.',
+    message: codeSentMessage(mail),
   });
 });
 
@@ -130,17 +127,17 @@ exports.confirmContactNumberChange = asyncHandler(async (req, res) => {
   requireFields(req.body, ['code']);
 
   const user = await User.findById(req.user._id).select(
-    '+pendingContactNumber +pendingContactNumberCode +pendingContactNumberCodeExpiresAt'
+    '+pendingContactNumber +pendingContactNumberCode +pendingContactNumberCodeExpiresAt +pendingContactNumberCodeAttempts'
   );
   if (!user.pendingContactNumber || !user.pendingContactNumberCode) {
     throw ApiError.badRequest('No contact number change is in progress. Please request one first.');
   }
-  if (user.pendingContactNumberCodeExpiresAt && user.pendingContactNumberCodeExpiresAt < new Date()) {
-    throw ApiError.badRequest('This code has expired. Please request a new one.');
-  }
-  if (user.pendingContactNumberCode !== String(req.body.code).trim()) {
-    throw ApiError.badRequest('Incorrect code.');
-  }
+  await checkCode(user, {
+    codeField: 'pendingContactNumberCode',
+    expiresField: 'pendingContactNumberCodeExpiresAt',
+    attemptsField: 'pendingContactNumberCodeAttempts',
+    input: req.body.code,
+  });
 
   const oldNumber = user.contactNumber;
   user.contactNumber = user.pendingContactNumber;
@@ -182,6 +179,7 @@ exports.requestPasswordChange = asyncHandler(async (req, res) => {
   user.pendingPasswordHash = await bcrypt.hash(newPassword, 10);
   user.pendingPasswordCode = code;
   user.pendingPasswordCodeExpiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60000);
+  user.pendingPasswordCodeAttempts = 0;
   await user.save();
 
   const mail = await sendVerificationCode({
@@ -194,9 +192,7 @@ exports.requestPasswordChange = asyncHandler(async (req, res) => {
 
   res.json({
     success: true,
-    message: mail.devMode
-      ? `A code was sent to your email. SMTP is not configured (DEV mode) — the code is ${code}.`
-      : 'A code was sent to your registered email. Enter it to confirm the password change.',
+    message: codeSentMessage(mail),
   });
 });
 
@@ -205,17 +201,17 @@ exports.confirmPasswordChange = asyncHandler(async (req, res) => {
   requireFields(req.body, ['code']);
 
   const user = await User.findById(req.user._id).select(
-    '+pendingPasswordHash +pendingPasswordCode +pendingPasswordCodeExpiresAt'
+    '+pendingPasswordHash +pendingPasswordCode +pendingPasswordCodeExpiresAt +pendingPasswordCodeAttempts'
   );
   if (!user.pendingPasswordHash || !user.pendingPasswordCode) {
     throw ApiError.badRequest('No password change is in progress. Please request one first.');
   }
-  if (user.pendingPasswordCodeExpiresAt && user.pendingPasswordCodeExpiresAt < new Date()) {
-    throw ApiError.badRequest('This code has expired. Please request a new one.');
-  }
-  if (user.pendingPasswordCode !== String(req.body.code).trim()) {
-    throw ApiError.badRequest('Incorrect code.');
-  }
+  await checkCode(user, {
+    codeField: 'pendingPasswordCode',
+    expiresField: 'pendingPasswordCodeExpiresAt',
+    attemptsField: 'pendingPasswordCodeAttempts',
+    input: req.body.code,
+  });
 
   // Written via updateOne (not save()) so the User model's pre-save hashing
   // hook does not re-hash a value that is already a bcrypt hash.
@@ -223,7 +219,12 @@ exports.confirmPasswordChange = asyncHandler(async (req, res) => {
     { _id: user._id },
     {
       $set: { password: user.pendingPasswordHash },
-      $unset: { pendingPasswordHash: '', pendingPasswordCode: '', pendingPasswordCodeExpiresAt: '' },
+      $unset: {
+        pendingPasswordHash: '',
+        pendingPasswordCode: '',
+        pendingPasswordCodeExpiresAt: '',
+        pendingPasswordCodeAttempts: '',
+      },
     }
   );
 

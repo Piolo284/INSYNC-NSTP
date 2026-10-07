@@ -48,6 +48,8 @@ exports.list = asyncHandler(async (req, res) => {
     filter.moduleCode = req.query.moduleCode;
   }
   if (req.query.withDeadline === 'true') filter.deadline = { $ne: null };
+  // Plain learning materials (no due date) — the officer's Modules list.
+  if (req.query.withDeadline === 'false') filter.deadline = null;
   if (req.query.search) {
     const rx = new RegExp(String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
     filter.$or = [{ title: rx }, { description: rx }];

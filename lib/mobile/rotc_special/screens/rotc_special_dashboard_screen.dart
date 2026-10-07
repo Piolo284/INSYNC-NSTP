@@ -129,6 +129,14 @@ class _RotcSpecialDashboardScreenState extends State<RotcSpecialDashboardScreen>
   }
 
   Widget _buildProfileHeader() {
+    // Rebuilds as soon as the session changes (e.g. a new profile photo).
+    return ValueListenableBuilder<int>(
+      valueListenable: Session.instance.changes,
+      builder: (_, _, _) => _profileHeaderContent(),
+    );
+  }
+
+  Widget _profileHeaderContent() {
     final session = Session.instance;
     return ProfileHeader(
       greeting: '${Fmt.greeting()} 👋',

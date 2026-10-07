@@ -125,7 +125,17 @@ class _CwtsAttendanceScreenState extends State<CwtsAttendanceScreen> {
         centerTitle: true,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
-          onPressed: () => widget.onBackToDashboard?.call(),
+          // As a bottom-nav tab the shell passes onBackToDashboard (switch to
+          // Home). Opened from "View all" it's a pushed route with no
+          // callback — pop back to the screen it was opened from.
+          onPressed: () {
+            final backToDashboard = widget.onBackToDashboard;
+            if (backToDashboard != null) {
+              backToDashboard();
+            } else {
+              Navigator.maybePop(context);
+            }
+          },
         ),
         title: const Text(
           'Attendance',

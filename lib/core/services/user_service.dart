@@ -126,6 +126,25 @@ class UserService {
     return ApiService.mapOf(response);
   }
 
+  /// Replaces the signed-in user's own profile photo (PUT /users/me/avatar —
+  /// png/jpg/jpeg/webp, max 5 MB, checked again on the server). Pass the
+  /// picked file's bytes ([fileBytes]; required on web) or its [filePath].
+  Future<void> uploadAvatar({
+    List<int>? fileBytes,
+    String? filePath,
+    required String fileName,
+  }) async {
+    await _api.upload(
+      '/users/me/avatar',
+      method: 'PUT',
+      fields: const {},
+      fileField: 'photo',
+      fileBytes: fileBytes,
+      filePath: filePath,
+      fileName: fileName,
+    );
+  }
+
   Future<Map<String, dynamic>> stats() async {
     final response = await _api.get('/users/stats/overview');
     return ApiService.mapOf(response);

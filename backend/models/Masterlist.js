@@ -11,7 +11,7 @@ const mongoose = require('mongoose');
  * Course/Program all match a row here.
  *
  * Every field below is required — Name, Student ID, Email, Course, Campus,
- * Year, and Section must all be present for a row to be on the masterlist
+ * and Year must all be present for a row to be on the masterlist
  * at all; controllers/masterlistController.js enforces this at upload time
  * by skipping any row missing even one of them, and this schema backs that
  * up for the single-entry `create` path too. There is deliberately no
@@ -28,7 +28,6 @@ const masterlistSchema = new mongoose.Schema(
     // the rule here is presence, not matching that specific format.
     campus: { type: String, required: true, trim: true },
     academicYear: { type: String, required: true, trim: true },
-    section: { type: String, required: true, trim: true },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
   },
   { timestamps: true, collection: 'masterlist' }

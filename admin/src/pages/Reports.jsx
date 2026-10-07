@@ -67,7 +67,7 @@ function buildReportView(reportId, rows) {
         { header: 'ID', key: 'id' },
         { header: 'Name', key: 'name' },
         { header: 'Program', key: 'program' },
-        { header: 'Course', key: 'course' },
+        { header: 'Program', key: 'course' },
         { header: 'Year Level', key: 'yearLevel' },
         { header: 'Status', key: 'status' },
         { header: 'Date Enrolled', key: 'enrolled' },

@@ -13,7 +13,7 @@ const COLUMNS = [
   { label: 'ID', value: 'id' },
   { label: 'Name', value: 'name' },
   { label: 'Program', value: 'program' },
-  { label: 'Course', value: 'course' },
+  { label: 'Program', value: 'course' },
   { label: 'Year Level', value: 'yearLevel' },
   { label: 'Section', value: 'section' },
   { label: 'Email', value: 'email' },

@@ -161,7 +161,7 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
       return 'Please create a stronger password before continuing.';
     }
     if (_selectedProgram == null) {
-      return 'Please select your course/program.';
+      return 'Please select your program.';
     }
     if (_selectedYear == null) {
       return 'Please select your year.';
@@ -330,7 +330,7 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
               ),
               PasswordStrengthIndicator(result: _passwordStrength),
               const SizedBox(height: 16),
-              _buildLabel('Course/Program'),
+              _buildLabel('Program'),
               const SizedBox(height: 6),
               _buildProgramField(),
               const SizedBox(height: 16),
@@ -514,9 +514,14 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
       );
     }
     return _buildDropdown(
-      hint: 'Select your course/program',
+      hint: 'Select your program',
       value: _selectedProgram,
       items: _programs,
+      // e.g. "College of Fisheries - MARSU - Gasan"
+      labelOf: (name) {
+        final campus = _programCampuses[name];
+        return campus == null ? name : '$name - $campus';
+      },
       onChanged: (value) => setState(() => _selectedProgram = value),
     );
   }
@@ -647,6 +652,7 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
     required String? value,
     required List<String> items,
     required ValueChanged<String?> onChanged,
+    String Function(String item)? labelOf,
   }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -676,7 +682,9 @@ class _RegisterBasicInfoScreenState extends State<RegisterBasicInfoScreen> {
             return DropdownMenuItem<String>(
               value: item,
               child: Text(
-                item,
+                labelOf?.call(item) ?? item,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 13,
                   color: Colors.black87,

@@ -11,9 +11,9 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
-const { ADMIN_ROLES, ROTC_RESTRICTED_CAMPUSES, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
+const { ADMIN_ROLES, STAFF_ROLES, ROTC_RESTRICTED_CAMPUSES, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
 const { assertSpecialClassManager, isSpecialClassManager } = require('../utils/specialClass');
-const { requireFields, isMarsuEmail } = require('../utils/validate');
+const { requireFields, isMarsuEmail, assertContactNumber } = require('../utils/validate');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 const { assertBrigadeAccess, scopeFilterToBrigade } = require('../utils/brigadeScope');
 const Brigade = require('../models/Brigade');
@@ -137,26 +137,34 @@ exports.update = asyncHandler(async (req, res) => {
     assertBrigadeAccess(req.user, cadet.brigadeId);
   }
 
-  const fields = [
-    'fullName',
-    'email',
-    'course',
-    'platoon',
-    'company',
-    'yearLevel',
-    'section',
-    'contactNumber',
-    'address',
-    'emergencyContact',
-    'profileImage',
-  ];
+  assertContactNumber(req.body.contactNumber);
+
+  // A trainee editing their own record may only change their contact
+  // details — enrollment data (name, course, year/section...) comes from
+  // the masterlist and the photo goes through PUT /api/users/me/avatar.
+  const fields = isSelf && !STAFF_ROLES.includes(req.user.role)
+    ? ['contactNumber', 'address', 'emergencyContact']
+    : [
+        'fullName',
+        'email',
+        'course',
+        'platoon',
+        'company',
+        'yearLevel',
+        'section',
+        'contactNumber',
+        'address',
+        'emergencyContact',
+        'profileImage',
+      ];
   if (req.user.role === 'officer') fields.push('status');
 
   fields.forEach((f) => {
     if (req.body[f] !== undefined) cadet[f] = req.body[f];
   });
+  const traineeSelf = isSelf && !STAFF_ROLES.includes(req.user.role);
 
-  if (req.body.campus !== undefined) {
+  if (!traineeSelf && req.body.campus !== undefined) {
     const nextCampus = req.body.campus || null;
     if (nextCampus && ROTC_RESTRICTED_CAMPUSES.includes(nextCampus)) {
       throw ApiError.badRequest(
@@ -168,7 +176,7 @@ exports.update = asyncHandler(async (req, res) => {
 
   // A cadet's company comes from their handling officer, not their course,
   // so a course change only refreshes program/campus.
-  if (req.body.course !== undefined) {
+  if (!traineeSelf && req.body.course !== undefined) {
     const resolved = await resolveBrigadeForCourse(cadet.course, cadet.program);
     applyBrigadeFields(cadet, resolved, { assignBrigade: false });
     await User.findByIdAndUpdate(userId, {
@@ -309,6 +317,7 @@ exports.create = asyncHandler(async (req, res) => {
     emergencyContact = '',
     campus = '',
   } = req.body;
+  assertContactNumber(contactNumber);
 
   requireFields(req.body, ['name', 'email', 'password', 'cadetId']);
 

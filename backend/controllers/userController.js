@@ -7,7 +7,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { destroy } = require('../middleware/upload');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { profileFor } = require('./authController');
-const { requireFields, isMarsuEmail } = require('../utils/validate');
+const { requireFields, isMarsuEmail, assertContactNumber } = require('../utils/validate');
 const { ADMIN_ROLES, PROGRAM_ADMIN_ROLES } = require('../config/constants');
 const { assertProgramAccess } = require('../utils/programScope');
 
@@ -79,7 +79,15 @@ exports.update = asyncHandler(async (req, res) => {
     }
   }
 
-  const userFields = ['name', 'email', 'profileImage', 'contactNumber', 'yearLevel', 'section'];
+  assertContactNumber(req.body.contactNumber);
+
+  // A trainee updating themselves here may only touch contact details —
+  // same rule as PUT /api/students|cadets/:id.
+  const traineeSelf = isSelf && !isAdmin && ['student', 'cadet'].includes(user.role);
+
+  const userFields = traineeSelf
+    ? ['contactNumber']
+    : ['name', 'email', 'profileImage', 'contactNumber', 'yearLevel', 'section'];
   if (isAdmin) userFields.push('status', 'role', 'program', 'studentId');
 
   userFields.forEach((f) => {
@@ -91,7 +99,7 @@ exports.update = asyncHandler(async (req, res) => {
   let profile = null;
 
   if (Model) {
-    const profileFields = [
+    const profileFields = traineeSelf ? ['contactNumber', 'address', 'emergencyContact'] : [
       'fullName',
       'email',
       'course',
@@ -113,7 +121,7 @@ exports.update = asyncHandler(async (req, res) => {
     profileFields.forEach((f) => {
       if (req.body[f] !== undefined) updates[f] = req.body[f];
     });
-    if (req.body.name !== undefined) updates.fullName = req.body.name;
+    if (!traineeSelf && req.body.name !== undefined) updates.fullName = req.body.name;
 
     profile = await Model.findOneAndUpdate({ userId: user._id }, updates, { new: true });
   }
@@ -134,10 +142,18 @@ exports.uploadAvatar = asyncHandler(async (req, res) => {
   user.profileImage = req.file.path;
   await user.save();
 
+  // The mobile app reads the photo from the role profile (Student/Cadet/
+  // Officer) first, so keep that copy in step — otherwise the new photo
+  // only shows up in the admin panel, never in the trainee's own app.
+  const Model = PROFILE_MODELS[user.role];
+  const profile = Model
+    ? await Model.findOneAndUpdate({ userId: user._id }, { profileImage: user.profileImage }, { new: true })
+    : null;
+
   const previousFileId = previousImage && previousImage.match(/\/files\/([a-f0-9]{24})$/i);
   if (previousFileId) await destroy(previousFileId[1]);
 
-  res.json({ success: true, data: user.toPublic() });
+  res.json({ success: true, data: user.toPublic(), profile });
 });
 
 /** DELETE /api/users/:id — removes the user and its role profile. */

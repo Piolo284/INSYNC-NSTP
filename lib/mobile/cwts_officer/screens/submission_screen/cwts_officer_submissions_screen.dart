@@ -7,7 +7,9 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/app_dialogs.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/attachment_preview_screen.dart';
 
 class CwtsOfficerSubmissionsScreen extends StatefulWidget {
   /// Lets the back arrow jump to the shell's Home tab instead of trying to
@@ -36,6 +38,15 @@ class _CwtsOfficerSubmissionsScreenState
   /// Every module that has a deadline — these are the "assignments".
   List<Map<String, dynamic>> _assignments = const [];
 
+  /// 'Assignments' (graded, with a due date) or 'Modules' (uploaded learning
+  /// materials with no due date — posted with the top-bar +).
+  String _view = 'Assignments';
+  bool get _showingModules => _view == 'Modules';
+
+  /// Uploaded learning materials (modules without a deadline).
+  List<Map<String, dynamic>> _materials = const [];
+  String? _deletingId;
+
   final List<String> _filters = const ['All', 'Submitted', 'Graded', 'To Grade'];
   final List<String> _sortOptions = const ['Newest', 'Oldest', 'Name A-Z'];
 
@@ -59,16 +70,27 @@ class _CwtsOfficerSubmissionsScreenState
     });
 
     try {
-      final modules = await ModuleService.instance.list(
-        program: Session.instance.program,
-        withDeadlineOnly: true,
-        search: _searchController.text.trim(),
-      );
+      final search = _searchController.text.trim();
+      final results = await Future.wait([
+        ModuleService.instance.list(
+          program: Session.instance.program,
+          withDeadlineOnly: true,
+          search: search,
+        ),
+        ModuleService.instance.list(
+          program: Session.instance.program,
+          withoutDeadlineOnly: true,
+          search: search,
+        ),
+      ]);
 
       if (!mounted) return;
       setState(() {
-        _assignments = modules;
-        _state = modules.isEmpty ? LoadState.empty : LoadState.ready;
+        _assignments = results[0];
+        _materials = results[1]
+          ..sort((a, b) => Fmt.str(b['createdAt']).compareTo(Fmt.str(a['createdAt'])));
+        final shown = _showingModules ? _materials : _assignments;
+        _state = shown.isEmpty ? LoadState.empty : LoadState.ready;
       });
     } catch (error) {
       if (!mounted) return;
@@ -85,13 +107,67 @@ class _CwtsOfficerSubmissionsScreenState
   }
 
   /// Top-bar + button: posts a plain resource (PDF/PPT/video) — a module
-  /// with no deadline, so it never shows up in this Submissions list.
+  /// with no deadline. It's listed (and managed) under the Modules view.
   Future<void> _openAddModule() async {
     final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(builder: (_) => const CwtsOfficerAddModuleScreen()),
     );
-    if (created == true) await _load();
+    if (created == true) {
+      _switchView('Modules');
+      await _load();
+    }
+  }
+
+  void _switchView(String view) {
+    if (_view == view) return;
+    setState(() {
+      _view = view;
+      if (_state == LoadState.ready || _state == LoadState.empty) {
+        final shown = _showingModules ? _materials : _assignments;
+        _state = shown.isEmpty ? LoadState.empty : LoadState.ready;
+      }
+    });
+  }
+
+  void _viewMaterial(Map<String, dynamic> m) {
+    final fileUrl = Fmt.str(m['fileUrl']);
+    if (fileUrl.isEmpty) {
+      AppSnack.info(context, 'This module has no file or link attached.');
+      return;
+    }
+    openAttachmentPreview(context, fileUrl: fileUrl, fileName: Fmt.str(m['fileName'], Fmt.str(m['title'], 'Module')));
+  }
+
+  Future<void> _editMaterial(Map<String, dynamic> m) async {
+    final saved = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(builder: (_) => CwtsOfficerAddModuleScreen(existing: m)),
+    );
+    if (saved == true) await _load();
+  }
+
+  Future<void> _deleteMaterial(Map<String, dynamic> m) async {
+    final title = Fmt.str(m['title'], 'this module');
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Delete module?',
+      message: '"$title" will be removed for every trainee. This cannot be undone.',
+      confirmLabel: 'Delete',
+    );
+    if (!confirmed || !mounted) return;
+    setState(() => _deletingId = Fmt.str(m['_id']));
+    try {
+      await ModuleService.instance.delete(Fmt.str(m['_id']));
+      if (!mounted) return;
+      AppSnack.success(context, 'Module deleted.');
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _deletingId = null);
+    }
   }
 
   /// Big floating + button: posts a graded assignment (requires a deadline)
@@ -199,7 +275,50 @@ class _CwtsOfficerSubmissionsScreenState
         children: [
           const SizedBox(height: 16),
 
+          // ===== ASSIGNMENTS | MODULES =====
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(AppColors.radiusSm),
+                border: Border.all(color: AppColors.border),
+              ),
+              child: Row(
+                children: [
+                  for (final v in const ['Assignments', 'Modules'])
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => _switchView(v),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 9),
+                          decoration: BoxDecoration(
+                            color: _view == v ? AppColors.primaryMaroon : Colors.transparent,
+                            borderRadius: BorderRadius.circular(AppColors.radiusSm - 2),
+                          ),
+                          child: Text(
+                            v == 'Assignments'
+                                ? 'Assignments (${_assignments.length})'
+                                : 'Modules (${_materials.length})',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _view == v ? AppColors.white : AppColors.textSecondary,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
           // ===== FILTER TABS =====
+          if (!_showingModules) ...[
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -235,6 +354,7 @@ class _CwtsOfficerSubmissionsScreenState
             ),
           ),
           const SizedBox(height: 16),
+          ],
 
           // ===== SEARCH =====
           Padding(
@@ -243,7 +363,7 @@ class _CwtsOfficerSubmissionsScreenState
               controller: _searchController,
               onChanged: _onSearchChanged,
               decoration: InputDecoration(
-                hintText: 'Search assignments...',
+                hintText: _showingModules ? 'Search modules...' : 'Search assignments...',
                 prefixIcon: const Icon(Icons.search),
                 contentPadding: const EdgeInsets.symmetric(vertical: 4),
                 border: OutlineInputBorder(
@@ -256,6 +376,7 @@ class _CwtsOfficerSubmissionsScreenState
           const SizedBox(height: 12),
 
           // ===== SORT ROW =====
+          if (!_showingModules)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Row(
@@ -315,6 +436,27 @@ class _CwtsOfficerSubmissionsScreenState
           ),
           const SizedBox(height: 16),
 
+          if (_showingModules)
+            Expanded(
+              child: AsyncView(
+                state: _state,
+                message: _error,
+                onRetry: _load,
+                emptyText: 'No modules uploaded yet. Tap + at the top to upload one.',
+                emptyIcon: Icons.folder_open_outlined,
+                child: RefreshIndicator(
+                  color: AppColors.primaryMaroon,
+                  onRefresh: _load,
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 88),
+                    itemCount: _materials.length,
+                    itemBuilder: (context, index) => _buildMaterialCard(_materials[index]),
+                  ),
+                ),
+              ),
+            )
+          else
           // ===== ASSIGNMENTS LIST =====
           Expanded(
             child: AsyncView(
@@ -353,6 +495,107 @@ class _CwtsOfficerSubmissionsScreenState
         tooltip: 'Add Assignment',
         backgroundColor: AppColors.primaryMaroon,
         child: const Icon(Icons.add, color: AppColors.white),
+      ),
+    );
+  }
+
+  /// One uploaded module: what was attached, when, and its actions.
+  Widget _buildMaterialCard(Map<String, dynamic> m) {
+    final fileUrl = Fmt.str(m['fileUrl']);
+    final fileName = Fmt.str(m['fileName']);
+    final isLink = fileUrl.startsWith('http') && !fileUrl.contains('/api/files/');
+    final type = FileTypeInfo.of(isLink ? '' : fileName);
+    final postedBy = m['createdBy'] is Map ? Fmt.str((m['createdBy'] as Map)['name']) : '';
+    final deleting = _deletingId == Fmt.str(m['_id']);
+    final details = [
+      if (Fmt.str(m['moduleCode']).isNotEmpty) Fmt.str(m['moduleCode']),
+      if (fileUrl.isEmpty)
+        'No attachment'
+      else if (isLink)
+        'Link'
+      else
+        '${type.label} • ${Fmt.fileSize(m['fileSize'])}',
+    ].join('  •  ');
+
+    return AppCard(
+      margin: const EdgeInsets.only(bottom: 12),
+      onTap: () => _viewMaterial(m),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: isLink ? AppColors.blueLight : type.background,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(isLink ? Icons.link : type.icon, color: isLink ? AppColors.blue : type.color, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  Fmt.str(m['title'], 'Module'),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppColors.textPrimary),
+                ),
+                const SizedBox(height: 4),
+                Text(details, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+                if (!isLink && fileName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    fileName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
+                  ),
+                ],
+                const SizedBox(height: 2),
+                Text(
+                  'Posted ${Fmt.date(m['createdAt'])}${postedBy.isEmpty ? '' : ' by $postedBy'}',
+                  style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+                ),
+              ],
+            ),
+          ),
+          if (deleting)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else
+            PopupMenuButton<String>(
+              tooltip: 'Manage module',
+              icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
+              onSelected: (action) {
+                switch (action) {
+                  case 'view':
+                    _viewMaterial(m);
+                  case 'edit':
+                    _editMaterial(m);
+                  case 'delete':
+                    _deleteMaterial(m);
+                }
+              },
+              itemBuilder: (_) => [
+                if (fileUrl.isNotEmpty)
+                  const PopupMenuItem(value: 'view', child: ListTile(leading: Icon(Icons.visibility_outlined), title: Text('View'), dense: true, contentPadding: EdgeInsets.zero)),
+                const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_outlined), title: Text('Edit'), dense: true, contentPadding: EdgeInsets.zero)),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete_outline, color: AppColors.error),
+                    title: Text('Delete', style: TextStyle(color: AppColors.error)),
+                    dense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ],
+            ),
+        ],
       ),
     );
   }

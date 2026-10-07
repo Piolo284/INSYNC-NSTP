@@ -52,6 +52,9 @@ class _CwtsOfficerAttendanceListScreenState
   bool _isNotifying = false;
   bool _isExporting = false;
 
+  /// userId of the drop review currently being saved (disables its buttons).
+  String? _reviewingUserId;
+
   bool get _isAtRisk => widget.category == 'At-Risk Students';
   bool get _isAllAttendance => widget.category == 'All Attendance';
 
@@ -130,6 +133,7 @@ class _CwtsOfficerAttendanceListScreenState
         'subtitle':
             '${Fmt.toInt(row['absents'])}/${Fmt.toInt(row['totalSessions'])} Absents',
         'image': '',
+        'pendingDrop': row['pendingDrop'] == true ? 'true' : '',
       };
     }
 
@@ -156,6 +160,39 @@ class _CwtsOfficerAttendanceListScreenState
       return data['name']!.toLowerCase().contains(query) ||
           data['idNumber']!.toLowerCase().contains(query);
     }).toList();
+  }
+
+  /// Reaching the absence limit only flags a trainee — the officer decides.
+  /// Both choices ask for confirmation first.
+  Future<void> _reviewDrop(Map<String, String> data, {required bool drop}) async {
+    final name = data['name']!;
+    final confirmed = await showConfirmDialog(
+      context,
+      title: drop ? 'Drop out $name?' : 'Keep $name enrolled?',
+      message: drop
+          ? '$name has ${data['subtitle']}. Dropping them out removes them from ${Session.instance.program}: '
+              'they can no longer sign in or take part. Are you sure you want to drop out this trainee?'
+          : '$name has ${data['subtitle']}. They will stay enrolled and will only be reviewed '
+              'again if they get another absence.',
+      confirmLabel: drop ? 'Drop Out' : 'Keep Enrolled',
+      danger: drop,
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _reviewingUserId = data['userId']);
+    try {
+      final message = drop
+          ? await AttendanceService.instance.confirmDrop(data['userId']!)
+          : await AttendanceService.instance.keepEnrolled(data['userId']!);
+      if (!mounted) return;
+      AppSnack.success(context, message);
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _reviewingUserId = null);
+    }
   }
 
   Future<void> _pickDate() async {
@@ -469,9 +506,11 @@ class _CwtsOfficerAttendanceListScreenState
   Widget _buildStudentTile(Map<String, dynamic> row) {
     final data = _rowData(row);
     final status = _status;
+    final pendingDrop = _isAtRisk && data['pendingDrop'] == 'true';
+    final busy = _reviewingUserId == data['userId'];
 
-    return AppCard(
-      margin: const EdgeInsets.only(bottom: 10),
+    final tile = AppCard(
+      margin: pendingDrop ? EdgeInsets.zero : const EdgeInsets.only(bottom: 10),
       onTap: data['userId']!.isEmpty
           ? null
           : () {
@@ -524,6 +563,18 @@ class _CwtsOfficerAttendanceListScreenState
           const SizedBox(width: 8),
           if (status != null)
             StatusBadge(status, dense: true)
+          else if (pendingDrop)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: AppColors.errorLight,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Text(
+                'For Drop Review',
+                style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: AppColors.error),
+              ),
+            )
           else if (_isAtRisk)
             const Icon(
               Icons.error_outline,
@@ -537,6 +588,54 @@ class _CwtsOfficerAttendanceListScreenState
             size: 20,
           ),
         ],
+      ),
+    );
+
+    if (!pendingDrop) return tile;
+
+    // At the absence limit: nothing happens until the officer decides.
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+          border: Border.all(color: AppColors.error.withValues(alpha: 0.35)),
+        ),
+        child: Column(
+          children: [
+            tile,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: busy ? null : () => _reviewDrop(data, drop: false),
+                      child: const Text('Keep'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: busy ? null : () => _reviewDrop(data, drop: true),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                        foregroundColor: AppColors.white,
+                      ),
+                      child: busy
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.white),
+                            )
+                          : const Text('Drop Out'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

@@ -12,9 +12,8 @@ const EMAIL_KEYS = ['email', 'email address', 'emailaddress'];
 const COURSE_KEYS = ['courseprogram', 'course/program', 'course', 'program'];
 const CAMPUS_KEYS = ['campus'];
 const YEAR_KEYS = ['academicyear', 'academic year', 'year', 'yearlevel', 'year level'];
-const SECTION_KEYS = ['section'];
 
-const REQUIRED_FIELD_LABEL = 'Student Number, Full Name, Email, Course/Program, Campus, Year, or Section';
+const REQUIRED_FIELD_LABEL = 'Student Number, Full Name, Email, Course/Program, Campus, or Year';
 
 function pick(row, keys) {
   for (const key of keys) {
@@ -88,7 +87,7 @@ exports.upload = asyncHandler(async (req, res) => {
   }
   if (!rows.length) {
     throw ApiError.badRequest(
-      'No data rows were found in that file. Make sure the first row has column headers like "Student Number", "Full Name", "Email", "Course/Program", "Campus", "Year", "Section".'
+      'No data rows were found in that file. Make sure the first row has column headers like "Student Number", "Full Name", "Email", "Course/Program", "Campus", "Year".'
     );
   }
 
@@ -106,11 +105,11 @@ exports.upload = asyncHandler(async (req, res) => {
     const courseProgram = pick(row, COURSE_KEYS);
     const campus = pick(row, CAMPUS_KEYS);
     const academicYear = pick(row, YEAR_KEYS);
-    const section = pick(row, SECTION_KEYS);
-    // Name, Student ID, Email, Course, Campus, Year, and Section are all
-    // required — a row missing even one of them never makes it onto the
-    // masterlist at all.
-    if (!studentNumber || !fullName || !email || !courseProgram || !campus || !academicYear || !section) {
+    // Name, Student ID, Email, Course, Campus, and Year are all required — a
+    // row missing even one of them never makes it onto the masterlist at
+    // all. The masterlist has no Section (a "Section" column in the file is
+    // simply ignored).
+    if (!studentNumber || !fullName || !email || !courseProgram || !campus || !academicYear) {
       skipped += 1;
       continue;
     }
@@ -125,7 +124,6 @@ exports.upload = asyncHandler(async (req, res) => {
             courseProgram,
             campus,
             academicYear,
-            section,
             uploadedBy: req.user._id,
           },
         },
@@ -156,7 +154,7 @@ exports.upload = asyncHandler(async (req, res) => {
  * student who needs to be added between registrar file uploads.
  */
 exports.create = asyncHandler(async (req, res) => {
-  requireFields(req.body, ['studentNumber', 'fullName', 'email', 'courseProgram', 'campus', 'academicYear', 'section']);
+  requireFields(req.body, ['studentNumber', 'fullName', 'email', 'courseProgram', 'campus', 'academicYear']);
 
   const studentNumber = String(req.body.studentNumber).trim().toUpperCase();
   const existing = await Masterlist.findOne({ studentNumber });
@@ -171,7 +169,6 @@ exports.create = asyncHandler(async (req, res) => {
     courseProgram: String(req.body.courseProgram).trim(),
     campus: String(req.body.campus).trim(),
     academicYear: String(req.body.academicYear).trim(),
-    section: String(req.body.section).trim(),
     uploadedBy: req.user._id,
   });
 

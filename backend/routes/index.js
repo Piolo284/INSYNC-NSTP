@@ -131,6 +131,8 @@ router.use('/announcement-templates', require('./announcementTemplateRoutes'));
 router.use('/master-enrollment', require('./masterlistRoutes'));
 router.use('/password-reset-requests', require('./passwordResetRequestRoutes'));
 router.use('/account-activity', require('./accountActivityRoutes'));
+router.use('/admin-accounts', require('./adminAccountRoutes'));
+router.use('/drop-reviews', require('./dropReviewRoutes'));
 router.use('/system/config', require('./systemConfigRoutes'));
 
 module.exports = router;

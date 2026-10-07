@@ -7,7 +7,7 @@ export const CERTIFICATE_FIELDS = [
   { key: 'studentName', label: 'Student Name' },
   { key: 'studentId', label: 'Student/Cadet ID' },
   { key: 'program', label: 'Program (CWTS/ROTC)' },
-  { key: 'course', label: 'Course' },
+  { key: 'course', label: 'Program' },
   { key: 'yearLevel', label: 'Year Level' },
   { key: 'sectionOrCompany', label: 'Section / Company' },
   { key: 'campus', label: 'Campus' },

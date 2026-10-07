@@ -50,6 +50,9 @@ const attendanceSessionSchema = new mongoose.Schema(
     },
     notes: { type: String, default: '' },
     status: { type: String, enum: SESSION_STATUSES, default: 'Active', index: true },
+    // When the automatic end-of-session absent sweep last ran for this
+    // session (utils/attendanceSweep.js). Null = not swept yet.
+    absentSweptAt: { type: Date, default: null, index: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
   },
   { timestamps: true }

@@ -3,6 +3,41 @@ const mongoose = require('mongoose');
 const { Readable } = require('stream');
 const ApiError = require('../utils/ApiError');
 
+/**
+ * MIME type by file extension. Clients don't always label uploads — Flutter's
+ * `MultipartFile.fromBytes` sends every file as application/octet-stream —
+ * and that label is what GridFS stored and later served, so a JPG came back
+ * as an unknown binary download instead of an image. The original file name
+ * is the reliable source, so it decides the stored type. The bytes themselves
+ * are never changed or converted.
+ */
+const MIME_BY_EXTENSION = {
+  pdf: 'application/pdf',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  ppt: 'application/vnd.ms-powerpoint',
+  pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+  txt: 'text/plain',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  webp: 'image/webp',
+  gif: 'image/gif',
+  zip: 'application/zip',
+  mp4: 'video/mp4',
+  mov: 'video/quicktime',
+  webm: 'video/webm',
+};
+
+function mimeFor(fileName, fallback) {
+  const match = /\.([a-z0-9]+)$/i.exec(String(fileName || ''));
+  const byExt = match && MIME_BY_EXTENSION[match[1].toLowerCase()];
+  return byExt || fallback || 'application/octet-stream';
+}
+
 const API_BASE = (
   process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 5000}/api`
 ).replace(/\/$/, '');
@@ -25,6 +60,7 @@ function getBucket() {
  */
 function persistFile(file, folder) {
   return new Promise((resolve, reject) => {
+    file.mimetype = mimeFor(file.originalname, file.mimetype);
     const uploadStream = getBucket().openUploadStream(file.originalname, {
       contentType: file.mimetype,
       metadata: { folder: `nstp/${folder}` },
@@ -100,4 +136,4 @@ async function destroy(fileId) {
   }
 }
 
-module.exports = { uploader, destroy, getBucket };
+module.exports = { uploader, destroy, getBucket, mimeFor };

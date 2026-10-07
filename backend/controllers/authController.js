@@ -1,4 +1,3 @@
-const crypto = require('crypto');
 const User = require('../models/User');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
@@ -7,14 +6,14 @@ const LoginSession = require('../models/LoginSession');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { signToken } = require('../middleware/auth');
-const { requireFields, requireOneOf, isMarsuEmail } = require('../utils/validate');
+const { requireFields, requireOneOf, isMarsuEmail, assertContactNumber } = require('../utils/validate');
 const { assertStrongPassword } = require('../utils/passwordStrength');
 const { resolveBrigadeForCourse, applyBrigadeFields } = require('../utils/brigadeAssignment');
 const { assertMasterlistMatch } = require('../utils/masterlistMatch');
 const { sendVerificationCode } = require('../utils/mailer');
 const { PROGRAMS, SPECIAL_CATEGORIES, CAMPUSES, ROTC_RESTRICTED_CAMPUSES } = require('../config/constants');
 
-const sixDigit = () => String(crypto.randomInt(0, 1000000)).padStart(6, '0');
+const { sixDigit, codeSentMessage, checkCode } = require('../utils/verificationCode');
 const TWO_FACTOR_CODE_TTL_MINUTES = 10;
 
 /** Loads the role-specific profile that goes with a User document. */
@@ -108,6 +107,7 @@ exports.login = asyncHandler(async (req, res) => {
     const code = sixDigit();
     user.twoFactorCode = code;
     user.twoFactorCodeExpiresAt = new Date(Date.now() + TWO_FACTOR_CODE_TTL_MINUTES * 60000);
+    user.twoFactorCodeAttempts = 0;
     await user.save();
 
     const mail = await sendVerificationCode({
@@ -120,9 +120,7 @@ exports.login = asyncHandler(async (req, res) => {
 
     res.json({
       success: true,
-      message: mail.devMode
-        ? `Enter the code sent to your email to finish logging in. SMTP is not configured (DEV mode) — the code is ${code}.`
-        : 'Enter the code sent to your email to finish logging in.',
+      message: `${codeSentMessage(mail)} Enter it to finish logging in.`,
       data: { requiresTwoFactor: true, identifier: raw },
     });
     return;
@@ -144,20 +142,18 @@ exports.verifyTwoFactor = asyncHandler(async (req, res) => {
   const query = raw.includes('@')
     ? { email: raw.toLowerCase() }
     : { studentId: new RegExp(`^${raw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i') };
-  const user = await User.findOne(query).select('+twoFactorCode +twoFactorCodeExpiresAt');
+  const user = await User.findOne(query).select('+twoFactorCode +twoFactorCodeExpiresAt +twoFactorCodeAttempts');
 
   if (!user || !user.twoFactorCode) {
     throw ApiError.badRequest('No login in progress for that account. Please log in again.');
   }
-  if (user.twoFactorCodeExpiresAt && user.twoFactorCodeExpiresAt < new Date()) {
-    throw ApiError.badRequest('This code has expired. Please log in again.');
-  }
-  if (user.twoFactorCode !== String(req.body.code).trim()) {
-    throw ApiError.badRequest('Incorrect code.');
-  }
-
-  user.twoFactorCode = null;
-  user.twoFactorCodeExpiresAt = null;
+  await checkCode(user, {
+    codeField: 'twoFactorCode',
+    expiresField: 'twoFactorCodeExpiresAt',
+    attemptsField: 'twoFactorCodeAttempts',
+    input: req.body.code,
+    restartHint: 'Please log in again to get a new code.',
+  });
   await user.save();
 
   await authResponse(res, user, 200, deviceFromRequest(req));
@@ -203,6 +199,7 @@ exports.register = asyncHandler(async (req, res) => {
   } = req.body;
 
   requireFields(req.body, ['name', 'email', 'password', 'studentId']);
+  assertContactNumber(contactNumber);
 
   if (!isMarsuEmail(email)) {
     throw ApiError.badRequest('Please use your official MARSU email address (e.g. juandelacruz@marsu.edu.ph).');

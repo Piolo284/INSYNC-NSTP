@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,6 +16,11 @@ class Session {
 
   Map<String, dynamic>? _user;
   Map<String, dynamic>? _profile;
+
+  /// Bumped every time the cached user/profile changes (e.g. a new profile
+  /// photo), so screens that stay alive — the dashboard header inside the
+  /// shell's IndexedStack — can rebuild without a reload.
+  final ValueNotifier<int> changes = ValueNotifier<int>(0);
 
   Map<String, dynamic>? get user => _user;
   Map<String, dynamic>? get profile => _profile;
@@ -83,6 +89,7 @@ class Session {
   }) async {
     _user = user;
     _profile = profile;
+    changes.value++;
 
     await _secureStorage.write(
       key: AppConfig.userKey,
@@ -141,6 +148,7 @@ class Session {
   Future<void> clear() async {
     _user = null;
     _profile = null;
+    changes.value++;
     await _secureStorage.delete(key: AppConfig.userKey);
     await _secureStorage.delete(key: AppConfig.profileKey);
   }

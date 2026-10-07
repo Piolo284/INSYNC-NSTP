@@ -73,13 +73,16 @@ class _RotcMainShellState extends State<RotcMainShell> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              // Five equal-width slots, so the Scan QR button sits exactly in
+              // the middle of the bar on every screen width, regardless of how
+              // long the neighbouring labels are; labels share one baseline.
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                _buildNavItem(icon: Icons.home, label: 'Home', navIndex: 0),
-                _buildNavItem(icon: Icons.calendar_today_outlined, label: 'Attendance', navIndex: 1),
-                _buildCenterQrButton(),
-                _buildNavItem(icon: Icons.notifications_outlined, label: 'Announcement', navIndex: 3),
-                _buildNavItem(icon: Icons.bar_chart_outlined, label: 'Activities', navIndex: 4),
+                Expanded(child: _buildNavItem(icon: Icons.home, label: 'Home', navIndex: 0)),
+                Expanded(child: _buildNavItem(icon: Icons.calendar_today_outlined, label: 'Attendance', navIndex: 1)),
+                Expanded(child: _buildCenterQrButton()),
+                Expanded(child: _buildNavItem(icon: Icons.notifications_outlined, label: 'Announcement', navIndex: 3)),
+                Expanded(child: _buildNavItem(icon: Icons.bar_chart_outlined, label: 'Activities', navIndex: 4)),
               ],
             ),
           ),
@@ -106,12 +109,16 @@ class _RotcMainShellState extends State<RotcMainShell> {
               size: 22,
             ),
             const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10,
-                color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
-                fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                label,
+                maxLines: 1,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: isSelected ? AppColors.primaryMaroon : AppColors.textSecondary,
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                ),
               ),
             ),
           ],
@@ -132,6 +139,7 @@ class _RotcMainShellState extends State<RotcMainShell> {
             Container(
               width: 50,
               height: 50,
+              alignment: Alignment.center,
               decoration: BoxDecoration(
                 color: AppColors.primaryMaroon,
                 shape: BoxShape.circle,
@@ -152,6 +160,8 @@ class _RotcMainShellState extends State<RotcMainShell> {
             const SizedBox(height: 2),
             Text(
               'Scan QR',
+              maxLines: 1,
+              textAlign: TextAlign.center,
               style: TextStyle(fontSize: 10, color: AppColors.textSecondary),
             ),
           ],

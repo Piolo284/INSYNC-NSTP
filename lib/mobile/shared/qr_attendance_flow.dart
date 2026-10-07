@@ -324,7 +324,6 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
         status: Fmt.str(result['status'], 'Present'),
         time: Fmt.str(result['time']),
         message: Fmt.str(result['message']),
-        devCode: Fmt.str(result['devVerificationCode']),
       );
     } catch (error) {
       if (!mounted) return;
@@ -339,9 +338,10 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
     required String status,
     required String time,
     required String message,
-    required String devCode,
   }) async {
-    final controller = TextEditingController(text: devCode);
+    // The code only ever arrives by email — the server never returns it, so
+    // there is nothing to pre-fill here.
+    final controller = TextEditingController();
 
     final entered = await showDialog<String>(
       context: context,
@@ -386,24 +386,6 @@ class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
                   : message,
               style: const TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
-            if (devCode.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: AppColors.orangeLight,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: AppColors.orange.withValues(alpha: 0.4)),
-                ),
-                child: Text(
-                  'Development mode: email is not configured, so the code is '
-                  'filled in for you.',
-                  style: TextStyle(
-                      fontSize: 11, color: AppColors.warning, height: 1.3),
-                ),
-              ),
-            ],
             const SizedBox(height: 14),
             TextField(
               controller: controller,

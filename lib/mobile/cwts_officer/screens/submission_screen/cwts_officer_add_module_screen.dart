@@ -69,7 +69,9 @@ class _CwtsOfficerAddModuleScreenState
       _deadline = Fmt.parse(existing['deadline']);
 
       final existingFileUrl = Fmt.str(existing['fileUrl']);
-      _existingIsLink = existingFileUrl.startsWith('http');
+      // Uploaded files are stored as an absolute ".../api/files/<id>" URL too,
+      // so only a non-upload http(s) URL is an external link (YouTube, etc.).
+      _existingIsLink = existingFileUrl.startsWith('http') && !existingFileUrl.contains('/api/files/');
       if (_existingIsLink) _linkController.text = existingFileUrl;
     }
   }

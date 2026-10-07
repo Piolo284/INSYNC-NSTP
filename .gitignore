@@ -43,3 +43,15 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Android release signing (never commit)
+android/key.properties
+*.jks
+*.keystore
+
+# Deploy hygiene: build output, user-uploaded files, student data, scratch scripts
+android/build/
+backend/uploads/*
+!backend/uploads/.gitkeep
+masterlist/
+backend/_tmp_*.js

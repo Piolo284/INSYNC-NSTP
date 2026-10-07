@@ -32,6 +32,16 @@ const userSchema = new mongoose.Schema(
     profileImage: { type: String, default: '' },
     contactNumber: { type: String, trim: true, default: '' },
     status: { type: String, enum: USER_STATUSES, default: 'Active', index: true },
+    // Reaching the absence limit no longer drops a trainee automatically —
+    // it flags them for their assigned officer to confirm (utils/
+    // gradeCalculator.js, controllers/dropReviewController.js).
+    // dropPendingSince: when they were flagged (null = not pending).
+    // dropReviewAbsences: their absence count when flagged.
+    // dropKeptAtAbsences: absence count when an officer chose to keep them —
+    //   they're only flagged again once they go past it.
+    dropPendingSince: { type: Date, default: null, index: true },
+    dropReviewAbsences: { type: Number, default: 0 },
+    dropKeptAtAbsences: { type: Number, default: 0 },
 
     // Email-code two-factor login (see controllers/authController.js login/
     // verifyTwoFactor) — not TOTP/authenticator-app based, same "email a
@@ -39,6 +49,7 @@ const userSchema = new mongoose.Schema(
     twoFactorEnabled: { type: Boolean, default: false },
     twoFactorCode: { type: String, select: false, default: null },
     twoFactorCodeExpiresAt: { type: Date, select: false, default: null },
+    twoFactorCodeAttempts: { type: Number, select: false, default: 0 },
 
     // Self-service "change email" / "change contact number" — a code is
     // emailed to confirm before the change actually takes effect (see
@@ -46,15 +57,19 @@ const userSchema = new mongoose.Schema(
     pendingEmail: { type: String, select: false, default: null },
     pendingEmailCode: { type: String, select: false, default: null },
     pendingEmailCodeExpiresAt: { type: Date, select: false, default: null },
+    pendingEmailCodeAttempts: { type: Number, select: false, default: 0 },
     pendingContactNumber: { type: String, select: false, default: null },
     pendingContactNumberCode: { type: String, select: false, default: null },
     pendingContactNumberCodeExpiresAt: { type: Date, select: false, default: null },
+    pendingContactNumberCodeAttempts: { type: Number, select: false, default: 0 },
     // Self-service "change password" (trainee/officer mobile app only) — the
     // new password is hashed immediately and held here, never in plaintext,
     // until the emailed code confirms it (see controllers/accountController.js).
     pendingPasswordHash: { type: String, select: false, default: null },
     pendingPasswordCode: { type: String, select: false, default: null },
     pendingPasswordCodeExpiresAt: { type: Date, select: false, default: null },
+    // Wrong-guess counters for the codes above (utils/verificationCode.js).
+    pendingPasswordCodeAttempts: { type: Number, select: false, default: 0 },
   },
   { timestamps: { createdAt: 'createdAt', updatedAt: 'updatedAt' } }
 );
@@ -84,6 +99,10 @@ const SENSITIVE_FIELDS = [
   'pendingPasswordHash',
   'pendingPasswordCode',
   'pendingPasswordCodeExpiresAt',
+  'twoFactorCodeAttempts',
+  'pendingEmailCodeAttempts',
+  'pendingContactNumberCodeAttempts',
+  'pendingPasswordCodeAttempts',
 ];
 
 userSchema.methods.toPublic = function toPublic() {

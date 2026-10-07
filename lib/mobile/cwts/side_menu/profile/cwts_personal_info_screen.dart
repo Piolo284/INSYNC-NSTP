@@ -1,14 +1,19 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
+import '../../../../core/utils/contact_number.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/status_badge.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
-/// Trainee profile, read from MongoDB. Address and emergency contact stay
-/// editable through the same "Edit" links the design already had.
+/// Trainee profile, read from MongoDB. The trainee can change their own
+/// photo, contact number, address and emergency contact — everything else
+/// (name, course, year/section...) comes from the masterlist and is
+/// read-only here (the backend enforces the same rule).
 class CwtsPersonalInfoScreen extends StatefulWidget {
   const CwtsPersonalInfoScreen({super.key});
 
@@ -20,6 +25,11 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
   LoadState _state = LoadState.loading;
   String _error = '';
   Map<String, dynamic> _profile = const {};
+  bool _uploadingPhoto = false;
+
+  /// Same limits as the server's avatar upload route (userRoutes.js).
+  static const List<String> _photoExtensions = ['png', 'jpg', 'jpeg', 'webp'];
+  static const int _photoMaxBytes = 5 * 1024 * 1024;
 
   @override
   void initState() {
@@ -53,34 +63,98 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
     }
   }
 
+  Future<void> _changePhoto() async {
+    if (_uploadingPhoto) return;
+    try {
+      final result = await FilePicker.platform.pickFiles(
+        type: FileType.custom,
+        allowedExtensions: _photoExtensions,
+        // Web only ever returns bytes, never a filesystem path.
+        withData: true,
+      );
+      if (result == null || result.files.isEmpty || !mounted) return;
+      final file = result.files.first;
+
+      final ext = (file.extension ?? '').toLowerCase();
+      if (!_photoExtensions.contains(ext)) {
+        AppSnack.error(context, 'Please choose a PNG, JPG, JPEG or WEBP image.');
+        return;
+      }
+      if (file.size > _photoMaxBytes) {
+        AppSnack.error(context, 'That image is too large. The maximum size is 5 MB.');
+        return;
+      }
+
+      setState(() => _uploadingPhoto = true);
+      await UserService.instance.uploadAvatar(
+        fileBytes: file.bytes,
+        filePath: kIsWeb ? null : file.path,
+        fileName: file.name,
+      );
+      // Re-reads /auth/me, which updates the cached session — the drawer
+      // and dashboard header pick the new photo up from there.
+      await _load();
+      if (!mounted) return;
+      AppSnack.success(context, 'Profile photo updated.');
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   Future<void> _editField(String label, String field, String current) async {
     final controller = TextEditingController(text: current);
+    final isContactNumber = field == 'contactNumber';
+    String? errorText;
 
     final value = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(
-          'Edit $label',
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          maxLines: 3,
-          minLines: 1,
-          decoration: InputDecoration(hintText: 'Enter your $label'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(
+            'Edit $label',
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
-            child: const Text('Save'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLines: isContactNumber ? 1 : 3,
+            minLines: 1,
+            keyboardType: isContactNumber ? TextInputType.number : null,
+            inputFormatters: isContactNumber ? contactNumberInputFormatters : null,
+            onChanged: (_) {
+              if (errorText != null) setDialogState(() => errorText = null);
+            },
+            decoration: InputDecoration(
+              hintText: isContactNumber ? 'e.g. 09123456789' : 'Enter your $label',
+              helperText: isContactNumber ? 'Numbers only, up to 11 digits' : null,
+              errorText: errorText,
+            ),
           ),
-        ],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final text = controller.text.trim();
+                if (isContactNumber) {
+                  final error = validateContactNumber(text);
+                  if (error != null) {
+                    setDialogState(() => errorText = error);
+                    return;
+                  }
+                }
+                Navigator.pop(dialogContext, text);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
       ),
     );
 
@@ -146,21 +220,62 @@ class _CwtsPersonalInfoScreenState extends State<CwtsPersonalInfoScreen> {
               Center(
                 child: Column(
                   children: [
-                    UserAvatar(
-                      imagePath: Fmt.str(_profile['profileImage']),
-                      radius: 45,
-                      backgroundColor: AppColors.goldLight,
-                      iconColor: AppColors.primaryMaroon,
+                    GestureDetector(
+                      onTap: _changePhoto,
+                      child: Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          UserAvatar(
+                            imagePath: Fmt.str(_profile['profileImage']),
+                            radius: 45,
+                            backgroundColor: AppColors.goldLight,
+                            iconColor: AppColors.primaryMaroon,
+                          ),
+                          if (_uploadingPhoto)
+                            Container(
+                              width: 90,
+                              height: 90,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.45),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Center(
+                                child: SizedBox(
+                                  width: 26,
+                                  height: 26,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2.5,
+                                    color: AppColors.white,
+                                  ),
+                                ),
+                              ),
+                            )
+                          else
+                            Positioned(
+                              right: 0,
+                              bottom: 0,
+                              child: Container(
+                                width: 28,
+                                height: 28,
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryMaroon,
+                                  shape: BoxShape.circle,
+                                  border: Border.all(color: AppColors.white, width: 2),
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.camera_alt, color: AppColors.white, size: 14),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 10),
                     GestureDetector(
-                      onTap: () => AppSnack.info(
-                        context,
-                        'Photo uploads are handled by your NSTP officer for now.',
-                      ),
-                      child: const Text(
-                        'Change Photo',
-                        style: TextStyle(
+                      onTap: _changePhoto,
+                      child: Text(
+                        _uploadingPhoto ? 'Uploading...' : 'Change Photo',
+                        style: const TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
                           color: AppColors.primaryMaroon,

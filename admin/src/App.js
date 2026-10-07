@@ -10,6 +10,7 @@ import Masterlist from './pages/Masterlist';
 import PasswordResetRequests from './pages/PasswordResetRequests';
 import ProgramManagement from './pages/ProgramManagement';
 import AccountActivity from './pages/AccountActivity';
+import AdminAccounts from './pages/AdminAccounts';
 import MedicallyUnfit from './pages/MedicallyUnfit';
 import StudentMonitoring from './pages/StudentMonitoring';
 import ExportData from './pages/ExportData';
@@ -60,6 +61,7 @@ function MaintenanceAppShell() {
           <Route path="/password-reset-requests" element={<PasswordResetRequests />} />
           <Route path="/programs" element={<ProgramManagement />} />
           <Route path="/account-activity" element={<AccountActivity />} />
+          <Route path="/admin-accounts" element={<AdminAccounts />} />
           <Route path="/certificate-templates" element={<CertificateTemplates />} />
           <Route path="/announcement-templates" element={<AnnouncementTemplates />} />
           <Route path="/settings" element={<Settings />} />

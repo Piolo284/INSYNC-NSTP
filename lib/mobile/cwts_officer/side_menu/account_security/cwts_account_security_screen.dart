@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../../cwts/side_menu/account_security/manage_sessions_screen.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
+import '../../../../core/utils/contact_number.dart';
 import '../../../../core/utils/login_validators.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/app_dialogs.dart';
@@ -96,24 +98,12 @@ class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
     if (!context.mounted) return;
     AppSnack.info(context, message);
 
-    final code = await _promptForValue(
+    final confirmed = await _enterEmailedCode(
       context,
-      title: 'Enter Code',
-      label: '6-digit code',
-      helperText: 'Sent to your registered email.',
-      keyboardType: TextInputType.number,
-      confirmLabel: 'Confirm',
+      confirm: AuthService.instance.confirmPasswordChange,
     );
-    if (code == null || code.trim().isEmpty || !context.mounted) return;
-
-    try {
-      await AuthService.instance.confirmPasswordChange(code.trim());
-      if (!context.mounted) return;
-      AppSnack.success(context, 'Password updated.');
-    } catch (error) {
-      if (!context.mounted) return;
-      AppSnack.error(context, describeError(error));
-    }
+    if (!confirmed || !context.mounted) return;
+    AppSnack.success(context, 'Password updated.');
   }
 
   /// Prompts for a single text value inside a standard AlertDialog shell —
@@ -125,38 +115,94 @@ class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
     required String label,
     String? helperText,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    String? Function(String value)? validator,
     String confirmLabel = 'Continue',
   }) async {
     final controller = TextEditingController();
+    String? errorText;
     final result = await showDialog<String>(
       context: context,
-      builder: (dialogContext) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-        content: TextField(
-          controller: controller,
-          keyboardType: keyboardType,
-          autofocus: true,
-          decoration: InputDecoration(
-            labelText: label,
-            helperText: helperText,
-            helperStyle: const TextStyle(fontSize: 11),
+      builder: (dialogContext) => StatefulBuilder(
+        builder: (dialogContext, setDialogState) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Text(title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+          content: TextField(
+            controller: controller,
+            keyboardType: keyboardType,
+            inputFormatters: inputFormatters,
+            autofocus: true,
+            onChanged: (_) {
+              if (errorText != null) setDialogState(() => errorText = null);
+            },
+            decoration: InputDecoration(
+              labelText: label,
+              helperText: helperText,
+              helperStyle: const TextStyle(fontSize: 11),
+              errorText: errorText,
+            ),
           ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final error = validator?.call(controller.text.trim());
+                if (error != null) {
+                  setDialogState(() => errorText = error);
+                  return;
+                }
+                Navigator.pop(dialogContext, controller.text);
+              },
+              child: Text(confirmLabel),
+            ),
+          ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(dialogContext),
-            child: const Text('Cancel', style: TextStyle(color: AppColors.textSecondary)),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: Text(confirmLabel),
-          ),
-        ],
       ),
     );
     controller.dispose();
     return result;
+  }
+
+  /// Asks for the code that was emailed and confirms it via [confirm]. A
+  /// mistyped code can be re-entered (the server allows a few attempts,
+  /// then voids the code and the user has to request a new one). The code
+  /// itself never comes from the server response — only from the email.
+  Future<bool> _enterEmailedCode(
+    BuildContext context, {
+    required Future<void> Function(String code) confirm,
+    String helperText = 'Check your registered email for the 6-digit code.',
+  }) async {
+    while (true) {
+      if (!context.mounted) return false;
+      final code = await _promptForValue(
+        context,
+        title: 'Enter Code',
+        label: '6-digit code',
+        helperText: helperText,
+        keyboardType: TextInputType.number,
+        inputFormatters: [
+          FilteringTextInputFormatter.digitsOnly,
+          LengthLimitingTextInputFormatter(6),
+        ],
+        validator: (v) => v.length == 6 ? null : 'Enter all 6 digits of the code.',
+        confirmLabel: 'Confirm',
+      );
+      if (code == null || code.trim().isEmpty || !context.mounted) return false;
+
+      try {
+        await confirm(code.trim());
+        return true;
+      } catch (error) {
+        if (!context.mounted) return false;
+        final message = describeError(error);
+        AppSnack.error(context, message);
+        // Only a wrong guess can be retried; an expired/voided code needs a new request.
+        if (!message.startsWith('Incorrect code')) return false;
+      }
+    }
   }
 
   Future<void> _changeEmail(BuildContext context) async {
@@ -180,24 +226,14 @@ class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
     if (!context.mounted) return;
     AppSnack.info(context, message);
 
-    final code = await _promptForValue(
+    final confirmed = await _enterEmailedCode(
       context,
-      title: 'Enter Code',
-      label: '6-digit code',
-      keyboardType: TextInputType.number,
-      confirmLabel: 'Confirm',
+      confirm: AuthService.instance.confirmEmailChange,
+      helperText: 'Sent to your NEW email address.',
     );
-    if (code == null || code.trim().isEmpty || !context.mounted) return;
-
-    try {
-      await AuthService.instance.confirmEmailChange(code.trim());
-      if (!context.mounted) return;
-      setState(() {}); // re-read Session.instance.email into the subtitle
-      AppSnack.success(context, 'Your email address has been updated.');
-    } catch (error) {
-      if (!context.mounted) return;
-      AppSnack.error(context, describeError(error));
-    }
+    if (!confirmed || !context.mounted) return;
+    setState(() {}); // re-read Session.instance.email into the subtitle
+    AppSnack.success(context, 'Your email address has been updated.');
   }
 
   Future<void> _changeContactNumber(BuildContext context) async {
@@ -205,7 +241,10 @@ class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
       context,
       title: 'Change Contact Number',
       label: 'New contact number',
-      keyboardType: TextInputType.phone,
+      helperText: 'Numbers only, up to 11 digits (e.g. 09123456789)',
+      keyboardType: TextInputType.number,
+      inputFormatters: contactNumberInputFormatters,
+      validator: (v) => validateContactNumber(v, required: true),
       confirmLabel: 'Send Code',
     );
     if (newNumber == null || newNumber.trim().isEmpty || !context.mounted) return;
@@ -221,25 +260,14 @@ class _CwtsAccountSecurityScreenState extends State<CwtsAccountSecurityScreen> {
     if (!context.mounted) return;
     AppSnack.info(context, message);
 
-    final code = await _promptForValue(
+    final confirmed = await _enterEmailedCode(
       context,
-      title: 'Enter Code',
-      label: '6-digit code',
+      confirm: AuthService.instance.confirmContactNumberChange,
       helperText: 'Sent to your registered email — there is no SMS verification yet.',
-      keyboardType: TextInputType.number,
-      confirmLabel: 'Confirm',
     );
-    if (code == null || code.trim().isEmpty || !context.mounted) return;
-
-    try {
-      await AuthService.instance.confirmContactNumberChange(code.trim());
-      if (!context.mounted) return;
-      setState(() {});
-      AppSnack.success(context, 'Your contact number has been updated.');
-    } catch (error) {
-      if (!context.mounted) return;
-      AppSnack.error(context, describeError(error));
-    }
+    if (!confirmed || !context.mounted) return;
+    setState(() {});
+    AppSnack.success(context, 'Your contact number has been updated.');
   }
 
   Future<void> _toggleTwoFactor(BuildContext context) async {

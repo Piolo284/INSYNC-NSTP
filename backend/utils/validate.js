@@ -55,7 +55,33 @@ function isMarsuEmail(value) {
   return /^[^\s@]+@marsu\.edu\.ph$/i.test(String(value || '').trim());
 }
 
+/** Digits 0–9 only, at most 11 of them (e.g. 09123456789). */
+const CONTACT_NUMBER_PATTERN = /^[0-9]{1,11}$/;
+
+/**
+ * Throws 400 unless `value` is a valid contact number. An empty value is
+ * allowed (the field is optional) unless `required` is set. Only call this
+ * where a contact number is actually being SET, so a record saved before
+ * this rule existed stays editable for its other fields.
+ */
+function assertContactNumber(value, { required = false } = {}) {
+  const raw = value === undefined || value === null ? '' : String(value);
+  if (raw === '') {
+    if (required) throw ApiError.badRequest('Contact number is required.');
+    return;
+  }
+  if (!/^[0-9]+$/.test(raw)) {
+    throw ApiError.badRequest(
+      'Contact number must contain numbers only (0–9) — no letters, spaces, dashes or other symbols.'
+    );
+  }
+  if (!CONTACT_NUMBER_PATTERN.test(raw)) {
+    throw ApiError.badRequest('Contact number must not be longer than 11 digits.');
+  }
+}
+
 module.exports = {
+  assertContactNumber,
   requireFields,
   requireOneOf,
   assertEnum,

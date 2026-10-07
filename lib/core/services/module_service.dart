@@ -17,6 +17,7 @@ class ModuleService {
     String? moduleCode,
     String? search,
     bool withDeadlineOnly = false,
+    bool withoutDeadlineOnly = false,
   }) async {
     final response = await _api.get('/modules', query: {
       'program': program,
@@ -24,6 +25,8 @@ class ModuleService {
       'moduleCode': moduleCode,
       'search': search,
       if (withDeadlineOnly) 'withDeadline': 'true',
+      // Plain learning materials only (no due date).
+      if (withoutDeadlineOnly) 'withDeadline': 'false',
     });
     return ApiService.listOf(response);
   }

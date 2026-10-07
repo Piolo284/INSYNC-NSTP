@@ -41,8 +41,11 @@ const protect = asyncHandler(async (req, _res, next) => {
       'This account has been dropped for exceeding the maximum allowed absences. Please contact your program administrator to have your account reviewed.'
     );
   }
+  // 401 (not 403) so a deactivated account that is still signed in — e.g. an
+  // admin just replaced from System Maintenance → Admin Accounts — is signed
+  // out of the admin panel immediately instead of staying on a broken page.
   if (user.status === 'Inactive') {
-    throw ApiError.forbidden('This account is no longer active. Please contact your program administrator.');
+    throw ApiError.unauthorized('This account is no longer active. Please contact your program administrator.');
   }
 
   // Session revocation ("Logout All Devices" / removing one device) only

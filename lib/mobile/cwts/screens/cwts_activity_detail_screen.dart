@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
+import '../../../core/widgets/app_dialogs.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/attachment_preview_screen.dart';
 import '../../../core/widgets/private_comments.dart';
@@ -42,6 +43,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
   PlatformFile? _pickedFile;
   bool _isSubmitting = false;
+  bool _isUnsubmitting = false;
 
   final TextEditingController _commentController = TextEditingController();
 
@@ -92,6 +94,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
   bool get _isClosed => _module['isClosed'] == true;
   bool get _isLocked => _isGraded || _isClosed;
 
+  /// Turned in and not graded yet — the trainee can view it or unsubmit it,
+  /// but has to unsubmit before attaching a different file.
+  bool get _isTurnedIn => _submission != null && _status == 'Submitted';
+
   void _explainLocked() {
     AppSnack.info(
       context,
@@ -104,6 +110,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
   Future<void> _pickFile() async {
     if (_isLocked) {
       _explainLocked();
+      return;
+    }
+    if (_isTurnedIn) {
+      AppSnack.info(context, 'Unsubmit your current submission first to attach a different file.');
       return;
     }
     try {
@@ -156,6 +166,49 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       AppSnack.error(context, describeError(error));
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// Opens the file that was already turned in — no re-upload needed.
+  void _viewSubmittedFile() {
+    final fileUrl = Fmt.str(_submission?['fileUrl']);
+    if (fileUrl.isEmpty) return;
+    openAttachmentPreview(
+      context,
+      fileUrl: fileUrl,
+      fileName: Fmt.str(_submission?['fileName'], 'Submitted file'),
+    );
+  }
+
+  /// Withdraws the current submission (DELETE /submissions/:id — only
+  /// allowed before grading and before the due date, checked server-side)
+  /// so the trainee can attach and turn in a new file.
+  Future<void> _unsubmit() async {
+    final id = Fmt.str(_submission?['_id']);
+    if (id.isEmpty || _isUnsubmitting) return;
+
+    final confirmed = await showConfirmDialog(
+      context,
+      title: 'Unsubmit',
+      message: 'Are you sure you want to unsubmit this file? Your current '
+          'submission will be withdrawn, and you can attach and turn in a new '
+          'file before the due date.',
+      confirmLabel: 'Unsubmit',
+    );
+    if (!confirmed || !mounted) return;
+
+    setState(() => _isUnsubmitting = true);
+    try {
+      await SubmissionService.instance.delete(id);
+      if (!mounted) return;
+      setState(() => _pickedFile = null);
+      AppSnack.success(context, 'Submission withdrawn. You can now attach a new file.');
+      await _load();
+    } catch (error) {
+      if (!mounted) return;
+      AppSnack.error(context, describeError(error));
+    } finally {
+      if (mounted) setState(() => _isUnsubmitting = false);
     }
   }
 
@@ -294,7 +347,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     // Optional note sent along with the submission
                     TextField(
                       controller: _commentController,
-                      enabled: !_isLocked,
+                      enabled: !_isLocked && !_isTurnedIn,
                       maxLines: 3,
                       decoration: const InputDecoration(
                         hintText: 'Add a note with your submission (optional)',
@@ -317,28 +370,46 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
               child: SizedBox(
                 width: double.infinity,
                 height: 50,
-                child: ElevatedButton(
-                  onPressed: (_isSubmitting || _isLocked) ? null : _turnIn,
-                  child: _isSubmitting
-                      ? const SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor:
-                                AlwaysStoppedAnimation<Color>(AppColors.white),
-                          ),
-                        )
-                      : Text(
-                          _isGraded
-                              ? 'Graded'
-                              : _isClosed
-                                  ? (_submission == null ? 'Missing' : 'Turned In')
-                                  : _status == 'Submitted'
-                                      ? 'Re-submit'
-                                      : 'Turn In',
+                child: _isTurnedIn && !_isLocked
+                    // File already submitted → Unsubmit (View File is on the card above).
+                    ? OutlinedButton.icon(
+                        onPressed: _isUnsubmitting ? null : _unsubmit,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.error,
+                          side: const BorderSide(color: AppColors.error),
                         ),
-                ),
+                        icon: _isUnsubmitting
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: AppColors.error,
+                                ),
+                              )
+                            : const Icon(Icons.undo, size: 18),
+                        label: const Text('Unsubmit'),
+                      )
+                    : ElevatedButton(
+                        onPressed: (_isSubmitting || _isLocked) ? null : _turnIn,
+                        child: _isSubmitting
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor:
+                                      AlwaysStoppedAnimation<Color>(AppColors.white),
+                                ),
+                              )
+                            : Text(
+                                _isGraded
+                                    ? 'Graded'
+                                    : _isClosed
+                                        ? (_submission == null ? 'Missing' : 'Turned In')
+                                        : 'Turn In',
+                              ),
+                      ),
               ),
             ),
           ],
@@ -531,46 +602,104 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
   Widget _buildSubmissionBox() {
     final existingName = Fmt.str(_submission?['fileName']);
+    final existingUrl = Fmt.str(_submission?['fileUrl']);
     final picked = _pickedFile;
 
-    if (picked == null && existingName.isEmpty) {
-      return GestureDetector(
+    // A file the trainee picked but hasn't turned in yet.
+    if (picked != null) {
+      final type = FileTypeInfo.of(picked.name);
+      return _fileCard(
+        type: type,
+        name: picked.name,
+        details: '${type.label} • ${Fmt.fileSize(picked.size)} • ready to submit',
         onTap: _pickFile,
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 30),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(AppColors.radiusSm),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            children: [
-              const Icon(
-                Icons.cloud_upload_outlined,
-                color: AppColors.textSecondary,
-                size: 32,
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Tap to upload or browse',
-                style: TextStyle(
-                  fontSize: 13,
-                  color: AppColors.textSecondary,
-                ),
-              ),
-            ],
-          ),
+        trailing: IconButton(
+          tooltip: 'Remove',
+          icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+          onPressed: () => setState(() => _pickedFile = null),
         ),
       );
     }
 
-    final name = picked?.name ?? existingName;
-    final size = picked?.size ?? Fmt.toInt(_submission?['fileSize']);
-    final submittedAt = _submission?['submittedAt'];
+    // Already turned in (or graded / locked in) — show what was submitted
+    // and let the trainee open it without uploading it again.
+    if (_submission != null && existingUrl.isNotEmpty) {
+      final type = FileTypeInfo.of(existingName);
+      final submittedAt = Fmt.dateTimeShort(_submission?['submittedAt'], fallback: '');
+      return _fileCard(
+        type: type,
+        name: existingName.isEmpty ? 'Submitted file' : existingName,
+        details: [
+          type.label,
+          Fmt.fileSize(_submission?['fileSize']),
+          if (submittedAt.isNotEmpty) 'Submitted $submittedAt',
+        ].join(' • '),
+        onTap: _viewSubmittedFile,
+        trailing: TextButton.icon(
+          onPressed: _viewSubmittedFile,
+          icon: const Icon(Icons.visibility_outlined, size: 18),
+          label: const Text('View File'),
+          style: TextButton.styleFrom(foregroundColor: AppColors.primaryMaroon),
+        ),
+      );
+    }
 
+    // Turned in with a note only, no file.
+    if (_submission != null) {
+      final submittedAt = Fmt.dateTimeShort(_submission?['submittedAt'], fallback: '');
+      return _fileCard(
+        type: FileTypeInfo.of(''),
+        name: 'No file attached',
+        details: submittedAt.isEmpty ? 'Submitted with a note only' : 'Note only • Submitted $submittedAt',
+      );
+    }
+
+    // Nothing yet → Attach File.
     return GestureDetector(
-      onTap: _isLocked ? null : _pickFile,
+      onTap: _pickFile,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(vertical: 30),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(AppColors.radiusSm),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: const Column(
+          children: [
+            Icon(
+              Icons.cloud_upload_outlined,
+              color: AppColors.textSecondary,
+              size: 32,
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Tap to attach a file',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            SizedBox(height: 2),
+            Text(
+              'PDF, DOC, DOCX, PNG, JPG or JPEG',
+              style: TextStyle(fontSize: 11, color: AppColors.textSecondary),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _fileCard({
+    required FileTypeInfo type,
+    required String name,
+    required String details,
+    VoidCallback? onTap,
+    Widget? trailing,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(14),
@@ -585,14 +714,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: AppColors.errorLight,
+                color: type.background,
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: const Icon(
-                Icons.picture_as_pdf,
-                color: AppColors.error,
-                size: 20,
-              ),
+              child: Icon(type.icon, color: type.color, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -611,9 +736,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    picked != null
-                        ? '${Fmt.fileSize(size)} • ready to submit'
-                        : '${Fmt.fileSize(size)} • submitted ${Fmt.dateTimeShort(submittedAt, fallback: '')}',
+                    details,
                     style: const TextStyle(
                       fontSize: 11,
                       color: AppColors.textSecondary,
@@ -622,9 +745,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                 ],
               ),
             ),
-            if (!_isLocked)
-              const Icon(Icons.edit_outlined,
-                  size: 18, color: AppColors.textSecondary),
+            ?trailing,
           ],
         ),
       ),

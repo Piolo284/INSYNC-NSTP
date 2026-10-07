@@ -8,7 +8,6 @@ import { programsApi } from '../api/programs';
 
 const CAMPUS_OPTIONS = ['MARSU - Boac (Main)', 'MARSU - Torrijos', 'MARSU - Sta. Cruz', 'MARSU - Gasan'];
 const YEAR_OPTIONS = ['1st Year', '2nd Year', '3rd Year', '4th Year'];
-const SECTION_OPTIONS = ['A', 'B', 'C', 'D', 'E', 'F'];
 
 export default function Masterlist() {
   const [search, setSearch] = useState('');
@@ -102,7 +101,7 @@ export default function Masterlist() {
               <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '720px' }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--border)' }}>
-                    {['Student Number', 'Full Name', 'Email', 'Course/Program', 'Campus', 'Year', 'Section', ''].map((h) => (
+                    {['Student Number', 'Full Name', 'Email', 'Program', 'Campus', 'Year', ''].map((h) => (
                       <th key={h} style={{ padding: '10px 12px', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', color: 'var(--text-secondary)' }}>{h}</th>
                     ))}
                   </tr>
@@ -116,7 +115,6 @@ export default function Masterlist() {
                       <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>{r.courseProgram}</td>
                       <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>{r.campus || '—'}</td>
                       <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>{r.academicYear || '—'}</td>
-                      <td style={{ padding: '10px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>{r.section || '—'}</td>
                       <td style={{ padding: '10px 12px', textAlign: 'right' }}>
                         <button onClick={() => handleRemove(r)} title="Remove" style={{ border: 0, background: 'none', color: 'var(--text-secondary)', cursor: 'pointer', padding: '4px' }}>
                           <Trash2 size={15} />
@@ -157,7 +155,7 @@ function StatPill({ label, value }) {
   );
 }
 
-const EMPTY_FORM = { studentNumber: '', fullName: '', email: '', courseProgram: '', campus: '', academicYear: '', section: '' };
+const EMPTY_FORM = { studentNumber: '', fullName: '', email: '', courseProgram: '', campus: '', academicYear: '' };
 
 function AddStudentModal({ onClose, onDone }) {
   const [form, setForm] = useState(EMPTY_FORM);
@@ -219,10 +217,10 @@ function AddStudentModal({ onClose, onDone }) {
             <input type="email" value={form.email} onChange={setField('email')} required style={inputStyle} placeholder="e.g. juandelacruz@marsu.edu.ph" />
           </div>
           <div style={{ marginBottom: '14px' }}>
-            <label style={labelStyle}>Course/Program</label>
+            <label style={labelStyle}>Program</label>
             <select value={form.courseProgram} onChange={setField('courseProgram')} required disabled={programsLoading} style={inputStyle}>
-              <option value="">{programsLoading ? 'Loading programs...' : 'Select a course/program'}</option>
-              {programs.map((p) => <option key={p._id} value={p.name}>{p.name}</option>)}
+              <option value="">{programsLoading ? 'Loading programs...' : 'Select a program'}</option>
+              {programs.map((p) => <option key={p._id} value={p.name}>{p.campus ? `${p.name} - ${p.campus}` : p.name}</option>)}
             </select>
           </div>
           <div style={{ marginBottom: '14px' }}>
@@ -232,21 +230,12 @@ function AddStudentModal({ onClose, onDone }) {
               {CAMPUS_OPTIONS.map((c) => <option key={c} value={c}>{c}</option>)}
             </select>
           </div>
-          <div style={{ display: 'flex', gap: '12px', marginBottom: '14px' }}>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Year</label>
-              <select value={form.academicYear} onChange={setField('academicYear')} required style={inputStyle}>
-                <option value="">Select year</option>
-                {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <div style={{ flex: 1 }}>
-              <label style={labelStyle}>Section</label>
-              <select value={form.section} onChange={setField('section')} required style={inputStyle}>
-                <option value="">Select section</option>
-                {SECTION_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
+          <div style={{ marginBottom: '14px' }}>
+            <label style={labelStyle}>Year</label>
+            <select value={form.academicYear} onChange={setField('academicYear')} required style={inputStyle}>
+              <option value="">Select year</option>
+              {YEAR_OPTIONS.map((y) => <option key={y} value={y}>{y}</option>)}
+            </select>
           </div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '20px' }}>
             <button type="button" onClick={onClose} style={{ padding: '10px 20px', borderRadius: '8px', border: '1px solid var(--border)', background: '#fff', color: 'var(--text-primary)', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Cancel</button>
@@ -296,7 +285,7 @@ function UploadModal({ onClose, onDone }) {
 
         {result ? (
           <div>
-            <p style={{ fontSize: '13.5px', color: 'var(--text-primary)', lineHeight: 1.6 }}>{result.processed} row(s) processed — <strong>{result.saved} saved</strong>, {result.skipped} skipped (missing Student Number, Full Name, Email, Course/Program, Campus, Year, or Section). The list now has <strong>{result.total}</strong> total {result.total === 1 ? 'entry' : 'entries'}.</p>
+            <p style={{ fontSize: '13.5px', color: 'var(--text-primary)', lineHeight: 1.6 }}>{result.processed} row(s) processed — <strong>{result.saved} saved</strong>, {result.skipped} skipped (missing Student Number, Full Name, Email, Program, Campus, or Year). The list now has <strong>{result.total}</strong> total {result.total === 1 ? 'entry' : 'entries'}.</p>
 
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
               <button onClick={onDone} style={{ padding: '10px 20px', borderRadius: '8px', border: 'none', background: 'var(--maroon)', color: '#fff', fontSize: '13px', fontWeight: 600, cursor: 'pointer', fontFamily: 'inherit' }}>Done</button>
@@ -305,7 +294,7 @@ function UploadModal({ onClose, onDone }) {
         ) : (
           <form onSubmit={handleSubmit}>
             <p style={{ margin: '0 0 14px', fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-              CSV or Excel (.xlsx) with a header row — columns "Student Number", "Full Name", "Email", "Course/Program", "Campus", "Year", and "Section" are all required per row; a row missing even one of them is skipped entirely. Column order/case doesn't matter.
+              CSV or Excel (.xlsx) with a header row — columns "Student Number", "Full Name", "Email", "Program", "Campus", and "Year" are all required per row; a row missing even one of them is skipped entirely. Column order/case doesn't matter.
             </p>
             {error && <div style={{ background: '#FEF2F2', border: '1px solid #FCA5A5', color: '#B91C1C', borderRadius: '8px', padding: '10px 14px', fontSize: '12.5px', marginBottom: '14px' }}>{error}</div>}
 

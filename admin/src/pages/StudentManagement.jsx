@@ -8,6 +8,7 @@ import { studentsApi } from '../api/students';
 import { cadetsApi } from '../api/cadets';
 import { programsApi } from '../api/programs';
 import { useAuth } from '../context/AuthContext';
+import { CONTACT_NUMBER_MAX_LENGTH, sanitizeContactNumber, contactNumberError } from '../utils/contactNumber';
 
 const STATUS_OPTIONS = ['All Status', 'Active', 'Dropped'];
 const CAMPUS_OPTIONS = ['MARSU - Boac (Main)', 'MARSU - Torrijos', 'MARSU - Sta. Cruz', 'MARSU - Gasan'];
@@ -84,7 +85,7 @@ export default function StudentManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All Status');
   const [programFilter, setProgramFilter] = useState('All Program');
-  const [courseFilter, setCourseFilter] = useState('All Course');
+  const [courseFilter, setCourseFilter] = useState('All Programs');
   const [campusFilter, setCampusFilter] = useState('All Campus');
   const [modal, setModal] = useState(null); // { kind: 'student'|'cadet', mode: 'create'|'edit', record? }
 
@@ -114,7 +115,7 @@ export default function StudentManagement() {
   const filteredRows = useMemo(
     () => (data?.rows || []).filter((r) =>
       (programFilter === 'All Program' || r.program === programFilter) &&
-      (courseFilter === 'All Course' || r.course === courseFilter) &&
+      (courseFilter === 'All Programs' || r.course === courseFilter) &&
       (campusFilter === 'All Campus' || r.campus === campusFilter)
     ),
     [data, programFilter, courseFilter, campusFilter]
@@ -124,7 +125,7 @@ export default function StudentManagement() {
   // a course that has no trainees to show for it.
   const courseOptions = useMemo(() => {
     const courses = new Set((data?.rows || []).map((r) => r.course).filter((c) => c && c !== '—'));
-    return ['All Course', ...Array.from(courses).sort()];
+    return ['All Programs', ...Array.from(courses).sort()];
   }, [data]);
 
   const totalEnrolled = (data?.studentStats?.total || 0) + (data?.cadetStats?.total || 0);
@@ -143,8 +144,8 @@ export default function StudentManagement() {
   // company instead of Section, which CWTS students don't have.
   const isRotcOnly = effectiveProgram === 'ROTC';
   const columns = isRotcOnly
-    ? ['No.', 'Name', 'ID', 'Course / Year', 'Campus', 'Company', 'Status']
-    : ['No.', 'Name', 'ID', 'Program', 'Course / Year', 'Campus', 'Brigade', 'Status'];
+    ? ['No.', 'Name', 'ID', 'Program / Year', 'Campus', 'Company', 'Status']
+    : ['No.', 'Name', 'ID', 'NSTP', 'Program / Year', 'Campus', 'Brigade', 'Status'];
 
   return (
     <div style={{ minHeight: '100vh', paddingBottom: '40px' }}>
@@ -325,6 +326,8 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
       if (!form.idNumber.trim()) return `${isCadet ? 'Cadet' : 'Student'} ID is required.`;
       if (!form.password || form.password.length < 8) return 'Password must be at least 8 characters long.';
     }
+    const contactError = contactNumberError(form.contactNumber);
+    if (contactError) return contactError;
     if (isCadet && form.campus && ROTC_RESTRICTED_CAMPUSES.includes(form.campus)) {
       return `ROTC is not offered at ${form.campus}. Only CWTS is available at this campus.`;
     }
@@ -403,10 +406,10 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
           {!isEdit && (
             <Field label="Password"><input type="password" value={form.password} onChange={(e) => update('password', e.target.value)} placeholder="Min. 8 characters" /></Field>
           )}
-          <Field label="Course">
+          <Field label="Program">
             <select value={form.course} onChange={(e) => update('course', e.target.value)} disabled={programsLoading}>
-              <option value="">{programsLoading ? 'Loading courses...' : 'Select a course'}</option>
-              {programs.map((p) => <option key={p._id} value={p.name}>{p.name} ({p.code})</option>)}
+              <option value="">{programsLoading ? 'Loading programs...' : 'Select a program'}</option>
+              {programs.map((p) => <option key={p._id} value={p.name}>{p.campus ? `${p.name} - ${p.campus}` : p.name}</option>)}
             </select>
           </Field>
           <Field label="Year Level"><input value={form.yearLevel} onChange={(e) => update('yearLevel', e.target.value)} placeholder="e.g. 2nd Year" /></Field>
@@ -422,7 +425,7 @@ function TraineeFormModal({ kind, mode, record, onClose, onSaved }) {
               ROTC is not offered at {form.campus}. Only CWTS is available at this campus.
             </div>
           )}
-          <Field label="Contact Number"><input value={form.contactNumber} onChange={(e) => update('contactNumber', e.target.value)} /></Field>
+          <Field label="Contact Number"><input value={form.contactNumber} inputMode="numeric" maxLength={CONTACT_NUMBER_MAX_LENGTH} placeholder="e.g. 09123456789" onChange={(e) => update('contactNumber', sanitizeContactNumber(e.target.value))} /></Field>
           {isCadet ? (
             <>
               <Field label="Platoon"><input value={form.platoon} onChange={(e) => update('platoon', e.target.value)} /></Field>

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -43,10 +44,30 @@ class _AttachmentPreviewScreenState extends State<AttachmentPreviewScreen> {
   bool _loading = true;
   bool _loadFailed = false;
 
+  /// Uploaded files are served from `/api/files/<id>` — a URL with no
+  /// extension — so the original file name decides the type; the URL's own
+  /// extension is only used for external links that have one.
   String get _extension {
+    final fromName = fileExtensionOf(widget.fileName);
+    if (fromName.isNotEmpty) return fromName;
     final path = Uri.tryParse(_resolvedUrl)?.path ?? _resolvedUrl;
-    final dot = path.lastIndexOf('.');
-    return dot == -1 ? '' : path.substring(dot + 1).toLowerCase();
+    return fileExtensionOf(path);
+  }
+
+  /// False for localhost, 10.x, 192.168.x and 172.16–31.x — addresses an
+  /// outside service such as Google's viewer can never reach.
+  bool get _isPubliclyReachable {
+    final host = Uri.tryParse(_resolvedUrl)?.host ?? '';
+    if (host.isEmpty || host == 'localhost' || host.startsWith('127.') || host.startsWith('10.') ||
+        host.startsWith('192.168.')) {
+      return false;
+    }
+    final m = RegExp(r'^172\.(\d+)\.').firstMatch(host);
+    if (m != null) {
+      final second = int.parse(m.group(1)!);
+      if (second >= 16 && second <= 31) return false;
+    }
+    return true;
   }
 
   bool get _isYouTube =>
@@ -65,7 +86,14 @@ class _AttachmentPreviewScreenState extends State<AttachmentPreviewScreen> {
     if (_isYouTube) return _PreviewKind.youtube;
     if (_imageExts.contains(_extension)) return _PreviewKind.image;
     if (_videoExts.contains(_extension)) return _PreviewKind.video;
-    if (_docExts.contains(_extension)) return _PreviewKind.document;
+    if (_docExts.contains(_extension)) {
+      // Google's document viewer has to download the file itself, so it can
+      // only preview files on a public server. Everything else (a backend on
+      // localhost / the LAN) used to end in Google's "No preview available".
+      // A browser can show a PDF on its own, so on web a PDF always previews.
+      if (_extension == 'pdf' && kIsWeb) return _PreviewKind.document;
+      return _isPubliclyReachable ? _PreviewKind.document : _PreviewKind.unsupported;
+    }
     return _PreviewKind.unsupported;
   }
 
@@ -102,8 +130,10 @@ class _AttachmentPreviewScreenState extends State<AttachmentPreviewScreen> {
           ? _resolvedUrl
           : 'https://www.youtube.com/embed/$id?autoplay=1&playsinline=1';
     }
+    // In a browser a PDF is shown by the browser's own PDF viewer.
+    if (kIsWeb && _extension == 'pdf') return _resolvedUrl;
     // Google's viewer renders PDF/Office documents inline without needing
-    // a native renderer package for each format.
+    // a native renderer package for each format (public files only).
     return 'https://docs.google.com/viewer?embedded=true&url=${Uri.encodeComponent(_resolvedUrl)}';
   }
 
@@ -211,16 +241,20 @@ class _AttachmentPreviewScreenState extends State<AttachmentPreviewScreen> {
           children: [
             const Icon(Icons.insert_drive_file_outlined, size: 56, color: AppColors.white),
             const SizedBox(height: 16),
-            const Text(
-              "This file type can't be previewed in the app.",
+            Text(
+              _docExts.contains(_extension)
+                  // A document on a local/LAN server — viewable, just not
+                  // through Google's online viewer.
+                  ? "This ${_extension.toUpperCase()} file can't be shown inside the app on this connection. Open it to view it."
+                  : "This file type can't be previewed in the app.",
               textAlign: TextAlign.center,
-              style: TextStyle(color: AppColors.white, fontSize: 14),
+              style: const TextStyle(color: AppColors.white, fontSize: 14),
             ),
             const SizedBox(height: 20),
             ElevatedButton.icon(
               onPressed: _openExternally,
               icon: const Icon(Icons.open_in_new, size: 18),
-              label: const Text('Open Externally'),
+              label: Text(_docExts.contains(_extension) ? 'Open File' : 'Open Externally'),
             ),
           ],
         ),
@@ -242,4 +276,56 @@ Future<void> openAttachmentPreview(
       builder: (_) => AttachmentPreviewScreen(fileUrl: fileUrl, fileName: fileName),
     ),
   );
+}
+
+/// Lower-case extension of a file name or path ("Photo.JPG" → "jpg"), or ''.
+String fileExtensionOf(String name) {
+  final slash = name.lastIndexOf('/');
+  final base = slash == -1 ? name : name.substring(slash + 1);
+  final dot = base.lastIndexOf('.');
+  return dot <= 0 || dot == base.length - 1 ? '' : base.substring(dot + 1).toLowerCase();
+}
+
+/// Icon, colours and a readable label for a file, from its real extension —
+/// so a JPG shows as a JPG image, never as a PDF.
+class FileTypeInfo {
+  final IconData icon;
+  final Color color;
+  final Color background;
+  final String label;
+
+  const FileTypeInfo(this.icon, this.color, this.background, this.label);
+
+  factory FileTypeInfo.of(String fileName) {
+    final ext = fileExtensionOf(fileName);
+    final upper = ext.toUpperCase();
+    switch (ext) {
+      case 'pdf':
+        return const FileTypeInfo(Icons.picture_as_pdf, AppColors.error, AppColors.errorLight, 'PDF document');
+      case 'png':
+      case 'jpg':
+      case 'jpeg':
+      case 'webp':
+      case 'gif':
+      case 'bmp':
+        return FileTypeInfo(Icons.image_outlined, AppColors.success, AppColors.greenLight, '$upper image');
+      case 'doc':
+      case 'docx':
+        return FileTypeInfo(Icons.description_outlined, AppColors.blue, AppColors.blueLight, '$upper document');
+      case 'ppt':
+      case 'pptx':
+      case 'xls':
+      case 'xlsx':
+      case 'csv':
+      case 'txt':
+        return FileTypeInfo(Icons.insert_drive_file_outlined, AppColors.orange, AppColors.orangeLight, '$upper file');
+      default:
+        return FileTypeInfo(
+          Icons.insert_drive_file_outlined,
+          AppColors.textSecondary,
+          AppColors.grey50,
+          upper.isEmpty ? 'File' : '$upper file',
+        );
+    }
+  }
 }

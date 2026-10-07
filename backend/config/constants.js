@@ -98,14 +98,10 @@ const CONTEST_STATUSES = ['Pending', 'Approved', 'Rejected'];
 const PASSWORD_RESET_STATUSES = ['Pending', 'Approved', 'Rejected'];
 
 const CERTIFICATE_STATUSES = ['Pending', 'Approved', 'Rejected'];
-/** Common certificate types offered on the request form; the field itself
- * stays free text so a trainee can still describe something not listed. */
-const CERTIFICATE_TYPES = [
-  'Certificate of Completion',
-  'Certificate of Participation',
-  'Certificate of Good Moral Character',
-  'Certificate of Enrollment',
-];
+/** The only certificate a trainee may request (enforced in
+ * certificateRequestController.create). Older requests of other types
+ * stay on record and still display as they were filed. */
+const CERTIFICATE_TYPES = ['Certificate of Completion'];
 
 const NOTIFICATION_TYPES = [
   'announcement',

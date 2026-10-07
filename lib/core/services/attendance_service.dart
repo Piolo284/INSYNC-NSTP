@@ -215,6 +215,21 @@ class AttendanceService {
   Future<void> delete(String id) => _api.delete('/attendance/$id');
 
   /// Trainees with 3+ absences, for the "near absence limit" widget.
+  /// The assigned officer confirms dropping a trainee who reached the
+  /// absence limit (reaching it only flags them — see `pendingDrop` on
+  /// [atRisk] rows). Returns the server's message.
+  Future<String> confirmDrop(String userId) async {
+    final response = await _api.post('/drop-reviews/$userId/confirm');
+    return (response['message'] ?? 'Trainee dropped.').toString();
+  }
+
+  /// The assigned officer keeps a flagged trainee enrolled; they're only
+  /// flagged again after another absence. Returns the server's message.
+  Future<String> keepEnrolled(String userId) async {
+    final response = await _api.post('/drop-reviews/$userId/keep');
+    return (response['message'] ?? 'Trainee kept.').toString();
+  }
+
   Future<List<Map<String, dynamic>>> atRisk({String? program, int threshold = 3}) async {
     final response = await _api.get('/students/at-risk', query: {
       'program': program ?? Session.instance.program,

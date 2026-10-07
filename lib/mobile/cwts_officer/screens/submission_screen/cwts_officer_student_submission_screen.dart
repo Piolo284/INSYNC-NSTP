@@ -6,6 +6,7 @@ import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
+import '../../../../core/widgets/attachment_preview_screen.dart' show FileTypeInfo;
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/private_comments.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -307,6 +308,7 @@ class _CwtsOfficerStudentSubmissionScreenState
   Widget _buildFileCard() {
     final fileUrl = Fmt.str(_submission['fileUrl']);
     final fileName = Fmt.str(_submission['fileName'], 'No file attached');
+    final type = FileTypeInfo.of(fileUrl.isEmpty ? '' : fileName);
 
     return AppCard(
       padding: const EdgeInsets.all(12),
@@ -316,10 +318,10 @@ class _CwtsOfficerStudentSubmissionScreenState
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: AppColors.errorLight,
+              color: type.background,
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.picture_as_pdf, color: AppColors.error, size: 20),
+            child: Icon(type.icon, color: type.color, size: 20),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -339,7 +341,7 @@ class _CwtsOfficerStudentSubmissionScreenState
                 Text(
                   fileUrl.isEmpty
                       ? 'The trainee submitted a comment only'
-                      : Fmt.fileSize(_submission['fileSize']),
+                      : '${type.label} • ${Fmt.fileSize(_submission['fileSize'])}',
                   style: const TextStyle(
                     fontSize: 11,
                     color: AppColors.textSecondary,

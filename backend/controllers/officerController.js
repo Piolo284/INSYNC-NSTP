@@ -6,7 +6,7 @@ const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { requireFields, isMarsuEmail, assertEnum } = require('../utils/validate');
+const { requireFields, isMarsuEmail, assertEnum, assertContactNumber } = require('../utils/validate');
 const { ADMIN_ROLES, PROGRAMS, OFFICER_POSITIONS } = require('../config/constants');
 const {
   assertProgramAccess,
@@ -132,6 +132,7 @@ exports.create = asyncHandler(async (req, res) => {
   } = req.body;
 
   requireFields(req.body, ['name', 'email', 'password', 'officerId', 'position']);
+  assertContactNumber(contactNumber);
 
   if (!isMarsuEmail(email)) {
     throw ApiError.badRequest('Please use an official MARSU email address (e.g. juandelacruz@marsu.edu.ph).');
@@ -205,6 +206,7 @@ exports.promote = asyncHandler(async (req, res) => {
   } = req.body;
 
   requireFields(req.body, ['studentUserId', 'brigadeId', 'position']);
+  assertContactNumber(contactNumber);
 
   const program = resolveProgramForCreate(req.user, req.body.program);
   if (!OFFICER_POSITIONS[program].includes(position)) {
@@ -278,6 +280,7 @@ exports.update = asyncHandler(async (req, res) => {
     assertEnum(req.body.position, OFFICER_POSITIONS[officer.program], 'position');
   }
 
+  assertContactNumber(req.body.contactNumber);
   const fields = ['fullName', 'email', 'position', 'contactNumber', 'profileImage'];
   // Brigade assignment is admin-only, never self-service — an officer
   // cannot reassign themselves to a different brigade's students.

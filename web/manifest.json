@@ -1,11 +1,11 @@
 {
-    "name": "marsu_nstp_portal",
-    "short_name": "marsu_nstp_portal",
+    "name": "MARSU NSTP Portal",
+    "short_name": "MARSU-NSTP",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#7B1F1F",
+    "theme_color": "#7B1F1F",
+    "description": "Marinduque State University NSTP Portal (CWTS and ROTC).",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

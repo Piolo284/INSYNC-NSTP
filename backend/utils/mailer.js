@@ -1,4 +1,5 @@
 const nodemailer = require('nodemailer');
+const ApiError = require('./ApiError');
 
 let transporter = null;
 let warned = false;
@@ -39,17 +40,28 @@ async function sendMail({ to, subject, text, html }) {
       );
       warned = true;
     }
-    console.log(`[mail:dev] to=${to} subject="${subject}"\n${text || html}`);
+    // The body (which holds the code) only ever reaches a local dev console,
+    // never production logs.
+    if (process.env.NODE_ENV !== 'production') {
+      console.log(`[mail:dev] to=${to} subject="${subject}"\n${text || html}`);
+    }
     return { delivered: false, devMode: true };
   }
 
-  await tx.sendMail({
-    from: process.env.MAIL_FROM || 'MARSU NSTP Portal <no-reply@marsu.edu.ph>',
-    to,
-    subject,
-    text,
-    html,
-  });
+  try {
+    await tx.sendMail({
+      from: process.env.MAIL_FROM || 'MARSU NSTP Portal <no-reply@marsu.edu.ph>',
+      to,
+      subject,
+      text,
+      html,
+    });
+  } catch (err) {
+    // Wrong SMTP credentials/host, provider outage, etc. — log the real
+    // reason for the admin, give the user a clear message (never the code).
+    console.error(`[mail] failed to send "${subject}" to ${to}:`, err.message);
+    throw new ApiError(502, 'The verification email could not be sent. Please try again in a few minutes.');
+  }
 
   return { delivered: true, devMode: false };
 }

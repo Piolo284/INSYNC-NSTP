@@ -11,8 +11,8 @@ const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { recalculateGrade } = require('../utils/gradeCalculator');
-const { ADMIN_ROLES, attendanceRules, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
-const { requireFields, isMarsuEmail } = require('../utils/validate');
+const { ADMIN_ROLES, STAFF_ROLES, attendanceRules, SPECIAL_CLASS_CATEGORIES } = require('../config/constants');
+const { requireFields, isMarsuEmail, assertContactNumber } = require('../utils/validate');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 const { assertBrigadeAccess, scopeFilterToBrigade } = require('../utils/brigadeScope');
 const { resolveBrigadeForCourse, applyBrigadeFields } = require('../utils/brigadeAssignment');
@@ -124,30 +124,38 @@ exports.update = asyncHandler(async (req, res) => {
     assertBrigadeAccess(req.user, student.brigadeId);
   }
 
-  const fields = [
-    'fullName',
-    'email',
-    'course',
-    'yearLevel',
-    'section',
-    'contactNumber',
-    'address',
-    'emergencyContact',
-    'profileImage',
-  ];
+  assertContactNumber(req.body.contactNumber);
+
+  // A trainee editing their own record may only change their contact
+  // details — enrollment data (name, course, year/section...) comes from
+  // the masterlist and the photo goes through PUT /api/users/me/avatar.
+  const fields = isSelf && !STAFF_ROLES.includes(req.user.role)
+    ? ['contactNumber', 'address', 'emergencyContact']
+    : [
+        'fullName',
+        'email',
+        'course',
+        'yearLevel',
+        'section',
+        'contactNumber',
+        'address',
+        'emergencyContact',
+        'profileImage',
+      ];
   if (req.user.role === 'officer') fields.push('status');
 
   fields.forEach((f) => {
     if (req.body[f] !== undefined) student[f] = req.body[f];
   });
+  const traineeSelf = isSelf && !STAFF_ROLES.includes(req.user.role);
 
-  if (req.body.campus !== undefined) student.campus = req.body.campus || null;
+  if (!traineeSelf && req.body.campus !== undefined) student.campus = req.body.campus || null;
 
   // Brigade is never hand-edited — if the course changed, re-derive it
   // (e.g. a program change like BSIT → BSBA moves the student to the new
   // brigade going forward; past attendance/session records keep their own
   // brigadeId snapshot untouched).
-  if (req.body.course !== undefined) {
+  if (!traineeSelf && req.body.course !== undefined) {
     const resolved = await resolveBrigadeForCourse(student.course, student.program);
     applyBrigadeFields(student, resolved);
     await User.findByIdAndUpdate(userId, {
@@ -323,6 +331,7 @@ exports.create = asyncHandler(async (req, res) => {
     emergencyContact = '',
     campus = '',
   } = req.body;
+  assertContactNumber(contactNumber);
 
   requireFields(req.body, ['name', 'email', 'password', 'studentId']);
 
@@ -413,13 +422,19 @@ exports.atRisk = asyncHandler(async (req, res) => {
     { $group: { _id: '$studentId', absents: { $sum: 1 } } },
     { $match: { absents: { $gte: threshold } } },
     { $sort: { absents: -1 } },
-    { $limit: 50 },
+    { $limit: 200 },
   ]);
 
   // Already-Dropped trainees belong in the Dropouts tab, not At Risk.
   const userIds = rows.map((r) => r._id);
   const users = await User.find({ _id: { $in: userIds }, status: { $ne: 'Dropped' } });
   const userMap = new Map(users.map((u) => [String(u._id), u]));
+  // Trainees waiting for the officer's drop decision come first.
+  rows.sort((a, b) => {
+    const pa = userMap.get(String(a._id))?.dropPendingSince ? 1 : 0;
+    const pb = userMap.get(String(b._id))?.dropPendingSince ? 1 : 0;
+    return pb - pa || b.absents - a.absents;
+  });
 
   res.json({
     success: true,
@@ -432,6 +447,10 @@ exports.atRisk = asyncHandler(async (req, res) => {
           name: u.name,
           studentId: u.studentId,
           absents: r.absents,
+          // At the absence limit and waiting for the officer to confirm the
+          // drop (or keep them) — see controllers/dropReviewController.js.
+          pendingDrop: Boolean(u.dropPendingSince),
+          dropPendingSince: u.dropPendingSince,
           // Shown as "absents / totalSessions" client-side — this is the
           // 4-absence drop limit, not the trainee's actual session count, so
           // the widget reads as progress toward the automatic-drop cutoff.

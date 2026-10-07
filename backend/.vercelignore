@@ -1,0 +1,5 @@
+node_modules
+uploads
+.env
+_tmp_*
+.env.local

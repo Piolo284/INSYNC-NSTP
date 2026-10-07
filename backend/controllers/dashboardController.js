@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Student = require('../models/Student');
+const Cadet = require('../models/Cadet');
 const Attendance = require('../models/Attendance');
 const Announcement = require('../models/Announcement');
 const Activity = require('../models/Activity');
@@ -7,11 +9,35 @@ const Submission = require('../models/Submission');
 const Grade = require('../models/Grade');
 const CertificateRequest = require('../models/CertificateRequest');
 const asyncHandler = require('../utils/asyncHandler');
-const { startOfDay, endOfDay } = require('../utils/datetime');
+const { APP_TIMEZONE, startOfDay, endOfDay } = require('../utils/datetime');
 const { isSpecialClassManager, specialClassTraineeIds } = require('../utils/specialClass');
+const { scopeFilterToBrigade } = require('../utils/brigadeScope');
 const { profileFor } = require('./authController');
 
 const toMap = (rows) => Object.fromEntries(rows.map((r) => [r._id, r.count]));
+
+/**
+ * One status per trainee per DAY. A day can hold several sessions (morning
+ * and afternoon, a re-run QR...), so counting raw attendance rows made the
+ * tiles add up past the roster (e.g. 112 "absents" out of 31 cadets). A
+ * trainee's day counts as their best status that day:
+ * Present > Late > Excused > Absent.
+ */
+const DAY_STATUS_RANK = { Absent: 1, Excused: 2, Late: 3, Present: 4 };
+const dayStatusRank = {
+  $switch: {
+    branches: Object.entries(DAY_STATUS_RANK).map(([status, rank]) => ({
+      case: { $eq: ['$status', status] },
+      then: rank,
+    })),
+    default: 0,
+  },
+};
+const rankToStatus = (rank) =>
+  Object.keys(DAY_STATUS_RANK).find((s) => DAY_STATUS_RANK[s] === rank);
+
+/** Absences needed (counted in DAYS, not sessions) to flag a trainee At-Risk. */
+const AT_RISK_ABSENT_DAYS = 3;
 
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -40,7 +66,7 @@ async function attendanceTrend(program, reference = new Date(), extraMatch = {})
     },
     {
       $group: {
-        _id: { $dateToString: { format: '%Y-%m-%dT%H:00:00', date: '$createdAt' } },
+        _id: { $dateToString: { format: '%Y-%m-%dT%H:00:00', date: '$createdAt', timezone: APP_TIMEZONE } },
         present: {
           $sum: { $cond: [{ $in: ['$status', ['Present', 'Late', 'Excused']] }, 1, 0] },
         },
@@ -63,7 +89,6 @@ async function attendanceTrend(program, reference = new Date(), extraMatch = {})
  */
 exports.officer = asyncHandler(async (req, res) => {
   const program = req.query.program || req.user.program || 'CWTS';
-  const traineeRole = program === 'ROTC' ? 'cadet' : 'student';
   // The Presents/Absents/Late/Excused tiles are "today's" counts, not a
   // running total since the program started — scope to the given date (or
   // today by default), same as attendanceController.summary's day totals.
@@ -81,27 +106,71 @@ exports.officer = asyncHandler(async (req, res) => {
     const traineeIds = await specialClassTraineeIds(program);
     extraMatch = { studentId: { $in: traineeIds } };
     totalStudentsQuery = Promise.resolve(traineeIds.length);
+  } else if (req.user.role === 'officer') {
+    // A regular officer only monitors the trainees they handle — the roster
+    // on their Cadets/Students tab (their own company/brigade). The total
+    // AND every attendance count (presents, absents, at-risk, trend) are
+    // scoped to exactly those trainees, matched by student rather than by
+    // the record's brigade snapshot, so attendance from before a cadet was
+    // added to this officer still counts and other companies' never does.
+    const rosterFilter = scopeFilterToBrigade({ program }, req.user);
+    const RosterModel = program === 'ROTC' ? Cadet : Student;
+    const roster = await RosterModel.find(rosterFilter).select('userId').lean();
+    const traineeIds = roster.map((r) => r.userId).filter(Boolean);
+    extraMatch = { studentId: { $in: traineeIds } };
+    totalStudentsQuery = Promise.resolve(roster.length);
   } else {
-    totalStudentsQuery = User.countDocuments({ role: traineeRole, program, status: 'Active' });
+    // Admin roles see the whole program unless they pass ?brigadeId.
+    scopeFilterToBrigade(extraMatch, req.user, req.query.brigadeId);
+    const RosterModel = program === 'ROTC' ? Cadet : Student;
+    totalStudentsQuery = RosterModel.countDocuments({ program, ...extraMatch });
   }
 
-  const [statusRows, totalStudents, atRiskRows, announcements, trend] =
+  // Trainees at the absence limit waiting for this officer's drop decision.
+  const pendingDropFilter = {
+    role: program === 'ROTC' ? 'cadet' : 'student',
+    program,
+    status: { $ne: 'Dropped' },
+    dropPendingSince: { $ne: null },
+    ...(extraMatch.studentId ? { _id: extraMatch.studentId } : {}),
+    ...(extraMatch.brigadeId !== undefined ? { brigadeId: extraMatch.brigadeId } : {}),
+  };
+
+  const [statusRows, totalStudents, atRiskRows, announcements, trend, pendingDrops] =
     await Promise.all([
+      // The day's sessions/events → one status per trainee (see dayStatusRank).
+      // A scan whose emailed code was never entered isn't attendance yet.
       Attendance.aggregate([
         {
           $match: {
             program,
             ...extraMatch,
+            verified: { $ne: false },
             date: { $gte: startOfDay(referenceDate), $lte: endOfDay(referenceDate) },
           },
         },
-        { $group: { _id: '$status', count: { $sum: 1 } } },
+        { $group: { _id: '$studentId', rank: { $max: dayStatusRank } } },
+        { $group: { _id: '$rank', count: { $sum: 1 } } },
       ]),
       totalStudentsQuery,
+      // At-Risk: absent on 3+ separate DAYS (a day with several missed
+      // sessions is one absence, matching the per-day tiles above). A day is
+      // an absence only if the trainee wasn't Present/Late/Excused in any of
+      // that day's sessions.
       Attendance.aggregate([
-        { $match: { program, ...extraMatch, status: 'Absent' } },
-        { $group: { _id: '$studentId', absents: { $sum: 1 } } },
-        { $match: { absents: { $gte: 3 } } },
+        { $match: { program, ...extraMatch, verified: { $ne: false } } },
+        {
+          $group: {
+            _id: {
+              studentId: '$studentId',
+              day: { $dateToString: { format: '%Y-%m-%d', date: '$date', timezone: APP_TIMEZONE } },
+            },
+            rank: { $max: dayStatusRank },
+          },
+        },
+        { $match: { rank: DAY_STATUS_RANK.Absent } },
+        { $group: { _id: '$_id.studentId', absentDays: { $sum: 1 } } },
+        { $match: { absentDays: { $gte: AT_RISK_ABSENT_DAYS } } },
       ]),
       Announcement.find({
         status: 'Published',
@@ -110,9 +179,10 @@ exports.officer = asyncHandler(async (req, res) => {
         .sort({ isPinned: -1, createdAt: -1 })
         .limit(5),
       attendanceTrend(program, referenceDate, extraMatch),
+      User.countDocuments(pendingDropFilter),
     ]);
 
-  const status = toMap(statusRows);
+  const status = Object.fromEntries(statusRows.map((r) => [rankToStatus(r._id), r.count]));
   const profile = await profileFor(req.user);
 
   res.json({
@@ -127,6 +197,7 @@ exports.officer = asyncHandler(async (req, res) => {
         late: status.Late || 0,
         excused: status.Excused || 0,
         atRisk: atRiskRows.length,
+        pendingDrops,
         totalStudents,
       },
       trend,

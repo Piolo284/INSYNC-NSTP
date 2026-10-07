@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Settings, Palette, ShieldCheck, KeyRound, Layers, History, LogOut, Megaphone } from 'lucide-react';
+import { Settings, Palette, ShieldCheck, KeyRound, Layers, History, LogOut, Megaphone, UserCog } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { resolveFileUrl } from '../api/client';
 
@@ -14,6 +14,7 @@ import { resolveFileUrl } from '../api/client';
  */
 const navItems = [
   { path: '/master-enrollment', label: 'Masterlist', icon: ShieldCheck },
+  { path: '/admin-accounts', label: 'Admin Accounts', icon: UserCog },
   { path: '/password-reset-requests', label: 'Password Resets', icon: KeyRound },
   { path: '/programs', label: 'Programs & Brigades', icon: Layers },
   { path: '/account-activity', label: 'Account Activity', icon: History },
