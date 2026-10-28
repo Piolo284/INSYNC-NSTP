@@ -59,3 +59,11 @@ services:
         value: MARSU NSTP Portal <no-reply@marsu.edu.ph>
       - key: CRON_SECRET
         generateValue: true
+
+  # Public landing page (landing/) — plain static files, no build step.
+  - type: web
+    name: insync-landing
+    runtime: static
+    rootDir: landing
+    buildCommand: ""
+    staticPublishPath: .
