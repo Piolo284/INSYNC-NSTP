@@ -34,7 +34,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       debugShowCheckedModeBanner: false,
-      title: 'MARSU-NSTP',
+      title: 'iNSync',
       theme: buildAppTheme(),
       home: const SplashRouter(),
     );
