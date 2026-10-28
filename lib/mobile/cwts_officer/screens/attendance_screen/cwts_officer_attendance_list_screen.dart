@@ -130,8 +130,11 @@ class _CwtsOfficerAttendanceListScreenState
         'userId': Fmt.str(row['userId']),
         'name': Fmt.str(row['name'], 'Trainee'),
         'idNumber': Fmt.str(row['studentId'], '—'),
+        // "Restricted" = at/over the limit: modules, activities and QR
+        // attendance are locked for this trainee until it's corrected.
         'subtitle':
-            '${Fmt.toInt(row['absents'])}/${Fmt.toInt(row['totalSessions'])} Absents',
+            '${Fmt.toInt(row['absents'])}/${Fmt.toInt(row['totalSessions'])} Absents'
+            '${row['restricted'] == true ? ' · Restricted' : ' · At Risk'}',
         'image': '',
         'pendingDrop': row['pendingDrop'] == true ? 'true' : '',
       };

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../shared/contest_absence_sheet.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
+import '../../../core/utils/attendance_filter_request.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
@@ -10,7 +11,19 @@ import '../../../core/widgets/status_badge.dart';
 class RotcAttendanceScreen extends StatefulWidget {
   final VoidCallback? onBackToDashboard;
 
-  const RotcAttendanceScreen({super.key, this.onBackToDashboard});
+  /// Status tab to open on ('All', 'Present', 'Late', 'Absent', 'Excused').
+  final String initialFilter;
+
+  /// Set by the shell so the dashboard's status counts can switch this tab
+  /// to the matching filter.
+  final AttendanceFilterRequest? filterRequest;
+
+  const RotcAttendanceScreen({
+    super.key,
+    this.onBackToDashboard,
+    this.initialFilter = 'All',
+    this.filterRequest,
+  });
 
   @override
   State<RotcAttendanceScreen> createState() => _RotcAttendanceScreenState();
@@ -25,7 +38,8 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
     'Excused',
   ];
 
-  String _selectedFilter = 'All';
+  late String _selectedFilter =
+      _filters.contains(widget.initialFilter) ? widget.initialFilter : 'All';
 
   LoadState _state = LoadState.loading;
   String _error = '';
@@ -35,7 +49,37 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
   @override
   void initState() {
     super.initState();
+    widget.filterRequest?.addListener(_applyFilterRequest);
     _load();
+  }
+
+  @override
+  void didUpdateWidget(covariant RotcAttendanceScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.filterRequest != widget.filterRequest) {
+      oldWidget.filterRequest?.removeListener(_applyFilterRequest);
+      widget.filterRequest?.addListener(_applyFilterRequest);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.filterRequest?.removeListener(_applyFilterRequest);
+    super.dispose();
+  }
+
+  void _applyFilterRequest() {
+    final filter = widget.filterRequest?.filter ?? 'All';
+    if (!_filters.contains(filter)) return;
+    setState(() => _selectedFilter = filter);
+    // The tab stays alive in the shell's IndexedStack, so refresh the records.
+    _load();
+  }
+
+  /// Tapping a summary tile filters the history to it; tapping it again
+  /// clears back to All.
+  void _toggleFilter(String status) {
+    setState(() => _selectedFilter = _selectedFilter == status ? 'All' : status);
   }
 
   Future<void> _load() async {
@@ -215,13 +259,37 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
           const SizedBox(height: 14),
           Row(
             children: [
-              _StatTile(label: 'Present', count: _countOf('Present'), status: 'Present'),
+              _StatTile(
+                label: 'Present',
+                count: _countOf('Present'),
+                status: 'Present',
+                selected: _selectedFilter == 'Present',
+                onTap: () => _toggleFilter('Present'),
+              ),
               const SizedBox(width: 8),
-              _StatTile(label: 'Late', count: _countOf('Late'), status: 'Late'),
+              _StatTile(
+                label: 'Late',
+                count: _countOf('Late'),
+                status: 'Late',
+                selected: _selectedFilter == 'Late',
+                onTap: () => _toggleFilter('Late'),
+              ),
               const SizedBox(width: 8),
-              _StatTile(label: 'Absent', count: _countOf('Absent'), status: 'Absent'),
+              _StatTile(
+                label: 'Absent',
+                count: _countOf('Absent'),
+                status: 'Absent',
+                selected: _selectedFilter == 'Absent',
+                onTap: () => _toggleFilter('Absent'),
+              ),
               const SizedBox(width: 8),
-              _StatTile(label: 'Excused', count: _countOf('Excused'), status: 'Excused'),
+              _StatTile(
+                label: 'Excused',
+                count: _countOf('Excused'),
+                status: 'Excused',
+                selected: _selectedFilter == 'Excused',
+                onTap: () => _toggleFilter('Excused'),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -289,11 +357,31 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
     );
   }
 
+  /// "Originally Absent → Approved as Present" / "Contest rejected: …".
+  String _contestNote(Map<String, dynamic>? contest) {
+    if (contest == null) return '';
+    switch (Fmt.str(contest['status'])) {
+      case 'Approved':
+        final approvedAs = Fmt.str(contest['approvedAs'], 'Excused');
+        return 'Originally Absent → Approved as ${approvedAs == 'Present' ? 'Present' : 'Excuse'}';
+      case 'Rejected':
+        final note = Fmt.str(contest['reviewNote']);
+        return note.isEmpty ? 'Contest rejected — counted as Absent' : 'Contest rejected: $note';
+      default:
+        return '';
+    }
+  }
+
   Widget _buildAttendanceCard(Map<String, dynamic> record) {
     final status = Fmt.str(record['status'], 'Present');
     final time = Fmt.str(record['time'], '---');
-    final contest = status == 'Absent' ? _contestFor(Fmt.str(record['_id'])) : null;
-    final displayStatus = contest != null ? Fmt.str(contest['status'], status) : status;
+    final contest = _contestFor(Fmt.str(record['_id']));
+    final contestStatus = Fmt.str(contest?['status']);
+    // Final status always comes from the record itself (Present / Excused
+    // after an approval, Absent after a rejection); only a still-pending
+    // contest overlays "Pending Review" on the Absent badge.
+    final displayStatus = status == 'Absent' && contestStatus == 'Pending' ? 'Pending' : status;
+    final contestNote = _contestNote(contest);
 
     return AppCard(
       margin: const EdgeInsets.only(bottom: 12),
@@ -327,6 +415,17 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
                       fontSize: 11,
                       color: AppColors.textSecondary,
                       fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
+                if (contestNote.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    contestNote,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
+                      color: contestStatus == 'Rejected' ? AppColors.error : AppColors.success,
                     ),
                   ),
                 ],
@@ -370,42 +469,62 @@ class _RotcAttendanceScreenState extends State<RotcAttendanceScreen> {
 /// same status→color mapping as [StatusBadge] so the summary and the history
 /// list below always agree visually.
 class _StatTile extends StatelessWidget {
-  const _StatTile({required this.label, required this.count, required this.status});
+  const _StatTile({
+    required this.label,
+    required this.count,
+    required this.status,
+    this.selected = false,
+    this.onTap,
+  });
 
   final String label;
   final int count;
   final String status;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
     final style = StatusStyle.of(status);
+    final radius = BorderRadius.circular(AppColors.radiusSm);
     return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: style.background,
-          borderRadius: BorderRadius.circular(AppColors.radiusSm),
-        ),
-        child: Column(
-          children: [
-            Text(
-              '$count',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w700,
-                color: style.color,
+      child: Material(
+        color: style.background,
+        borderRadius: radius,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: radius,
+          child: Container(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+              borderRadius: radius,
+              border: Border.all(
+                color: selected ? style.color : Colors.transparent,
+                width: 1.5,
               ),
             ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 10.5,
-                fontWeight: FontWeight.w600,
-                color: style.color,
-              ),
+            child: Column(
+              children: [
+                Text(
+                  '$count',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: style.color,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w600,
+                    color: style.color,
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
       ),
     );

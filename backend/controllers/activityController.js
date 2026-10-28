@@ -17,6 +17,7 @@ const {
   isSpecialClassTrainee,
 } = require('../utils/specialClass');
 const Brigade = require('../models/Brigade');
+const { announceActivity, removeLinkedAnnouncements } = require('../utils/linkedAnnouncement');
 
 function parseList(value) {
   if (value === undefined || value === null || value === '') return undefined;
@@ -153,6 +154,9 @@ exports.create = asyncHandler(async (req, res) => {
     createdBy: req.user._id,
   });
 
+  // Announce it to the trainees who can see it, linked to this activity.
+  await announceActivity(activity, req.user._id);
+
   res.status(201).json({ success: true, data: activity });
 });
 
@@ -206,6 +210,7 @@ exports.remove = asyncHandler(async (req, res) => {
   if (activity.brigadeId) assertBrigadeAccess(req.user, activity.brigadeId);
 
   await Attendance.updateMany({ activityId: activity._id }, { activityId: null });
+  await removeLinkedAnnouncements('Activity', activity._id);
   await activity.deleteOne();
 
   res.json({ success: true, message: 'Activity deleted.' });

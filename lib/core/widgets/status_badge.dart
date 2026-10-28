@@ -16,6 +16,7 @@ class StatusStyle {
     switch (status.trim().toLowerCase()) {
       // Attendance
       case 'present':
+      case 'approved as present':
       case 'active':
       case 'approved':
       case 'published':
@@ -29,6 +30,7 @@ class StatusStyle {
         return const StatusStyle(AppColors.lateStatus, AppColors.orangeLight);
 
       case 'warning':
+      case 'at risk for dropping':
       case 'pending':
       case 'pending review':
       case 'needs reply':
@@ -45,11 +47,14 @@ class StatusStyle {
       case 'cancelled':
       case 'inactive':
       case 'dropped':
+      case 'at risk / restricted':
+      case 'restricted':
       case 'overdue':
       case 'late submission':
         return const StatusStyle(AppColors.error, AppColors.errorLight);
 
       case 'excused':
+      case 'approved as excuse':
       case 'submitted':
       case 'to do':
       case 'draft':

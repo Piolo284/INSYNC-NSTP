@@ -5,6 +5,7 @@ import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/attachment_preview_screen.dart';
+import '../../../core/widgets/attendance_standing.dart';
 
 /// Read-only view of a posted module's full content — description, every
 /// instruction line, and the officer's attached file — for modules with no
@@ -30,6 +31,10 @@ class _CwtsModuleDetailScreenState extends State<CwtsModuleDetailScreen> {
   String _error = '';
   Map<String, dynamic> _module = const {};
 
+  /// Set when the server refused to open this module because the trainee
+  /// reached the counted-absence limit — shows "Feature Locked" instead.
+  String? _restrictedMessage;
+
   @override
   void initState() {
     super.initState();
@@ -40,6 +45,7 @@ class _CwtsModuleDetailScreenState extends State<CwtsModuleDetailScreen> {
     setState(() {
       _state = LoadState.loading;
       _error = '';
+      _restrictedMessage = null;
     });
     try {
       final data = await ModuleService.instance.get(widget.moduleId);
@@ -51,8 +57,13 @@ class _CwtsModuleDetailScreenState extends State<CwtsModuleDetailScreen> {
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _state = LoadState.error;
-        _error = describeError(error);
+        if (error is ApiException && error.isAttendanceRestricted) {
+          _restrictedMessage = error.message;
+          _state = LoadState.ready;
+        } else {
+          _state = LoadState.error;
+          _error = describeError(error);
+        }
       });
     }
   }
@@ -88,7 +99,9 @@ class _CwtsModuleDetailScreenState extends State<CwtsModuleDetailScreen> {
           style: const TextStyle(color: AppColors.white, fontSize: 17, fontWeight: FontWeight.w600),
         ),
       ),
-      body: AsyncView(
+      body: _restrictedMessage != null
+          ? FeatureLockedView(message: _restrictedMessage!)
+          : AsyncView(
         state: _state,
         message: _error,
         onRetry: _load,

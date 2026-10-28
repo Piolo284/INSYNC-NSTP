@@ -191,7 +191,12 @@ class _CwtsOfficerAttendanceContestsScreenState
             ),
           ),
           const SizedBox(width: 8),
-          StatusBadge(Fmt.str(contest['status'], 'Pending'), dense: true),
+          StatusBadge(
+            Fmt.str(contest['status']) == 'Approved'
+                ? (Fmt.str(contest['approvedAs'], 'Excused') == 'Present' ? 'Approved as Present' : 'Approved as Excuse')
+                : Fmt.str(contest['status'], 'Pending'),
+            dense: true,
+          ),
         ],
       ),
     );

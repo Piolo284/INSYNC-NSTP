@@ -46,8 +46,12 @@ async function courseProgramMatches(masterlistCourse, typedCourse, nstpProgram) 
  * masterlist at all is the only bar; see models/Masterlist.js.
  */
 async function assertMasterlistMatch({ studentId, name, course, program }) {
+  // Only the Current Master List admits new registrations — a student left
+  // out of a newer import keeps any account they already have, but can't
+  // newly register (see controllers/masterlistController.confirmImport).
   const masterRecord = await Masterlist.findOne({
     studentNumber: String(studentId).trim().toUpperCase(),
+    inCurrentList: { $ne: false },
   });
   if (!masterRecord) {
     throw ApiError.forbidden(

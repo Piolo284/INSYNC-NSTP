@@ -39,6 +39,11 @@ const SUBMISSION_STATUSES = ['To Do', 'Submitted', 'Graded', 'Missing'];
 
 const TARGET_AUDIENCES = ['All', 'Students', 'Cadets', 'Officers'];
 
+/** What an announcement can deep-link to in the mobile app ('' = nothing).
+ * Module covers learning modules, assignments and quizzes; Attendance has no
+ * linkId (it opens the trainee's own attendance page). */
+const ANNOUNCEMENT_LINK_TYPES = ['Module', 'Activity', 'Attendance'];
+
 /** Special-consideration category collected at registration (drives which
  * requirement documents a trainee is asked to submit). */
 const SPECIAL_CATEGORIES = ['None', 'PWD', 'SK Chairperson', 'Medical Condition'];
@@ -91,6 +96,10 @@ const SESSION_STATUSES = ['Active', 'Closed', 'Cancelled'];
 const SESSION_CHECK_TYPES = ['IN', 'OUT'];
 
 const CONTEST_STATUSES = ['Pending', 'Approved', 'Rejected'];
+/** What an Approved contest turned the Absent record into: 'Excused' keeps
+ * it in the history as an excused (uncounted) absence, 'Present' erases the
+ * absence entirely. See attendanceContestController.review. */
+const CONTEST_APPROVAL_TYPES = ['Excused', 'Present'];
 
 /** A trainee's forgot-password request, manually reviewed by
  * system_maintenance_admin before any reset code is issued — see
@@ -153,9 +162,14 @@ const attendanceRules = () => {
   return {
     lateGraceMinutes: num('ATTENDANCE_LATE_GRACE_MINUTES', 15),
     codeTtlMinutes: override != null ? override : num('ATTENDANCE_CODE_TTL_MINUTES', 15),
-    // A trainee is automatically Dropped once their Absent count for a
-    // program reaches this many — see utils/gradeCalculator.js.
-    maxAbsencesBeforeDrop: num('ATTENDANCE_MAX_ABSENCES_BEFORE_DROP', 4),
+    // At this many Absents a trainee is restricted (QR attendance and
+    // modules locked) and flagged for the officer's drop review — they need
+    // an officer/admin to sort it out. See utils/attendanceStanding.js and
+    // utils/gradeCalculator.js.
+    maxAbsencesBeforeDrop: num('ATTENDANCE_MAX_ABSENCES_BEFORE_DROP', 5),
+    // At this many Absents the trainee's home screen shows an attendance
+    // warning ("needs attention"), before anything is locked.
+    absenceWarningAt: num('ATTENDANCE_ABSENCE_WARNING_AT', 3),
   };
 };
 
@@ -173,6 +187,7 @@ module.exports = {
   ATTENDANCE_METHODS,
   SUBMISSION_STATUSES,
   TARGET_AUDIENCES,
+  ANNOUNCEMENT_LINK_TYPES,
   SPECIAL_CATEGORIES,
   SPECIAL_CLASS_CATEGORIES,
   OFFICER_POSITIONS,
@@ -183,6 +198,7 @@ module.exports = {
   SESSION_STATUSES,
   SESSION_CHECK_TYPES,
   CONTEST_STATUSES,
+  CONTEST_APPROVAL_TYPES,
   CERTIFICATE_STATUSES,
   CERTIFICATE_TYPES,
   PASSWORD_RESET_STATUSES,

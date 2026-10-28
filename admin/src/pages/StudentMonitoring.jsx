@@ -190,6 +190,14 @@ export default function StudentMonitoring() {
                       <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: '0 0 2px', fontWeight: 500 }}>{student.studentId} · {student.program}</p>
                       <p style={{ fontSize: '13px', color: '#DC2626', margin: '2px 0 0', fontWeight: 700 }}>
                         Absences: {student.absents} / {student.totalSessions}
+                        <span style={{
+                          marginLeft: '10px', padding: '2px 8px', borderRadius: '999px', fontSize: '11px', fontWeight: 700,
+                          background: student.restricted ? '#FEF2F2' : 'var(--orange-banner)',
+                          color: student.restricted ? '#B91C1C' : 'var(--orange-text)',
+                          border: `1px solid ${student.restricted ? '#FCA5A5' : 'var(--orange-border)'}`,
+                        }}>
+                          {student.restricted ? 'At Risk / Restricted' : 'At Risk for Dropping'}
+                        </span>
                       </p>
                     </div>
                     <button onClick={() => setSelectedStudent(student)} style={{

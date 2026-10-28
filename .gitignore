@@ -55,3 +55,6 @@ backend/uploads/*
 !backend/uploads/.gitkeep
 masterlist/
 backend/_tmp_*.js
+
+# Stray Flutter build output accidentally generated inside lib/
+lib/core/build/

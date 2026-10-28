@@ -1,36 +1,39 @@
 const Announcement = require('../models/Announcement');
-const User = require('../models/User');
+const ModuleModel = require('../models/Module');
+const Activity = require('../models/Activity');
 const ApiError = require('../utils/ApiError');
 const asyncHandler = require('../utils/asyncHandler');
-const { requireFields, assertEnum } = require('../utils/validate');
-const { PROGRAMS, TARGET_AUDIENCES, CAMPUSES } = require('../config/constants');
+const { requireFields, assertEnum, assertObjectId } = require('../utils/validate');
+const {
+  PROGRAMS,
+  TARGET_AUDIENCES,
+  CAMPUSES,
+  ANNOUNCEMENT_LINK_TYPES,
+} = require('../config/constants');
 const { notifyUsers } = require('../utils/notify');
 const { assertProgramAccess } = require('../utils/programScope');
+const { recipientsFor, moduleLinkLabel } = require('../utils/linkedAnnouncement');
 
-const AUDIENCE_ROLES = {
-  Students: ['student'],
-  Cadets: ['cadet'],
-  Officers: ['officer'],
-};
+/**
+ * Validates an optional deep link sent with a create/update. Returns
+ * `{ linkType, linkId }` ready to save, or undefined when nothing was sent.
+ * An empty linkType clears the link.
+ */
+async function resolveLink(body) {
+  if (body.linkType === undefined) return undefined;
+  const linkType = body.linkType || '';
+  if (!linkType) return { linkType: '', linkId: null, linkLabel: '' };
+  assertEnum(linkType, ANNOUNCEMENT_LINK_TYPES, 'linkType');
+  if (linkType === 'Attendance') return { linkType, linkId: null, linkLabel: 'Attendance' };
 
-/** Resolves who should receive a notification for this announcement. */
-async function recipientsFor(announcement) {
-  if (announcement.recipients && announcement.recipients.length) {
-    return announcement.recipients;
+  assertObjectId(body.linkId, 'linkId');
+  const Model = linkType === 'Module' ? ModuleModel : Activity;
+  const target = await Model.findById(body.linkId).select('kind deadline');
+  if (!target) {
+    throw ApiError.badRequest(`The linked ${linkType.toLowerCase()} no longer exists.`);
   }
-
-  const filter = {};
-  const roles = AUDIENCE_ROLES[announcement.targetAudience];
-  if (roles) filter.role = { $in: roles };
-  else filter.role = { $in: ['student', 'cadet', 'officer'] };
-
-  if (announcement.program && announcement.program !== 'All') {
-    filter.program = announcement.program;
-  }
-  filter.status = 'Active';
-
-  const users = await User.find(filter).select('_id');
-  return users.map((u) => u._id);
+  const linkLabel = linkType === 'Module' ? moduleLinkLabel(target) : 'Activity';
+  return { linkType, linkId: body.linkId, linkLabel };
 }
 
 /**
@@ -133,7 +136,10 @@ exports.create = asyncHandler(async (req, res) => {
     }
   }
 
+  const link = (await resolveLink(req.body)) || {};
+
   const announcement = await Announcement.create({
+    ...link,
     title: req.body.title,
     content: req.body.content,
     program,
@@ -156,7 +162,12 @@ exports.create = asyncHandler(async (req, res) => {
       title: announcement.title,
       message: announcement.content,
       type: 'announcement',
-      data: { announcementId: announcement._id },
+      data: {
+        announcementId: announcement._id,
+        linkType: announcement.linkType,
+        linkId: announcement.linkId,
+        linkLabel: announcement.linkLabel,
+      },
     });
   }
 
@@ -203,6 +214,8 @@ exports.update = asyncHandler(async (req, res) => {
     announcement.imageName = req.file.originalname;
   }
   if (req.body.date !== undefined) announcement.date = new Date(req.body.date);
+  const link = await resolveLink(req.body);
+  if (link) Object.assign(announcement, link);
   if (req.body.expiresAt !== undefined) {
     if (!req.body.expiresAt) {
       announcement.expiresAt = null;
@@ -257,7 +270,12 @@ exports.send = asyncHandler(async (req, res) => {
     title: announcement.title,
     message: announcement.content,
     type: 'announcement',
-    data: { announcementId: announcement._id },
+    data: {
+      announcementId: announcement._id,
+      linkType: announcement.linkType,
+      linkId: announcement.linkId,
+      linkLabel: announcement.linkLabel,
+    },
   });
 
   res.json({

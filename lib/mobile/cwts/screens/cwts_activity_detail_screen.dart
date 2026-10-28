@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
@@ -8,7 +9,9 @@ import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/app_dialogs.dart';
 import '../../../core/widgets/async_view.dart';
 import '../../../core/widgets/attachment_preview_screen.dart';
+import '../../../core/widgets/attendance_standing.dart';
 import '../../../core/widgets/private_comments.dart';
+import '../../../core/widgets/rubric_view.dart';
 import '../../../core/widgets/status_badge.dart';
 
 /// Module/assignment detail with the trainee's own submission.
@@ -38,6 +41,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
   LoadState _state = LoadState.loading;
   String _error = '';
 
+  /// Set when the server refused to open this activity because the trainee
+  /// reached the counted-absence limit — shows "Feature Locked" instead.
+  String? _restrictedMessage;
+
   Map<String, dynamic> _module = const {};
   Map<String, dynamic>? _submission;
 
@@ -63,6 +70,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     setState(() {
       _state = LoadState.loading;
       _error = '';
+      _restrictedMessage = null;
     });
 
     try {
@@ -70,24 +78,28 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       if (!mounted) return;
       setState(() {
         _module = data;
-        _submission =
-            (data['mySubmission'] as Map?)?.cast<String, dynamic>();
+        _submission = (data['mySubmission'] as Map?)?.cast<String, dynamic>();
         _commentController.text = Fmt.str(_submission?['comment']);
         _state = LoadState.ready;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
-        _state = LoadState.error;
-        _error = describeError(error);
+        if (error is ApiException && error.isAttendanceRestricted) {
+          _restrictedMessage = error.message;
+          _state = LoadState.ready;
+        } else {
+          _state = LoadState.error;
+          _error = describeError(error);
+        }
       });
     }
   }
 
   String get _status => Fmt.str(
-        _submission?['status'],
-        Fmt.str(_module['myStatus'], widget.status),
-      );
+    _submission?['status'],
+    Fmt.str(_module['myStatus'], widget.status),
+  );
   bool get _isGraded => _status == 'Graded';
 
   /// Due date has passed — the server refuses any turn-in/re-submit now.
@@ -113,7 +125,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       return;
     }
     if (_isTurnedIn) {
-      AppSnack.info(context, 'Unsubmit your current submission first to attach a different file.');
+      AppSnack.info(
+        context,
+        'Unsubmit your current submission first to attach a different file.',
+      );
       return;
     }
     try {
@@ -190,7 +205,8 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     final confirmed = await showConfirmDialog(
       context,
       title: 'Unsubmit',
-      message: 'Are you sure you want to unsubmit this file? Your current '
+      message:
+          'Are you sure you want to unsubmit this file? Your current '
           'submission will be withdrawn, and you can attach and turn in a new '
           'file before the due date.',
       confirmLabel: 'Unsubmit',
@@ -202,7 +218,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       await SubmissionService.instance.delete(id);
       if (!mounted) return;
       setState(() => _pickedFile = null);
-      AppSnack.success(context, 'Submission withdrawn. You can now attach a new file.');
+      AppSnack.success(
+        context,
+        'Submission withdrawn. You can now attach a new file.',
+      );
       await _load();
     } catch (error) {
       if (!mounted) return;
@@ -214,24 +233,38 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryMaroon,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
-          onPressed: () => Navigator.pop(context),
+    final appBar = AppBar(
+      backgroundColor: AppColors.primaryMaroon,
+      elevation: 0,
+      leading: IconButton(
+        icon: const Icon(
+          Icons.arrow_back_ios,
+          color: AppColors.white,
+          size: 20,
         ),
-        title: const Text(
-          'Activity Details',
-          style: TextStyle(
-            color: AppColors.white,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-          ),
+        onPressed: () => Navigator.pop(context),
+      ),
+      title: const Text(
+        'Activity Details',
+        style: TextStyle(
+          color: AppColors.white,
+          fontSize: 18,
+          fontWeight: FontWeight.w600,
         ),
       ),
+    );
+
+    if (_restrictedMessage != null) {
+      return Scaffold(
+        backgroundColor: AppColors.white,
+        appBar: appBar,
+        body: FeatureLockedView(message: _restrictedMessage!),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.white,
+      appBar: appBar,
       body: AsyncView(
         state: _state,
         message: _error,
@@ -266,6 +299,21 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
+                                if (_isQuiz)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 2),
+                                    child: Text(
+                                      Fmt.str(_module['quizNumber']).isEmpty
+                                          ? 'QUIZ'
+                                          : 'QUIZ NO. ${Fmt.str(_module['quizNumber'])}',
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.4,
+                                        color: AppColors.primaryMaroon,
+                                      ),
+                                    ),
+                                  ),
                                 Text(
                                   Fmt.str(_module['title'], widget.title),
                                   style: const TextStyle(
@@ -321,16 +369,48 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Instructions
-                    const SectionHeader(title: 'Instructions'),
-                    const SizedBox(height: 10),
-                    ..._instructions().map(
-                      (line) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: _buildBulletPoint(line),
+                    // A quiz has no instructions/rubric — just a total score
+                    // and (optionally) an online form to answer.
+                    if (_isQuiz) ...[
+                      Text(
+                        'Total score: ${Fmt.toInt(_module['totalPoints'], 100)} points',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textPrimary,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 12),
+                      const SizedBox(height: 20),
+                      if (Fmt.str(_module['formUrl']).isNotEmpty) ...[
+                        const SectionHeader(title: 'Google Form'),
+                        const SizedBox(height: 10),
+                        _buildFormLinkCard(Fmt.str(_module['formUrl'])),
+                        const SizedBox(height: 20),
+                      ],
+                    ] else ...[
+                      // Instructions
+                      const SectionHeader(title: 'Instructions'),
+                      const SizedBox(height: 10),
+                      ..._instructions().map(
+                        (line) => Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: _buildBulletPoint(line),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Grading rubric — visible before turning in, and with the
+                      // awarded points per criterion once graded.
+                      const SectionHeader(title: 'Grading Rubric'),
+                      const SizedBox(height: 10),
+                      RubricView(
+                        rubrics: RubricView.listFrom(_module['rubrics']),
+                        scores: _isGraded
+                            ? RubricView.listFrom(_submission?['rubricScores'])
+                            : const [],
+                      ),
+                      const SizedBox(height: 20),
+                    ],
 
                     // Attachment
                     const SectionHeader(title: 'Attachment'),
@@ -391,23 +471,28 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
                         label: const Text('Unsubmit'),
                       )
                     : ElevatedButton(
-                        onPressed: (_isSubmitting || _isLocked) ? null : _turnIn,
+                        onPressed: (_isSubmitting || _isLocked)
+                            ? null
+                            : _turnIn,
                         child: _isSubmitting
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor:
-                                      AlwaysStoppedAnimation<Color>(AppColors.white),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    AppColors.white,
+                                  ),
                                 ),
                               )
                             : Text(
                                 _isGraded
                                     ? 'Graded'
                                     : _isClosed
-                                        ? (_submission == null ? 'Missing' : 'Turned In')
-                                        : 'Turn In',
+                                    ? (_submission == null
+                                          ? 'Missing'
+                                          : 'Turned In')
+                                    : 'Turn In',
                               ),
                       ),
               ),
@@ -420,7 +505,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
   List<String> _instructions() {
     final raw = (_module['instructions'] as List?) ?? const [];
-    final lines = raw.map((e) => e.toString()).where((e) => e.isNotEmpty).toList();
+    final lines = raw
+        .map((e) => e.toString())
+        .where((e) => e.isNotEmpty)
+        .toList();
     if (lines.isNotEmpty) return lines;
     return const [
       'Follow the format given in the instructions',
@@ -456,10 +544,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
             child: Text(
               missing
                   ? 'The due date has passed and nothing was turned in, so this is '
-                      'marked Missing. It can no longer be turned in — use the '
-                      'private comments below to reach your officer.'
+                        'marked Missing. It can no longer be turned in — use the '
+                        'private comments below to reach your officer.'
                   : 'The due date has passed. Your submission is locked in and can '
-                      'no longer be changed.',
+                        'no longer be changed.',
               style: TextStyle(
                 fontSize: 12.5,
                 height: 1.4,
@@ -490,7 +578,11 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.check_circle, color: AppColors.success, size: 20),
+              const Icon(
+                Icons.check_circle,
+                color: AppColors.success,
+                size: 20,
+              ),
               const SizedBox(width: 8),
               const Text(
                 'Score',
@@ -536,6 +628,79 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     );
   }
 
+  bool get _isQuiz => Fmt.str(_module['kind']) == 'Quiz';
+
+  Future<void> _openFormLink(String url) async {
+    final uri = Uri.tryParse(url);
+    try {
+      final opened =
+          uri != null &&
+          await launchUrl(uri, mode: LaunchMode.externalApplication);
+      if (!opened && mounted) {
+        AppSnack.error(context, 'Could not open the Google Form link.');
+      }
+    } catch (_) {
+      if (mounted) {
+        AppSnack.error(context, 'Could not open the Google Form link.');
+      }
+    }
+  }
+
+  Widget _buildFormLinkCard(String url) {
+    return AppCard(
+      padding: const EdgeInsets.all(14),
+      onTap: () => _openFormLink(url),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: AppColors.primaryMaroon.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Icon(
+              Icons.quiz_outlined,
+              color: AppColors.primaryMaroon,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Answer the quiz online',
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    color: AppColors.textSecondary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Icon(
+            Icons.open_in_new,
+            color: AppColors.primaryMaroon,
+            size: 20,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAttachmentCard() {
     final fileUrl = Fmt.str(_module['fileUrl']);
     final fileName = Fmt.str(_module['fileName'], 'No attachment');
@@ -544,7 +709,11 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       padding: const EdgeInsets.all(14),
       onTap: fileUrl.isEmpty
           ? null
-          : () => openAttachmentPreview(context, fileUrl: fileUrl, fileName: fileName),
+          : () => openAttachmentPreview(
+              context,
+              fileUrl: fileUrl,
+              fileName: fileName,
+            ),
       child: Row(
         children: [
           Container(
@@ -611,11 +780,16 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
       return _fileCard(
         type: type,
         name: picked.name,
-        details: '${type.label} • ${Fmt.fileSize(picked.size)} • ready to submit',
+        details:
+            '${type.label} • ${Fmt.fileSize(picked.size)} • ready to submit',
         onTap: _pickFile,
         trailing: IconButton(
           tooltip: 'Remove',
-          icon: const Icon(Icons.close, size: 18, color: AppColors.textSecondary),
+          icon: const Icon(
+            Icons.close,
+            size: 18,
+            color: AppColors.textSecondary,
+          ),
           onPressed: () => setState(() => _pickedFile = null),
         ),
       );
@@ -625,7 +799,10 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
     // and let the trainee open it without uploading it again.
     if (_submission != null && existingUrl.isNotEmpty) {
       final type = FileTypeInfo.of(existingName);
-      final submittedAt = Fmt.dateTimeShort(_submission?['submittedAt'], fallback: '');
+      final submittedAt = Fmt.dateTimeShort(
+        _submission?['submittedAt'],
+        fallback: '',
+      );
       return _fileCard(
         type: type,
         name: existingName.isEmpty ? 'Submitted file' : existingName,
@@ -646,11 +823,16 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
 
     // Turned in with a note only, no file.
     if (_submission != null) {
-      final submittedAt = Fmt.dateTimeShort(_submission?['submittedAt'], fallback: '');
+      final submittedAt = Fmt.dateTimeShort(
+        _submission?['submittedAt'],
+        fallback: '',
+      );
       return _fileCard(
         type: FileTypeInfo.of(''),
         name: 'No file attached',
-        details: submittedAt.isEmpty ? 'Submitted with a note only' : 'Note only • Submitted $submittedAt',
+        details: submittedAt.isEmpty
+            ? 'Submitted with a note only'
+            : 'Note only • Submitted $submittedAt',
       );
     }
 
@@ -675,10 +857,7 @@ class _CwtsActivityDetailScreenState extends State<CwtsActivityDetailScreen> {
             SizedBox(height: 8),
             Text(
               'Tap to attach a file',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
+              style: TextStyle(fontSize: 13, color: AppColors.textSecondary),
             ),
             SizedBox(height: 2),
             Text(

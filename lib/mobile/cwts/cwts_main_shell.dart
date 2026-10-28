@@ -6,6 +6,7 @@ import 'screens/cwts_activities_modules_screen.dart';
 import 'screens/cwts_scan_qr_screen.dart';
 import 'cwts_drawer.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/attendance_filter_request.dart';
 
 class CwtsMainShell extends StatefulWidget {
   const CwtsMainShell({super.key});
@@ -17,6 +18,19 @@ class CwtsMainShell extends StatefulWidget {
 class _CwtsMainShellState extends State<CwtsMainShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
+  final AttendanceFilterRequest _attendanceFilter = AttendanceFilterRequest();
+
+  @override
+  void dispose() {
+    _attendanceFilter.dispose();
+    super.dispose();
+  }
+
+  /// Dashboard status count tapped — jump to the Attendance tab on that filter.
+  void _openAttendance(String status) {
+    _attendanceFilter.open(status);
+    setState(() => _currentIndex = 1);
+  }
 
   void _goToDashboard() {
     setState(() => _currentIndex = 0);
@@ -43,8 +57,8 @@ class _CwtsMainShellState extends State<CwtsMainShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      CwtsDashboardScreen(onOpenDrawer: _openDrawer),
-      CwtsAttendanceScreen(onBackToDashboard: _goToDashboard),
+      CwtsDashboardScreen(onOpenDrawer: _openDrawer, onOpenAttendance: _openAttendance),
+      CwtsAttendanceScreen(onBackToDashboard: _goToDashboard, filterRequest: _attendanceFilter),
       CwtsAnnouncementScreen(onBackToDashboard: _goToDashboard),
       CwtsActivitiesModulesScreen(onBackToDashboard: _goToDashboard),
     ];

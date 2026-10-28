@@ -5,7 +5,7 @@ const asyncHandler = require('../utils/asyncHandler');
 const { requireFields, assertEnum } = require('../utils/validate');
 const { notifyUser } = require('../utils/notify');
 const { recalculateGrade } = require('../utils/gradeCalculator');
-const { CONTEST_STATUSES } = require('../config/constants');
+const { CONTEST_STATUSES, CONTEST_APPROVAL_TYPES } = require('../config/constants');
 const { assertSelfOrStaff } = require('../middleware/auth');
 const { assertProgramAccess, scopeFilterToProgram } = require('../utils/programScope');
 const { assertBrigadeAccess, scopeFilterToBrigade } = require('../utils/brigadeScope');
@@ -83,7 +83,8 @@ exports.list = asyncHandler(async (req, res) => {
 exports.get = asyncHandler(async (req, res) => {
   const contest = await AttendanceContest.findById(req.params.id)
     .populate('studentId', 'name studentId profileImage')
-    .populate('attendanceId');
+    .populate('attendanceId')
+    .populate('reviewedBy', 'name role');
   if (!contest) throw ApiError.notFound('Contest not found.');
 
   const ownerId = contest.studentId?._id || contest.studentId;
@@ -97,52 +98,94 @@ exports.get = asyncHandler(async (req, res) => {
 });
 
 /**
- * PUT /api/attendance-contests/:id — officer approves or rejects.
- * Approving flips the linked Attendance record to Excused and recalculates
- * the trainee's grade (attendance feeds directly into it); rejecting leaves
- * the Absent record untouched. Either way the trainee is notified.
+ * PUT /api/attendance-contests/:id — officer decides a pending contest.
+ *
+ *   { status: 'Approved', approvedAs: 'Excused' } — "Approve as Excuse": the
+ *       record stays in the history as Excused, which never counts toward the
+ *       absence limit.
+ *   { status: 'Approved', approvedAs: 'Present' } — "Approve as Present": the
+ *       record becomes Present, so the absence disappears entirely.
+ *   { status: 'Rejected', reviewNote }            — the record stays Absent and
+ *       keeps counting; a reason is required so the trainee knows why.
+ *
+ * `approvedAs` defaults to Excused for older clients that only send status.
+ * Either approval recalculates the trainee's grade, absence count, at-risk
+ * warning and feature restriction (utils/gradeCalculator.js).
  */
 exports.review = asyncHandler(async (req, res) => {
   requireFields(req.body, ['status']);
   assertEnum(req.body.status, ['Approved', 'Rejected'], 'status');
 
-  const contest = await AttendanceContest.findById(req.params.id);
-  if (!contest) throw ApiError.notFound('Contest not found.');
-  if (contest.status !== 'Pending') {
-    throw ApiError.conflict('This contest has already been reviewed.');
+  const status = req.body.status;
+  const reviewNote = String(req.body.reviewNote || '').trim();
+  let approvedAs = null;
+  if (status === 'Approved') {
+    approvedAs = req.body.approvedAs || 'Excused';
+    assertEnum(approvedAs, CONTEST_APPROVAL_TYPES, 'approvedAs');
+  } else if (!reviewNote) {
+    throw ApiError.badRequest('Please give a reason for rejecting this contest.');
   }
 
-  assertProgramAccess(req.user, contest.program);
-  assertBrigadeAccess(req.user, contest.brigadeId);
+  const existing = await AttendanceContest.findById(req.params.id);
+  if (!existing) throw ApiError.notFound('Contest not found.');
+  if (existing.status !== 'Pending') {
+    throw ApiError.conflict('This contest has already been reviewed.');
+  }
+  assertProgramAccess(req.user, existing.program);
+  assertBrigadeAccess(req.user, existing.brigadeId);
 
-  contest.status = req.body.status;
-  contest.reviewNote = req.body.reviewNote || '';
-  contest.reviewedBy = req.user._id;
-  contest.reviewedAt = new Date();
-  await contest.save();
+  const record = await Attendance.findById(existing.attendanceId);
+  const originalStatus = record ? record.status : 'Absent';
+  const finalStatus = status === 'Approved' ? approvedAs : originalStatus;
 
-  if (contest.status === 'Approved') {
-    const record = await Attendance.findById(contest.attendanceId);
-    if (record) {
-      record.status = 'Excused';
-      record.remarks = contest.reviewNote
-        ? `Contest approved: ${contest.reviewNote}`
-        : 'Contest approved — absence excused.';
-      record.recordedBy = req.user._id;
-      await record.save();
-      await recalculateGrade(record.studentId, record.program, req.user._id);
-    }
+  // Conditional on still being Pending, so two officers deciding the same
+  // contest at once can't both apply (and double-notify).
+  const contest = await AttendanceContest.findOneAndUpdate(
+    { _id: existing._id, status: 'Pending' },
+    {
+      status,
+      approvedAs,
+      originalStatus,
+      finalStatus,
+      reviewNote,
+      reviewedBy: req.user._id,
+      reviewedAt: new Date(),
+    },
+    { new: true }
+  );
+  if (!contest) throw ApiError.conflict('This contest has already been reviewed.');
+
+  if (status === 'Approved' && record) {
+    const label = approvedAs === 'Present' ? 'Approved as Present' : 'Approved as Excuse';
+    record.status = approvedAs;
+    record.autoAbsent = false;
+    record.remarks = reviewNote ? `Contest ${label.toLowerCase()}: ${reviewNote}` : `Contest ${label.toLowerCase()}.`;
+    record.recordedBy = req.user._id;
+    await record.save();
+    await recalculateGrade(record.studentId, record.program, req.user._id);
+  }
+
+  let message;
+  if (status === 'Rejected') {
+    message = `Your absence dispute was rejected and the record stays Absent. Reason: ${reviewNote}`;
+  } else if (approvedAs === 'Present') {
+    message = 'Your absence dispute was approved as Present. The record now counts as attended and no longer counts as an absence.';
+  } else {
+    message = 'Your absence dispute was approved as an Excuse. The record is now Excused and does not count as an absence.';
   }
 
   await notifyUser(contest.studentId, {
-    title: contest.status === 'Approved' ? 'Attendance contest approved' : 'Attendance contest rejected',
-    message:
-      contest.status === 'Approved'
-        ? 'Your absence dispute was approved and your attendance record has been excused.'
-        : `Your absence dispute was rejected.${contest.reviewNote ? ` Reason: ${contest.reviewNote}` : ''}`,
+    title: status === 'Approved'
+      ? `Attendance contest approved as ${approvedAs === 'Present' ? 'Present' : 'Excuse'}`
+      : 'Attendance contest rejected',
+    message,
     type: 'attendance',
     data: { attendanceId: contest.attendanceId, contestId: contest._id },
   });
 
-  res.json({ success: true, data: contest });
+  const populated = await AttendanceContest.findById(contest._id)
+    .populate('studentId', 'name studentId profileImage')
+    .populate('attendanceId')
+    .populate('reviewedBy', 'name role');
+  res.json({ success: true, data: populated });
 });

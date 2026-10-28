@@ -15,7 +15,17 @@ class ProfileHeader extends StatelessWidget {
     this.imagePath,
     this.trailing,
     this.greeting,
+    this.alert,
+    this.alertColor,
   });
+
+  /// Shown under the subtitle — e.g. the trainee's attendance warning
+  /// (AttendanceHeaderAlert), so it's the first thing they see.
+  final Widget? alert;
+
+  /// When set, rings the avatar in this color with a "!" badge, to pull the
+  /// eye to the [alert].
+  final Color? alertColor;
 
   /// e.g. "Good morning," shown above the name — omit for a plain header.
   final String? greeting;
@@ -40,11 +50,7 @@ class ProfileHeader extends StatelessWidget {
       ),
       child: Row(
         children: [
-          UserAvatar(
-            imagePath: imagePath,
-            radius: 26,
-            backgroundColor: Colors.white.withValues(alpha: 0.15),
-          ),
+          _avatar(),
           const SizedBox(width: 14),
           Expanded(
             child: Column(
@@ -78,12 +84,50 @@ class ProfileHeader extends StatelessWidget {
                     color: Colors.white.withValues(alpha: 0.8),
                   ),
                 ),
+                if (alert != null) ...[
+                  const SizedBox(height: 8),
+                  alert!,
+                ],
               ],
             ),
           ),
           ?trailing,
         ],
       ),
+    );
+  }
+
+  Widget _avatar() {
+    final avatar = UserAvatar(
+      imagePath: imagePath,
+      radius: 26,
+      backgroundColor: Colors.white.withValues(alpha: 0.15),
+    );
+    final color = alertColor;
+    if (color == null) return avatar;
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(2.5),
+          decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          child: avatar,
+        ),
+        Positioned(
+          right: -2,
+          bottom: -2,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.primaryMaroon, width: 2),
+            ),
+            child: const Icon(Icons.priority_high, size: 12, color: Colors.white),
+          ),
+        ),
+      ],
     );
   }
 }

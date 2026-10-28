@@ -42,6 +42,11 @@ class ModuleService {
     String? program,
     String moduleCode = '',
     String section = '',
+    // 'Assignment' or 'Quiz' — only meaningful for a graded item (with a deadline).
+    String kind = 'Assignment',
+    // Quiz only — both optional.
+    String quizNumber = '',
+    String formUrl = '',
     String instructions = '',
     DateTime? deadline,
     int totalPoints = 100,
@@ -59,6 +64,9 @@ class ModuleService {
       'program': ?program,
       'moduleCode': moduleCode,
       'section': section,
+      'kind': kind,
+      if (quizNumber.isNotEmpty) 'quizNumber': quizNumber,
+      if (formUrl.isNotEmpty) 'formUrl': formUrl,
       'instructions': instructions,
       if (deadline != null) 'deadline': Fmt.apiDate(deadline),
       'totalPoints': '$totalPoints',

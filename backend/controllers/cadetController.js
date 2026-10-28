@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { standingFrom } = require('../utils/attendanceStanding');
 const Cadet = require('../models/Cadet');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
@@ -210,6 +211,7 @@ exports.dashboard = asyncHandler(async (req, res) => {
         status: 'Published',
         program: { $in: [program, 'All'] },
         targetAudience: { $in: ['All', 'Cadets'] },
+        $or: [{ recipients: { $size: 0 } }, { recipients: userId }],
       })
         .sort({ isPinned: -1, createdAt: -1 })
         .limit(5),
@@ -254,6 +256,8 @@ exports.dashboard = asyncHandler(async (req, res) => {
         late: attendance.filter((a) => a.status === 'Late').length,
         excused: attendance.filter((a) => a.status === 'Excused').length,
       },
+      // At-risk warning + feature restriction for the Dashboard Overview.
+      attendanceStanding: standingFrom(attendance.filter((a) => a.status === 'Absent').length),
       announcements,
       toDo,
       upcomingActivities: upcoming,

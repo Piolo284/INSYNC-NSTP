@@ -29,6 +29,12 @@ const moduleSchema = new mongoose.Schema(
     fileSize: { type: Number, default: 0 },
     instructions: { type: [String], default: [] },
     deadline: { type: Date, default: null, index: true },
+    /** What a graded item (one with a deadline) is called — graded the same way either way. */
+    kind: { type: String, enum: ['Assignment', 'Quiz'], default: 'Assignment' },
+    /** Quiz only: the officer's own numbering, e.g. "1" or "Quiz 3". */
+    quizNumber: { type: String, default: '', trim: true },
+    /** Quiz only: optional Google Forms (or other online form) link. */
+    formUrl: { type: String, default: '', trim: true },
     totalPoints: { type: Number, default: 100 },
     rubrics: { type: [rubricSchema], default: [] },
     status: {

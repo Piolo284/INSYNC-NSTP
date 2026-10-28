@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'core/constants/app_theme.dart';
 import 'core/services/services.dart';
+import 'core/widgets/notifications_sheet.dart';
 import 'mobile/splash/splash_screen.dart';
 import 'mobile/splash/welcome_screen.dart';
 import 'mobile/cwts/cwts_main_shell.dart';
@@ -9,6 +10,7 @@ import 'mobile/cwts_special/cwts_special_main_shell.dart';
 import 'mobile/rotc/rotc_main_shell.dart';
 import 'mobile/rotc_special/rotc_special_main_shell.dart';
 import 'mobile/cwts_officer/cwts_officer_main_shell.dart';
+import 'mobile/shared/announcement_link.dart';
 
 /// Lets the splash router pop a message onto the very first screen the user
 /// sees after an unsupported/legacy session is signed out (there is no
@@ -19,6 +21,8 @@ final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
+  // Tapping a notification opens its linked quiz/module/activity/announcement.
+  NotificationsSheet.onOpenTarget = openNotificationTarget;
   runApp(const MyApp());
 }
 

@@ -1,12 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'cwts_officer_grade_submission_screen.dart';
-import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
-import '../../../../core/widgets/attachment_preview_screen.dart' show FileTypeInfo;
+import '../../../../core/widgets/attachment_preview_screen.dart';
 import '../../../../core/widgets/async_view.dart';
 import '../../../../core/widgets/private_comments.dart';
 import '../../../../core/widgets/status_badge.dart';
@@ -71,20 +69,15 @@ class _CwtsOfficerStudentSubmissionScreenState
 
   bool get _isGraded => _submission['status'] == 'Graded';
 
-  Future<void> _openFile(String fileUrl) async {
-    final uri = Uri.tryParse(AppConfig.resolveFileUrl(fileUrl));
-    if (uri == null) {
-      AppSnack.error(context, 'That file link looks invalid.');
-      return;
-    }
-    try {
-      final opened = await launchUrl(uri, mode: LaunchMode.externalApplication);
-      if (!opened && mounted) {
-        AppSnack.error(context, 'Could not open the file. No app is available to view it.');
-      }
-    } catch (error) {
-      if (mounted) AppSnack.error(context, describeError(error));
-    }
+  /// Opens the trainee's submitted file inside the app (images/PDFs render
+  /// in place; anything else offers to open externally) so it can be
+  /// reviewed before grading.
+  void _openFile(String fileUrl) {
+    openAttachmentPreview(
+      context,
+      fileUrl: fileUrl,
+      fileName: Fmt.str(_submission['fileName'], 'Submission'),
+    );
   }
 
   @override
@@ -312,6 +305,7 @@ class _CwtsOfficerStudentSubmissionScreenState
 
     return AppCard(
       padding: const EdgeInsets.all(12),
+      onTap: fileUrl.isEmpty ? null : () => _openFile(fileUrl),
       child: Row(
         children: [
           Container(
@@ -351,8 +345,9 @@ class _CwtsOfficerStudentSubmissionScreenState
             ),
           ),
           IconButton(
+            tooltip: 'Preview submission',
             icon: Icon(
-              Icons.download,
+              Icons.visibility_outlined,
               color: fileUrl.isEmpty ? AppColors.textSecondary : AppColors.primaryMaroon,
               size: 20,
             ),

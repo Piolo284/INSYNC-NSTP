@@ -285,16 +285,31 @@ class AttendanceService {
     return ApiService.mapOf(response);
   }
 
-  /// Officer approves or rejects a pending contest.
+  /// Officer decides a pending contest: [status] 'Approved' with
+  /// [approvedAs] 'Excused' ("Approve as Excuse") or 'Present' ("Approve as
+  /// Present"), or 'Rejected' with a required [reviewNote] reason.
   Future<Map<String, dynamic>> reviewContest(
     String id, {
     required String status,
+    String? approvedAs,
     String reviewNote = '',
   }) async {
     final response = await _api.put('/attendance-contests/$id', body: {
       'status': status,
+      'approvedAs': ?approvedAs,
       'reviewNote': reviewNote,
     });
+    return ApiService.mapOf(response);
+  }
+
+  // ---------------------------------------------------------------
+  // Attendance standing (at-risk warning / feature restriction)
+  // ---------------------------------------------------------------
+
+  /// The signed-in trainee's live standing: countedAbsences, limit, atRisk,
+  /// restricted, status, message, restrictedFeatures.
+  Future<Map<String, dynamic>> standing() async {
+    final response = await _api.get('/attendance/standing');
     return ApiService.mapOf(response);
   }
 }

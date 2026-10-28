@@ -42,6 +42,10 @@ const userSchema = new mongoose.Schema(
     dropPendingSince: { type: Date, default: null, index: true },
     dropReviewAbsences: { type: Number, default: 0 },
     dropKeptAtAbsences: { type: Number, default: 0 },
+    // Last known "restricted" state (counted absences at/over the limit) —
+    // only used to notify the trainee once when it turns on or off. The
+    // restriction itself is always computed live (utils/attendanceStanding.js).
+    attendanceRestricted: { type: Boolean, default: false },
 
     // Email-code two-factor login (see controllers/authController.js login/
     // verifyTwoFactor) — not TOTP/authenticator-app based, same "email a

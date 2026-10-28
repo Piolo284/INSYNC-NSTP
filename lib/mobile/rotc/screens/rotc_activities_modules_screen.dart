@@ -6,6 +6,7 @@ import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/attendance_standing.dart';
 import '../../../core/widgets/status_badge.dart';
 
 /// ROTC activities and modules. This screen was a placeholder; it now lists the
@@ -171,9 +172,15 @@ class _RotcActivitiesModulesScreenState
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SectionHeader(
-                title: 'Activities',
-                subtitle: '${_activities.length} assigned to you',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LockedListNotice(items: _activities),
+                  SectionHeader(
+                    title: 'Activities',
+                    subtitle: '${_activities.length} assigned to you',
+                  ),
+                ],
               ),
             );
           }
@@ -282,9 +289,15 @@ class _RotcActivitiesModulesScreenState
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SectionHeader(
-                title: 'Modules',
-                subtitle: '${_modules.length} posted',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LockedListNotice(items: _modules),
+                  SectionHeader(
+                    title: 'Modules',
+                    subtitle: '${_modules.length} posted',
+                  ),
+                ],
               ),
             );
           }

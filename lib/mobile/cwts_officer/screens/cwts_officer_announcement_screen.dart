@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../shared/announcement_link.dart';
 import '../../../../core/config/app_config.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../../core/services/services.dart';
@@ -305,6 +306,19 @@ class _CwtsOfficerAnnouncementScreenState
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
+              if (hasAnnouncementLink(announcement)) ...[
+                Flexible(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: _buildActionButton(
+                      icon: announcementLinkIcon(announcement),
+                      label: announcementLinkLabel(announcement),
+                      onTap: () => openAnnouncement(context, announcement),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+              ],
               _buildActionButton(
                 icon: Icons.send_outlined,
                 label: 'Send',

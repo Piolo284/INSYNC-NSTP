@@ -6,6 +6,7 @@ import '../rotc/screens/rotc_activities_modules_screen.dart';
 import '../rotc/screens/rotc_scan_qr_screen.dart';
 import '../rotc/rotc_drawer.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/attendance_filter_request.dart';
 
 /// Landing shell for a signed-in ROTC Special Class cadet (PWD/Medical
 /// Condition — exempt from field training). A dedicated shell rather than a
@@ -25,6 +26,19 @@ class RotcSpecialMainShell extends StatefulWidget {
 class _RotcSpecialMainShellState extends State<RotcSpecialMainShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
+  final AttendanceFilterRequest _attendanceFilter = AttendanceFilterRequest();
+
+  @override
+  void dispose() {
+    _attendanceFilter.dispose();
+    super.dispose();
+  }
+
+  /// Dashboard status count tapped — jump to the Attendance tab on that filter.
+  void _openAttendance(String status) {
+    _attendanceFilter.open(status);
+    setState(() => _currentIndex = 1);
+  }
 
   void _goToDashboard() {
     setState(() => _currentIndex = 0);
@@ -51,8 +65,8 @@ class _RotcSpecialMainShellState extends State<RotcSpecialMainShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      RotcSpecialDashboardScreen(onOpenDrawer: _openDrawer),
-      RotcAttendanceScreen(onBackToDashboard: _goToDashboard),
+      RotcSpecialDashboardScreen(onOpenDrawer: _openDrawer, onOpenAttendance: _openAttendance),
+      RotcAttendanceScreen(onBackToDashboard: _goToDashboard, filterRequest: _attendanceFilter),
       RotcAnnouncementScreen(onBackToDashboard: _goToDashboard),
       RotcActivitiesModulesScreen(onBackToDashboard: _goToDashboard),
     ];

@@ -6,6 +6,7 @@ import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/attendance_standing.dart';
 import '../../../core/widgets/status_badge.dart';
 
 class CwtsActivitiesModulesScreen extends StatefulWidget {
@@ -161,9 +162,15 @@ class _CwtsActivitiesModulesScreenState
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SectionHeader(
-                title: 'Activities',
-                subtitle: '${activities.length} assigned to you',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LockedListNotice(items: activities),
+                  SectionHeader(
+                    title: 'Activities',
+                    subtitle: '${activities.length} assigned to you',
+                  ),
+                ],
               ),
             );
           }
@@ -272,9 +279,15 @@ class _CwtsActivitiesModulesScreenState
           if (index == 0) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: SectionHeader(
-                title: 'Modules',
-                subtitle: '${modules.length} posted',
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LockedListNotice(items: modules),
+                  SectionHeader(
+                    title: 'Modules',
+                    subtitle: '${modules.length} posted',
+                  ),
+                ],
               ),
             );
           }

@@ -1,4 +1,5 @@
 const mongoose = require('mongoose');
+const { standingFrom } = require('../utils/attendanceStanding');
 const Student = require('../models/Student');
 const User = require('../models/User');
 const Attendance = require('../models/Attendance');
@@ -194,6 +195,7 @@ exports.dashboard = asyncHandler(async (req, res) => {
         status: 'Published',
         program: { $in: [program, 'All'] },
         targetAudience: { $in: ['All', 'Students'] },
+        $or: [{ recipients: { $size: 0 } }, { recipients: userId }],
       })
         .sort({ isPinned: -1, createdAt: -1 })
         .limit(5),
@@ -251,6 +253,8 @@ exports.dashboard = asyncHandler(async (req, res) => {
         late: attendance.filter((a) => a.status === 'Late').length,
         excused: attendance.filter((a) => a.status === 'Excused').length,
       },
+      // At-risk warning + feature restriction for the Dashboard Overview.
+      attendanceStanding: standingFrom(attendance.filter((a) => a.status === 'Absent').length),
       announcements,
       toDo,
       upcomingActivities: upcoming,
@@ -405,8 +409,8 @@ exports.searchFilter = searchFilter;
 exports.atRisk = asyncHandler(async (req, res) => {
   const program =
     req.user.role === 'super_admin' ? req.query.program || 'CWTS' : req.user.program;
-  const threshold = Number(req.query.threshold) || 3;
-  const { maxAbsencesBeforeDrop } = attendanceRules();
+  const { maxAbsencesBeforeDrop, absenceWarningAt } = attendanceRules();
+  const threshold = Number(req.query.threshold) || absenceWarningAt;
   // Special Class attendance is always program-wide (brigadeId: null), so
   // the assigned Special Class officer is scoped by their trainee roster
   // instead of the usual single-brigade filter, which would never match.
@@ -450,9 +454,12 @@ exports.atRisk = asyncHandler(async (req, res) => {
           // At the absence limit and waiting for the officer to confirm the
           // drop (or keep them) — see controllers/dropReviewController.js.
           pendingDrop: Boolean(u.dropPendingSince),
+          // At/over the limit: modules, activities and QR attendance are
+          // locked for this trainee (utils/attendanceStanding.js).
+          restricted: r.absents >= maxAbsencesBeforeDrop,
           dropPendingSince: u.dropPendingSince,
           // Shown as "absents / totalSessions" client-side — this is the
-          // 4-absence drop limit, not the trainee's actual session count, so
+          // absence limit, not the trainee's actual session count, so
           // the widget reads as progress toward the automatic-drop cutoff.
           totalSessions: maxAbsencesBeforeDrop,
         };

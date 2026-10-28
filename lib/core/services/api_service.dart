@@ -13,11 +13,18 @@ class ApiException implements Exception {
   final String message;
   final int? statusCode;
 
-  const ApiException(this.message, {this.statusCode});
+  /// Machine-readable reason from the server's `details.code`, when given.
+  final String? code;
+
+  const ApiException(this.message, {this.statusCode, this.code});
 
   bool get isUnauthorized => statusCode == 401 || statusCode == 403;
   bool get isNetworkError => statusCode == null;
   bool get isConflict => statusCode == 409;
+
+  /// The trainee reached the counted-absence limit and this feature is
+  /// locked server-side (backend utils/attendanceStanding.js).
+  bool get isAttendanceRestricted => code == 'ATTENDANCE_RESTRICTED';
 
   @override
   String toString() => message;
@@ -199,9 +206,11 @@ class ApiService {
       return body;
     }
 
+    final details = body['details'];
     throw ApiException(
       (body['message'] as String?) ?? 'Something went wrong. Please try again.',
       statusCode: response.statusCode,
+      code: details is Map ? details['code']?.toString() : null,
     );
   }
 

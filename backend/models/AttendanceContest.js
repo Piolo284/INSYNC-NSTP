@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const { PROGRAMS, CONTEST_STATUSES } = require('../config/constants');
+const { PROGRAMS, CONTEST_STATUSES, CONTEST_APPROVAL_TYPES } = require('../config/constants');
 
 /**
  * A trainee's dispute of one Absent attendance record. Kept as its own
@@ -29,6 +29,14 @@ const attendanceContestSchema = new mongoose.Schema(
     attachmentName: { type: String, default: '' },
     attachmentSize: { type: Number, default: 0 },
     status: { type: String, enum: CONTEST_STATUSES, default: 'Pending', index: true },
+    // Set only when Approved: the attendance status the officer chose
+    // ("Approved as Excuse" -> Excused, "Approved as Present" -> Present).
+    // Older approvals predate the choice and were always Excused.
+    approvedAs: { type: String, enum: [...CONTEST_APPROVAL_TYPES, null], default: null },
+    // The record's status when the contest was filed and after the decision,
+    // kept so the history shows exactly what changed (Absent -> Present).
+    originalStatus: { type: String, default: 'Absent' },
+    finalStatus: { type: String, default: null },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reviewNote: { type: String, default: '' },
     reviewedAt: { type: Date, default: null },

@@ -4,6 +4,7 @@ import '../../../../core/services/services.dart';
 import '../../../../core/utils/formatters.dart';
 import '../../../../core/widgets/app_card.dart';
 import '../../../../core/widgets/async_view.dart';
+import '../../../../core/widgets/attachment_preview_screen.dart';
 import '../../../../core/widgets/user_avatar.dart';
 
 /// Officer grading screen.
@@ -373,6 +374,12 @@ class _CwtsOfficerGradeSubmissionScreenState
                 'Due: ${Fmt.date(_module['deadline'])}',
                 style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
               ),
+              const SizedBox(height: 16),
+
+              // ===== SUBMITTED WORK (preview while grading) =====
+              const SectionHeader(title: 'Submitted Work'),
+              const SizedBox(height: 10),
+              _buildSubmittedWork(),
               const Divider(height: 32),
 
               // ===== RUBRICS HEADER =====
@@ -501,6 +508,76 @@ class _CwtsOfficerGradeSubmissionScreenState
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSubmittedWork() {
+    final fileUrl = Fmt.str(_submission['fileUrl']);
+    final fileName = Fmt.str(_submission['fileName'], 'Submission');
+    final comment = Fmt.str(_submission['comment']);
+    final type = FileTypeInfo.of(fileUrl.isEmpty ? '' : fileName);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        AppCard(
+          padding: const EdgeInsets.all(12),
+          onTap: fileUrl.isEmpty
+              ? null
+              : () => openAttachmentPreview(context, fileUrl: fileUrl, fileName: fileName),
+          child: Row(
+            children: [
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: type.background,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(type.icon, color: type.color, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fileUrl.isEmpty ? 'No file attached' : fileName,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: AppColors.textPrimary),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      fileUrl.isEmpty
+                          ? 'The trainee submitted a note only'
+                          : 'Tap to preview • Submitted ${Fmt.dateTimeShort(_submission['submittedAt'])}',
+                      style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                    ),
+                  ],
+                ),
+              ),
+              if (fileUrl.isNotEmpty)
+                const Icon(Icons.visibility_outlined, color: AppColors.primaryMaroon, size: 20),
+            ],
+          ),
+        ),
+        if (comment.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppColors.grey50,
+              borderRadius: BorderRadius.circular(AppColors.radiusSm),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Text(
+              comment,
+              style: const TextStyle(fontSize: 12.5, color: AppColors.textPrimary, height: 1.4),
+            ),
+          ),
+        ],
+      ],
     );
   }
 

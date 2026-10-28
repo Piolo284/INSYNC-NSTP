@@ -15,7 +15,9 @@ const mongoose = require('mongoose');
  * at all; controllers/masterlistController.js enforces this at upload time
  * by skipping any row missing even one of them, and this schema backs that
  * up for the single-entry `create` path too. There is deliberately no
- * enrollment-status field — every row on this list is simply enrolled.
+ * enrollment-status field — every row on the current list is simply
+ * enrolled. Rows a newer import leaves out are kept with `inCurrentList:
+ * false` (see models/MasterlistImport.js) rather than deleted.
  */
 const masterlistSchema = new mongoose.Schema(
   {
@@ -29,6 +31,13 @@ const masterlistSchema = new mongoose.Schema(
     campus: { type: String, required: true, trim: true },
     academicYear: { type: String, required: true, trim: true },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Legacy: older imports set this to false for students missing from a
+    // newer file (new self-registration refused). Imports no longer do that;
+    // re-importing or editing the student sets it back to true. Missing
+    // counts as true (queries use `$ne: false`).
+    inCurrentList: { type: Boolean, default: true, index: true },
+    lastImportId: { type: mongoose.Schema.Types.ObjectId, ref: 'MasterlistImport', default: null },
+    removedFromListAt: { type: Date, default: null },
   },
   { timestamps: true, collection: 'masterlist' }
 );

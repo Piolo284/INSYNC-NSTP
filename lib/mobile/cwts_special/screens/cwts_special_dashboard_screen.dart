@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../cwts/screens/cwts_attendance_screen.dart';
 import '../../cwts/screens/cwts_activities_modules_screen.dart';
 import '../../cwts/screens/cwts_announcement_screen.dart';
 import '../../cwts/screens/cwts_scan_qr_screen.dart';
@@ -7,6 +8,7 @@ import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/attendance_standing.dart';
 import '../../../core/widgets/profile_header.dart';
 
 /// Home tab of the CWTS Special Class shell — the CWTS counterpart of
@@ -15,7 +17,11 @@ import '../../../core/widgets/profile_header.dart';
 class CwtsSpecialDashboardScreen extends StatefulWidget {
   final VoidCallback onOpenDrawer;
 
-  const CwtsSpecialDashboardScreen({super.key, required this.onOpenDrawer});
+  /// Opens the Attendance tab on the given status filter. When the shell
+  /// doesn't provide it, the Attendance screen is pushed instead.
+  final ValueChanged<String>? onOpenAttendance;
+
+  const CwtsSpecialDashboardScreen({super.key, required this.onOpenDrawer, this.onOpenAttendance});
 
   @override
   State<CwtsSpecialDashboardScreen> createState() => _CwtsSpecialDashboardScreenState();
@@ -28,6 +34,9 @@ class _CwtsSpecialDashboardScreenState extends State<CwtsSpecialDashboardScreen>
   Map<String, dynamic>? _officer;
   List<Map<String, dynamic>> _records = const [];
   List<Map<String, dynamic>> _activities = const [];
+
+  /// Live at-risk / restricted standing — the attendance warning banner.
+  Map<String, dynamic>? _standing;
 
   @override
   void initState() {
@@ -46,12 +55,15 @@ class _CwtsSpecialDashboardScreenState extends State<CwtsSpecialDashboardScreen>
         SpecialClassService.instance.officer(program: 'CWTS'),
         AttendanceService.instance.myRecords(),
         ActivityService.instance.list(program: 'CWTS', upcomingOnly: true),
+        // The warning banner is extra — a failure here never breaks the dashboard.
+        AttendanceService.instance.standing().then<Map<String, dynamic>?>((s) => s).catchError((_) => null),
       ]);
       if (!mounted) return;
       setState(() {
         _officer = results[0] as Map<String, dynamic>?;
         _records = (results[1] as List).cast<Map<String, dynamic>>();
         _activities = (results[2] as List).cast<Map<String, dynamic>>();
+        _standing = results[3] as Map<String, dynamic>?;
         _state = LoadState.ready;
       });
     } catch (error) {
@@ -104,6 +116,7 @@ class _CwtsSpecialDashboardScreenState extends State<CwtsSpecialDashboardScreen>
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      AttendanceWarningBanner(standing: _standing),
                       _buildTrackBanner(),
                       const SizedBox(height: 20),
                       _buildOfficerCard(),
@@ -140,6 +153,8 @@ class _CwtsSpecialDashboardScreenState extends State<CwtsSpecialDashboardScreen>
       name: session.name.isEmpty ? 'Trainee' : session.name,
       subtitle: 'CWTS · Inclusive Learning Section',
       imagePath: session.profileImage,
+      alert: AttendanceHeaderAlert(standing: _standing),
+      alertColor: attendanceAlertColor(_standing),
     );
   }
 
@@ -238,14 +253,33 @@ class _CwtsSpecialDashboardScreenState extends State<CwtsSpecialDashboardScreen>
     );
   }
 
+  void _openAttendance(String status) {
+    final open = widget.onOpenAttendance;
+    if (open != null) {
+      open(status);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CwtsAttendanceScreen(initialFilter: status)),
+    ).then((_) => _load());
+  }
+
   Widget _buildStat(String label, int value, Color color) {
     return Expanded(
-      child: Column(
-        children: [
-          Text('$value', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
-        ],
+      child: InkWell(
+        onTap: () => _openAttendance(label),
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Text('$value', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+              const SizedBox(height: 4),
+              Text(label, style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary)),
+            ],
+          ),
+        ),
       ),
     );
   }

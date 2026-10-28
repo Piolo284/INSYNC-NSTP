@@ -11,6 +11,15 @@ import 'async_view.dart';
 class NotificationsSheet extends StatefulWidget {
   const NotificationsSheet({super.key});
 
+  /// Opens the page a tapped notification points to (its linked quiz,
+  /// module, activity or announcement). Set once in main.dart — core can't
+  /// import the role-specific screens itself.
+  static Future<bool> Function(BuildContext context, Map<String, dynamic> data)?
+      onOpenTarget;
+
+  /// Keys in a notification's `data` that point at something openable.
+  static const _targetKeys = ['linkType', 'moduleId', 'announcementId'];
+
   @override
   State<NotificationsSheet> createState() => _NotificationsSheetState();
 }
@@ -46,6 +55,33 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
         _error = describeError(error);
       });
     }
+  }
+
+  /// Marks the notification read, then — when it points at something —
+  /// closes the sheet and opens that page.
+  Future<void> _onTap(Map<String, dynamic> item) async {
+    final data = (item['data'] as Map?)?.cast<String, dynamic>() ?? const {};
+    final open = NotificationsSheet.onOpenTarget;
+    final hasTarget = NotificationsSheet._targetKeys
+        .any((key) => Fmt.str(data[key]).isNotEmpty);
+
+    if (item['isRead'] != true) {
+      try {
+        await NotificationService.instance.markRead(Fmt.str(item['_id']));
+      } catch (_) {
+        /* ignore */
+      }
+    }
+    if (!mounted) return;
+
+    if (open == null || !hasTarget) {
+      await _load();
+      return;
+    }
+    // The navigator outlives this sheet, so push from its context.
+    final navigator = Navigator.of(context);
+    navigator.pop();
+    await open(navigator.context, data);
   }
 
   @override
@@ -116,16 +152,7 @@ class _NotificationsSheetState extends State<NotificationsSheet> {
                     final item = _items[index];
                     final isRead = item['isRead'] == true;
                     return ListTile(
-                      onTap: () async {
-                        if (isRead) return;
-                        try {
-                          await NotificationService.instance
-                              .markRead(Fmt.str(item['_id']));
-                          await _load();
-                        } catch (_) {
-                          /* ignore */
-                        }
-                      },
+                      onTap: () => _onTap(item),
                       leading: Container(
                         width: 40,
                         height: 40,

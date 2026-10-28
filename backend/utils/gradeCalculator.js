@@ -118,9 +118,64 @@ async function recalculateGrade(userId, program, gradedBy = null) {
     { new: true, upsert: true, setDefaultsOnInsert: true }
   );
 
-  await flagForDropReviewIfOverAbsenceLimit(userId, program, summary.absent);
+  const flaggedNow = await flagForDropReviewIfOverAbsenceLimit(userId, program, summary.absent);
+  await syncRestrictionState(userId, summary.absent, flaggedNow);
 
   return grade;
+}
+
+/**
+ * Keeps the trainee's restriction in step with their counted absences after
+ * every attendance change, in both directions:
+ *  - reaching the limit: notify once that features are now locked (skipped
+ *    when the drop-review notice above already told them, so they don't get
+ *    two alerts for the same absence);
+ *  - falling back under it (an absence approved as Excused/Present): notify
+ *    that access is restored, and withdraw a drop review that no longer
+ *    applies.
+ */
+async function syncRestrictionState(userId, absentCount, alreadyNotified) {
+  const { maxAbsencesBeforeDrop } = attendanceRules();
+  const restricted = absentCount >= maxAbsencesBeforeDrop;
+
+  const user = await User.findById(userId);
+  if (!user || !['student', 'cadet'].includes(user.role)) return;
+
+  let changed = false;
+  if (!restricted) {
+    if (user.dropPendingSince && user.status !== 'Dropped') {
+      user.dropPendingSince = null;
+      changed = true;
+    }
+    // A kept-at count above the new total would stop the next real absence
+    // from being reviewed again.
+    if ((user.dropKeptAtAbsences || 0) > absentCount) {
+      user.dropKeptAtAbsences = absentCount;
+      changed = true;
+    }
+  }
+
+  if (Boolean(user.attendanceRestricted) !== restricted) {
+    user.attendanceRestricted = restricted;
+    changed = true;
+    if (restricted && !alreadyNotified) {
+      await notifyUser(userId, {
+        title: 'Access restricted',
+        message: `You have reached ${absentCount} counted absences (limit: ${maxAbsencesBeforeDrop}). Opening learning modules/activities and attendance check-in are restricted until your attendance record is corrected.`,
+        type: 'attendance',
+        data: { attendanceRestricted: true },
+      });
+    } else if (!restricted) {
+      await notifyUser(userId, {
+        title: 'Access restored',
+        message: `Your attendance record was updated and you now have ${absentCount} counted absence(s). Restricted features are available again.`,
+        type: 'attendance',
+        data: { attendanceRestricted: false },
+      });
+    }
+  }
+
+  if (changed) await user.save();
 }
 
 /**
@@ -135,15 +190,15 @@ async function flagForDropReviewIfOverAbsenceLimit(userId, program, absentCount)
   const { maxAbsencesBeforeDrop } = attendanceRules();
 
   if (absentCount < maxAbsencesBeforeDrop) {
-    await warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop);
-    return;
+    await warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop, attendanceRules().absenceWarningAt);
+    return false;
   }
 
   const user = await User.findById(userId);
-  if (!user || user.status === 'Dropped' || user.dropPendingSince) return;
+  if (!user || user.status === 'Dropped' || user.dropPendingSince) return false;
   // An officer already reviewed and kept them at this count — only a new
   // absence brings them back for review.
-  if (absentCount <= (user.dropKeptAtAbsences || 0)) return;
+  if (absentCount <= (user.dropKeptAtAbsences || 0)) return false;
 
   user.dropPendingSince = new Date();
   user.dropReviewAbsences = absentCount;
@@ -151,7 +206,7 @@ async function flagForDropReviewIfOverAbsenceLimit(userId, program, absentCount)
 
   await notifyUser(userId, {
     title: 'Absence limit reached',
-    message: `You have reached ${absentCount} absences (limit: ${maxAbsencesBeforeDrop}). Your officer will review whether you will be dropped from the program.`,
+    message: `You have reached ${absentCount} absences (limit: ${maxAbsencesBeforeDrop}). You can no longer scan attendance or open learning modules/activities. Please see your NSTP officer or admin for assistance.`,
     type: 'attendance',
   });
 
@@ -164,6 +219,7 @@ async function flagForDropReviewIfOverAbsenceLimit(userId, program, absentCount)
       data: { dropReviewUserId: user._id },
     });
   }
+  return true;
 }
 
 /** Active officers handling this trainee: their brigade/company's officers,
@@ -185,13 +241,13 @@ async function assignedOfficerIds(user, program) {
 }
 
 /**
- * Sends a one-time heads-up notification once a trainee is exactly one
- * absence away from the auto-drop threshold. Guarded by a marker in
+ * Sends a one-time heads-up notification once a trainee reaches the
+ * warning threshold (`absenceWarningAt`, default 3). Guarded by a marker in
  * `data.warningAbsentCount` so re-running recalculateGrade (e.g. after
  * grading an unrelated submission) never re-sends the same warning.
  */
-async function warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop) {
-  if (maxAbsencesBeforeDrop <= 1 || absentCount !== maxAbsencesBeforeDrop - 1) return;
+async function warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBeforeDrop, warnAt) {
+  if (absentCount !== warnAt || warnAt >= maxAbsencesBeforeDrop) return;
 
   const alreadyWarned = await Notification.exists({
     recipientId: userId,
@@ -201,8 +257,8 @@ async function warnIfApproachingDropLimit(userId, absentCount, maxAbsencesBefore
   if (alreadyWarned) return;
 
   await notifyUser(userId, {
-    title: 'Attendance warning',
-    message: `You now have ${absentCount} absence(s). Reaching ${maxAbsencesBeforeDrop} absences will refer you to your officer for dropping from the program.`,
+    title: 'Attendance Warning: At risk for dropping',
+    message: `Attendance Warning: You already have ${absentCount} counted absences. At ${maxAbsencesBeforeDrop} absences you will no longer be able to scan attendance and will need your officer's or admin's assistance.`,
     type: 'attendance',
     data: { warningAbsentCount: absentCount },
   });

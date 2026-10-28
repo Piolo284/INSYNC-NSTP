@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { standingForUser } = require('../utils/attendanceStanding');
 const Student = require('../models/Student');
 const Cadet = require('../models/Cadet');
 const Officer = require('../models/Officer');
@@ -306,8 +307,11 @@ exports.register = asyncHandler(async (req, res) => {
 
 /** GET /api/auth/me */
 exports.me = asyncHandler(async (req, res) => {
-  const profile = await profileFor(req.user);
-  res.json({ success: true, data: { user: req.user.toPublic(), profile } });
+  const [profile, attendanceStanding] = await Promise.all([
+    profileFor(req.user),
+    standingForUser(req.user),
+  ]);
+  res.json({ success: true, data: { user: req.user.toPublic(), profile, attendanceStanding } });
 });
 
 /** PUT /api/auth/password */

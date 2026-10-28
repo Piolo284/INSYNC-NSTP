@@ -1,7 +1,7 @@
 /* eslint-disable no-console */
 /**
  * Generates an NSTP masterlist file (.xlsx + .csv) ready for upload in the
- * admin panel (Masterlist → Upload, POST /api/master-enrollment/upload).
+ * admin panel (Masterlist → Upload New Master List, POST /api/master-enrollment/import/preview).
  *
  * Student Number format:  YY + C + NNNN
  *   YY   = last 2 digits of the academic year the student enrolled

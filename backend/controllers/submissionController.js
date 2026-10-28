@@ -263,7 +263,37 @@ exports.grade = asyncHandler(async (req, res) => {
   let score;
   let totalPoints = submission.totalPoints || 100;
 
-  if (Array.isArray(rubricScores) && rubricScores.length) {
+  // An activity with a rubric is always graded against that rubric as
+  // defined on the activity — criteria and max points come from the server,
+  // only each criterion's awarded score comes from the officer.
+  const module = submission.moduleId
+    ? await ModuleModel.findById(submission.moduleId).select('rubrics totalPoints')
+    : null;
+
+  if (module && module.rubrics.length) {
+    if (!Array.isArray(rubricScores) || !rubricScores.length) {
+      throw ApiError.badRequest('Score every rubric criterion before submitting the grade.');
+    }
+    const given = new Map(
+      rubricScores.map((r) => [String(r.title || '').trim().toLowerCase(), r.score])
+    );
+    const scored = module.rubrics.map((criterion) => {
+      const raw = given.get(criterion.title.toLowerCase());
+      const value = Number(raw);
+      if (raw === undefined || raw === null || raw === '' || !Number.isFinite(value)) {
+        throw ApiError.badRequest(`Enter a score for "${criterion.title}".`);
+      }
+      if (value < 0 || value > criterion.points) {
+        throw ApiError.badRequest(
+          `Score for "${criterion.title}" must be between 0 and ${criterion.points}.`
+        );
+      }
+      return { title: criterion.title, points: criterion.points, score: value };
+    });
+    score = scored.reduce((sum, r) => sum + r.score, 0);
+    totalPoints = scored.reduce((sum, r) => sum + r.points, 0);
+    submission.rubricScores = scored;
+  } else if (Array.isArray(rubricScores) && rubricScores.length) {
     const invalid = rubricScores.find(
       (r) => Number(r.score) < 0 || Number(r.score) > Number(r.points)
     );

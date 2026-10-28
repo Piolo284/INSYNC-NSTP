@@ -1,5 +1,10 @@
 const mongoose = require('mongoose');
-const { PROGRAMS, TARGET_AUDIENCES, CAMPUSES } = require('../config/constants');
+const {
+  PROGRAMS,
+  TARGET_AUDIENCES,
+  CAMPUSES,
+  ANNOUNCEMENT_LINK_TYPES,
+} = require('../config/constants');
 
 const announcementSchema = new mongoose.Schema(
   {
@@ -16,6 +21,14 @@ const announcementSchema = new mongoose.Schema(
     time: { type: String, default: '' },
     location: { type: String, default: '' },
     isPinned: { type: Boolean, default: false },
+    /** Optional deep link — tapping the announcement in the app opens this
+     * item (quiz/assignment/module, activity, or attendance) directly. Set
+     * automatically when a module or activity is posted. */
+    linkType: { type: String, enum: ['', ...ANNOUNCEMENT_LINK_TYPES], default: '' },
+    linkId: { type: mongoose.Schema.Types.ObjectId, default: null, index: true },
+    /** What the link opens, for the app's button text: 'Quiz', 'Assignment',
+     * 'Module', 'Activity' or 'Attendance'. */
+    linkLabel: { type: String, default: '' },
     // Auto-composed from this program's AnnouncementTemplate (if one exists)
     // at post time, or left blank if no template is configured — see
     // admin/src/utils/announcementGenerator.js.

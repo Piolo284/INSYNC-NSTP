@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../../shared/announcement_link.dart';
+import 'cwts_attendance_screen.dart';
 import 'cwts_activities_modules_screen.dart';
 import 'cwts_activity_detail_screen.dart';
 import 'cwts_announcement_screen.dart';
@@ -7,6 +9,7 @@ import '../../../core/services/services.dart';
 import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/app_card.dart';
 import '../../../core/widgets/async_view.dart';
+import '../../../core/widgets/attendance_standing.dart';
 import '../../../core/widgets/notifications_sheet.dart';
 import '../../../core/widgets/profile_header.dart';
 import '../../../core/widgets/status_badge.dart';
@@ -14,7 +17,11 @@ import '../../../core/widgets/status_badge.dart';
 class CwtsDashboardScreen extends StatefulWidget {
   final VoidCallback onOpenDrawer;
 
-  const CwtsDashboardScreen({super.key, required this.onOpenDrawer});
+  /// Opens the Attendance tab on the given status filter. When the shell
+  /// doesn't provide it, the Attendance screen is pushed instead.
+  final ValueChanged<String>? onOpenAttendance;
+
+  const CwtsDashboardScreen({super.key, required this.onOpenDrawer, this.onOpenAttendance});
 
   @override
   State<CwtsDashboardScreen> createState() => _CwtsDashboardScreenState();
@@ -27,6 +34,10 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
   String _error = '';
 
   Map<String, dynamic> _overview = const {};
+
+  /// Live at-risk / restricted standing from the dashboard call — drives the
+  /// attendance warning at the top of the Dashboard Overview.
+  Map<String, dynamic>? _standing;
   List<Map<String, dynamic>> announcements = const [];
   List<Map<String, dynamic>> _toDo = const [];
   List<Map<String, dynamic>> _upcomingActivities = const [];
@@ -52,6 +63,7 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
       if (!mounted) return;
       setState(() {
         _overview = (data['overview'] as Map?)?.cast<String, dynamic>() ?? {};
+        _standing = (data['attendanceStanding'] as Map?)?.cast<String, dynamic>();
         announcements =
             (data['announcements'] as List? ?? []).cast<Map<String, dynamic>>();
         _toDo = (data['toDo'] as List? ?? []).cast<Map<String, dynamic>>();
@@ -156,6 +168,7 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
+                      AttendanceWarningBanner(standing: _standing),
                       _buildOverviewSection(),
                       const SizedBox(height: 20),
                       _buildToDoSection(),
@@ -204,6 +217,8 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
       name: session.name.isEmpty ? 'Trainee' : session.name,
       subtitle: subtitleParts.isEmpty ? 'NSTP Trainee' : subtitleParts,
       imagePath: session.profileImage,
+      alert: AttendanceHeaderAlert(standing: _standing),
+      alertColor: attendanceAlertColor(_standing),
     );
   }
 
@@ -307,24 +322,43 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
     );
   }
 
+  void _openAttendance(String status) {
+    final open = widget.onOpenAttendance;
+    if (open != null) {
+      open(status);
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => CwtsAttendanceScreen(initialFilter: status)),
+    ).then((_) => _load());
+  }
+
   Widget _buildAttendanceStat(String label, int value, Color color) {
     return Expanded(
-      child: Column(
-        children: [
-          Text(
-            '$value',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: color,
-            ),
+      child: InkWell(
+        onTap: () => _openAttendance(label),
+        borderRadius: BorderRadius.circular(AppColors.radiusSm),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              Text(
+                '$value',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
+              ),
+            ],
           ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: const TextStyle(fontSize: 11.5, color: AppColors.textSecondary),
-          ),
-        ],
+        ),
       ),
     );
   }
@@ -368,6 +402,7 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
                 final announcement = announcements[index];
                 return AppCard(
                   margin: const EdgeInsets.only(right: 10),
+                  onTap: () => openAnnouncement(context, announcement),
                   child: Row(
                     children: [
                       Container(
@@ -377,8 +412,8 @@ class _CwtsDashboardScreenState extends State<CwtsDashboardScreen> {
                           color: AppColors.goldLight,
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        child: const Icon(
-                          Icons.campaign,
+                        child: Icon(
+                          announcementLinkIcon(announcement),
                           color: AppColors.primaryMaroon,
                           size: 24,
                         ),

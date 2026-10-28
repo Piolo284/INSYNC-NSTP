@@ -322,6 +322,8 @@ class _CwtsOfficerDashboardScreenState
                                     iconBgColor: AppColors.blue,
                                     label: 'Excused',
                                     value: Fmt.count(_overview['excused']),
+                                    onTap: () =>
+                                        _navigateToList('Excused Students'),
                                   ),
                                 ),
                                 const SizedBox(width: 12),

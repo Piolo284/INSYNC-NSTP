@@ -6,6 +6,7 @@ import 'screens/rotc_activities_modules_screen.dart';
 import 'screens/rotc_scan_qr_screen.dart';
 import 'rotc_drawer.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/utils/attendance_filter_request.dart';
 
 class RotcMainShell extends StatefulWidget {
   const RotcMainShell({super.key});
@@ -17,6 +18,19 @@ class RotcMainShell extends StatefulWidget {
 class _RotcMainShellState extends State<RotcMainShell> {
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   int _currentIndex = 0;
+  final AttendanceFilterRequest _attendanceFilter = AttendanceFilterRequest();
+
+  @override
+  void dispose() {
+    _attendanceFilter.dispose();
+    super.dispose();
+  }
+
+  /// Dashboard status count tapped — jump to the Attendance tab on that filter.
+  void _openAttendance(String status) {
+    _attendanceFilter.open(status);
+    setState(() => _currentIndex = 1);
+  }
 
   void _goToDashboard() {
     setState(() => _currentIndex = 0);
@@ -43,8 +57,8 @@ class _RotcMainShellState extends State<RotcMainShell> {
   @override
   Widget build(BuildContext context) {
     final screens = [
-      RotcDashboardScreen(onOpenDrawer: _openDrawer),
-      RotcAttendanceScreen(onBackToDashboard: _goToDashboard),
+      RotcDashboardScreen(onOpenDrawer: _openDrawer, onOpenAttendance: _openAttendance),
+      RotcAttendanceScreen(onBackToDashboard: _goToDashboard, filterRequest: _attendanceFilter),
       RotcAnnouncementScreen(onBackToDashboard: _goToDashboard),
       RotcActivitiesModulesScreen(onBackToDashboard: _goToDashboard),
     ];

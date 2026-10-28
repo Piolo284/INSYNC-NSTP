@@ -5,6 +5,7 @@ import '../../core/constants/app_colors.dart';
 import '../../core/services/services.dart';
 import '../../core/utils/formatters.dart';
 import '../../core/widgets/async_view.dart';
+import '../../core/widgets/attendance_standing.dart';
 import '../../core/widgets/status_badge.dart';
 
 /// Shared QR attendance screen used by both the CWTS and ROTC scanners.
@@ -22,7 +23,11 @@ import '../../core/widgets/status_badge.dart';
 /// how the code was collected. The manual entry sheet is kept as a "Can't
 /// scan? Enter code manually" link, for accessibility or when the camera
 /// permission is denied.
-class QrAttendanceScaffold extends StatefulWidget {
+///
+/// Attendance check-in/check-out is locked once the trainee reaches the
+/// counted-absence limit (backend utils/attendanceStanding.js), so the camera
+/// is only started after [RestrictionGate] confirms they're not restricted.
+class QrAttendanceScaffold extends StatelessWidget {
   final Color accentColor;
   final VoidCallback? onBackToDashboard;
 
@@ -33,10 +38,47 @@ class QrAttendanceScaffold extends StatefulWidget {
   });
 
   @override
-  State<QrAttendanceScaffold> createState() => _QrAttendanceScaffoldState();
+  Widget build(BuildContext context) {
+    return RestrictionGate(
+      lockedBuilder: (context, lockedView) => Scaffold(
+        backgroundColor: AppColors.white,
+        appBar: AppBar(
+          backgroundColor: AppColors.primaryMaroon,
+          elevation: 0,
+          centerTitle: true,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios, color: AppColors.white, size: 20),
+            onPressed: () {
+              Navigator.pop(context);
+              onBackToDashboard?.call();
+            },
+          ),
+          title: const Text(
+            'Scan QR Code',
+            style: TextStyle(color: AppColors.white, fontSize: 18, fontWeight: FontWeight.w600),
+          ),
+        ),
+        body: lockedView,
+      ),
+      child: _QrAttendanceBody(accentColor: accentColor, onBackToDashboard: onBackToDashboard),
+    );
+  }
 }
 
-class _QrAttendanceScaffoldState extends State<QrAttendanceScaffold> {
+class _QrAttendanceBody extends StatefulWidget {
+  final Color accentColor;
+  final VoidCallback? onBackToDashboard;
+
+  const _QrAttendanceBody({
+    this.accentColor = AppColors.primaryMaroon,
+    this.onBackToDashboard,
+  });
+
+  @override
+  State<_QrAttendanceBody> createState() => _QrAttendanceBodyState();
+}
+
+class _QrAttendanceBodyState extends State<_QrAttendanceBody> {
   bool _isBusy = false;
 
   final MobileScannerController _scannerController = MobileScannerController(

@@ -106,8 +106,8 @@ class _CwtsOfficerSubmissionsScreenState
     _debounce = Timer(const Duration(milliseconds: 400), _load);
   }
 
-  /// Top-bar + button: posts a plain resource (PDF/PPT/video) — a module
-  /// with no deadline. It's listed (and managed) under the Modules view.
+  /// Posts a plain resource (PDF/PPT/video) — a module with no deadline.
+  /// It's listed (and managed) under the Modules view.
   Future<void> _openAddModule() async {
     final created = await Navigator.push<bool>(
       context,
@@ -170,17 +170,62 @@ class _CwtsOfficerSubmissionsScreenState
     }
   }
 
-  /// Big floating + button: posts a graded assignment (requires a deadline)
-  /// that students/cadets submit work against — this is what populates the
-  /// list below.
-  Future<void> _openAddAssignment() async {
+  /// Posts a graded assignment or quiz (requires a deadline) that
+  /// students/cadets submit work against — this is what populates the
+  /// Assignments list.
+  Future<void> _openAddAssignment({bool isQuiz = false}) async {
     final created = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => const CwtsOfficerAddModuleScreen(forAssignment: true),
+        builder: (_) => CwtsOfficerAddModuleScreen(forAssignment: true, isQuiz: isQuiz),
       ),
     );
-    if (created == true) await _load();
+    if (created == true) {
+      _switchView('Assignments');
+      await _load();
+    }
+  }
+
+  /// Floating + button: asks what to post, then opens the matching form.
+  Future<void> _openAddMenu() async {
+    final choice = await showAppBottomSheet<String>(
+      context,
+      title: 'Add new',
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _addOption('Assignment', 'Graded task with a deadline', Icons.assignment_outlined),
+          _addOption('Quiz', 'Graded quiz with a deadline', Icons.quiz_outlined),
+          _addOption('Module', 'Learning material — PDF, PPT or video', Icons.menu_book_outlined),
+        ],
+      ),
+    );
+    if (!mounted || choice == null) return;
+    switch (choice) {
+      case 'Assignment':
+        await _openAddAssignment();
+        break;
+      case 'Quiz':
+        await _openAddAssignment(isQuiz: true);
+        break;
+      case 'Module':
+        await _openAddModule();
+        break;
+    }
+  }
+
+  Widget _addOption(String label, String subtitle, IconData icon) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: CircleAvatar(
+        backgroundColor: AppColors.primaryMaroon.withValues(alpha: 0.1),
+        child: Icon(icon, color: AppColors.primaryMaroon, size: 22),
+      ),
+      title: Text(label, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12, color: AppColors.textSecondary)),
+      trailing: const Icon(Icons.chevron_right, color: AppColors.textSecondary),
+      onTap: () => Navigator.pop(context, label),
+    );
   }
 
   // Everything below filters/sorts the assignment list that was already
@@ -260,11 +305,6 @@ class _CwtsOfficerSubmissionsScreenState
           ),
         ),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add, color: AppColors.white, size: 22),
-            tooltip: 'Add Module',
-            onPressed: _openAddModule,
-          ),
           IconButton(
             icon: const Icon(Icons.refresh, color: AppColors.white, size: 20),
             onPressed: _load,
@@ -491,8 +531,8 @@ class _CwtsOfficerSubmissionsScreenState
         ],
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: _openAddAssignment,
-        tooltip: 'Add Assignment',
+        onPressed: _openAddMenu,
+        tooltip: 'Add Assignment, Quiz or Module',
         backgroundColor: AppColors.primaryMaroon,
         child: const Icon(Icons.add, color: AppColors.white),
       ),
@@ -634,7 +674,7 @@ class _CwtsOfficerSubmissionsScreenState
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Module: ${Fmt.str(a['moduleCode'], '—')}',
+                  Fmt.str(a['kind'], 'Assignment'),
                   style: const TextStyle(fontSize: 12, color: AppColors.textSecondary),
                 ),
                 const SizedBox(height: 2),
